@@ -1,0 +1,15 @@
+services:
+  db:
+    image: mysql:8.0
+    ports:
+      - "3307:3306" # 내 PC의 3307번을 컨테이너의 MySQL(3306)에 연결. 로컬에 MySQL이 깔려 있어도 충돌하지 않음
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: wms_db
+      TZ: Asia/Seoul
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db-data:/var/lib/mysql
+
+volumes:
+  db-data:
