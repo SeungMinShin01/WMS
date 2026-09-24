@@ -12,9 +12,7 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: wms-core # 백엔드(Spring Boot) 폴더
+
     steps:
       - uses: actions/checkout@v4
 
