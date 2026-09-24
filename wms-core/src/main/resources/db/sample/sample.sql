@@ -39,7 +39,8 @@ INSERT INTO lot (product_id, lot_code, expiry_date) VALUES
 INSERT INTO document (document_no, type, partner_id, expected_at) VALUES
 ('IN-20261001-002',  'INBOUND',  2, '2026-10-01 14:00:00'),   -- 1: 다온제과 (오후)
 ('IN-20261001-001',  'INBOUND',  1, '2026-10-01 09:00:00'),   -- 2: 한빛식품 (오전)
-('OUT-20261008-001', 'OUTBOUND', 3, '2026-10-08 10:00:00');   -- 3: 중앙마트 (출고)
+('OUT-20261008-001', 'OUTBOUND', 3, '2026-10-08 10:00:00'),   -- 3: 중앙마트 (출고)
+('OUT-20261007-001', 'OUTBOUND', 3, '2026-10-07 15:00');
 
 -- 5. 요청 줄 (입고는 LOT 있음, 출고는 NULL)
 INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
