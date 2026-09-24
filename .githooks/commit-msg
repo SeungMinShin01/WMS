@@ -1,0 +1,25 @@
+#!/bin/sh
+# 커밋 메시지 형식 검사. 설치: git config core.hooksPath .githooks (clone한 사람마다 1번)
+
+msg=$(head -n1 "$1")
+
+# git이 자동으로 만드는 메시지는 검사하지 않는다
+case "$msg" in
+  Merge*|Revert*|fixup!*|squash!*) exit 0 ;;
+esac
+
+PATTERN='^(feat|fix|refactor|perf|test|docs|chore|release)(\((global|document|inbound|stock|outbound|product|partner|location|portal)\))?: .+'
+
+if ! printf '%s' "$msg" | grep -Eq "$PATTERN"; then
+  echo ""
+  echo "❌ 커밋 메시지 형식이 아닙니다: $msg"
+  echo ""
+  echo "   형식 : <type>(<scope>): <제목> (ED-숫자)"
+  echo "   type : feat fix refactor perf test docs chore release"
+  echo "   scope: global document inbound stock outbound product partner location portal"
+  echo "   예시 : feat(inbound): 입고 문서 목록 조회 API (ED-13)"
+  echo ""
+  exit 1
+fi
+
+exit 0
