@@ -29,10 +29,7 @@ jobs:
 
       # 3. 빌드 (컴파일 + jar 생성)
       #    -x test : 테스트는 일단 뺀다. 테스트가 MySQL에 붙어야 해서 CI에서 실패하기 때문.
-      #    funda도 lint/test 단계를 주석으로 막아두고 빌드만 돌리고 있다.
       - name: build
         run: |
           chmod +x gradlew
           ./gradlew build -x test --no-daemon
-
-  # frontend 작업은 프론트 폴더가 생기면 추가한다 (Node 설치 → npm ci → lint → build)
