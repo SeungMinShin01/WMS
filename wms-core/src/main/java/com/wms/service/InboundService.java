@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 import com.wms.model.dto.inbound.InboundDetailDto;
 import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
+import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.entity.DocumentEntity;
+import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 
@@ -25,6 +28,9 @@ public class InboundService {
     // ED - 13
     @Autowired
     private DocumentItemRepository documentItemRepository;
+    // ED - 14
+    @Autowired
+    private DocumentItemDetailRepository detailRepository;
 
     public List<InboundListDto> findAll() {
         // 문서를 전부 다 가져오기 입출고
@@ -74,5 +80,15 @@ public class InboundService {
             }
         });
         return inboundDetailDto;
+    }
+
+    // 검수 1건 등록 ED - 14
+    public Integer inspectionSave(InspectionDto inspectionDto) {
+        DocumentItemEntity documentItemEntity = documentItemRepository.findById(inspectionDto.getDocumentItemId())
+                .orElse(null);
+        DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
+        DocumentItemDetailEntity savedEntity = detailRepository.save(detailEntity);
+
+        return savedEntity.getDetailId();
     }
 }
