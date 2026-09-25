@@ -43,3 +43,4 @@ replay_pid*
 ### 기타 ###
 *.log
 .env
+claude_output/

@@ -50,10 +50,31 @@ INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
 (2, 2, 3,    80),   -- 문서2: 컵라면 80
 (3, 1, NULL, 90);   -- 문서3(출고): 라면 90
 
---- 확인 쿼리
-SELECT d.document_id, d.document_no, p.partner_name,
-       (SELECT COUNT(*) FROM document_item i WHERE i.document_id = d.document_id) AS item_count
-  FROM document d
-  JOIN partner p ON p.partner_id = d.partner_id
- WHERE d.type = 'INBOUND'
- ORDER BY d.expected_at;
+-- 5. 요청 줄 (입고는 LOT 있음, 출고는 NULL)
+INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
+(1, 3, 4,    60),   -- 1: 문서1 크래커 60
+(2, 1, 1,    60),   -- 2: 문서2 라면 LOT-01 60
+(2, 1, 2,    40),   -- 3: 문서2 라면 LOT-02 40
+(2, 2, 3,    80),   -- 4: 문서2 컵라면 80
+(3, 1, NULL, 90),   -- 5: 문서3(출고) 라면 90
+(4, 2, NULL, 30),   -- 6: 문서4(출고) 컵라면 30
+(4, 3, NULL, 20);   -- 7: 문서4(출고) 크래커 20
+
+-- 6. 칸 5개
+INSERT INTO location (location_code, is_active) VALUES
+('A-01-01', TRUE),   -- 1
+('A-01-02', TRUE),   -- 2
+('A-02-01', TRUE),   -- 3
+('B-01-01', TRUE),   -- 4
+('B-01-02', TRUE);   -- 5
+
+-- 7. 문서1(크래커 60)은 검수·적재까지 끝난 상태로 둔다
+--    → 입고-6 재고 조회, 출고-3 할당을 입고 흐름 없이도 테스트할 수 있게
+--    재고: 크래커 LOT(4)이 A-01-01(1번 칸)에 60개
+INSERT INTO stock (lot_id, location_id, qty, allocated_qty) VALUES
+(4, 1, 60, 0);   -- 1
+
+--    검수·적재 결과: 문서1 요청 줄(1) → LOT 4, 칸 1, 재고 1, 60개
+INSERT INTO document_item_detail (document_item_id, lot_id, location_id, stock_id, qty) VALUES
+(1, 4, 1, 1, 60);   -- 1
+
