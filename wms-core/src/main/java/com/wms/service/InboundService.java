@@ -10,6 +10,7 @@ import com.wms.model.dto.inbound.InboundDetailDto;
 import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
+import com.wms.model.dto.inbound.InspectionResultDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -90,5 +91,19 @@ public class InboundService {
         DocumentItemDetailEntity savedEntity = detailRepository.save(detailEntity);
 
         return savedEntity.getDetailId();
+    }
+
+    // 검수 결과 조회 ED - 15
+    public List<InspectionResultDto> inspectionFindAll(Integer documentId) {
+        List<DocumentItemDetailEntity> detailEntities = detailRepository.findAll();
+
+        List<InspectionResultDto> inspectionResultDtos = new ArrayList<>();
+        detailEntities.forEach((detailEntity) -> {
+            // 검수결과(detail) -> 문서 품목 (item) -> 문서 (document)
+            if (detailEntity.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
+                inspectionResultDtos.add(InspectionResultDto.from(detailEntity));
+            }
+        });
+        return inspectionResultDtos;
     }
 }
