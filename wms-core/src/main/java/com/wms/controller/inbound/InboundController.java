@@ -4,9 +4,12 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.wms.model.dto.InboundListDto;
+
+import com.wms.model.dto.inbound.InboundDetailDto;
+import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.service.InboundService;
 
 @RestController
@@ -21,4 +24,10 @@ public class InboundController {
         return inboundService.findAll();
     }
 
+    // 입고 문서 상세 조회
+    @GetMapping("/{documentId}")
+    public InboundDetailDto detailFindAll(
+            @PathVariable(name = "documentId") Integer documentId) {
+        return inboundService.detailFindAll(documentId);
+    }
 }

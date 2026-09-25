@@ -5,8 +5,13 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import com.wms.model.dto.InboundListDto;
+
+import com.wms.model.dto.inbound.InboundDetailDto;
+import com.wms.model.dto.inbound.InboundItemDto;
+import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.entity.DocumentEntity;
+import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 
 import jakarta.transaction.Transactional;
@@ -14,8 +19,12 @@ import jakarta.transaction.Transactional;
 @Service
 @Transactional
 public class InboundService {
+    // ED - 10
     @Autowired
     private DocumentRepository documentRepository;
+    // ED - 13
+    @Autowired
+    private DocumentItemRepository documentItemRepository;
 
     public List<InboundListDto> findAll() {
         // 문서를 전부 다 가져오기 입출고
@@ -48,5 +57,22 @@ public class InboundService {
         });
         return inboundListDtos;
 
+    }
+
+    // 입고 문서 상세 조회 ED - 13
+    public InboundDetailDto detailFindAll(Integer docuemntId) {
+        // 문서 하나 가져오기
+        DocumentEntity documentEntity = documentRepository.findById(docuemntId).orElse(null);
+        InboundDetailDto inboundDetailDto = InboundDetailDto.from(documentEntity);
+
+        List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
+        documentItemEntities.forEach((documentItemEntity) -> {
+            // 해당 문서에 해당하는 품목만 가져오기
+            if (documentItemEntity.getDocumentEntity().getDocumentId().equals(docuemntId)) {
+                InboundItemDto inboundItemDto = InboundItemDto.from(documentItemEntity);
+                inboundDetailDto.getItems().add(inboundItemDto);
+            }
+        });
+        return inboundDetailDto;
     }
 }

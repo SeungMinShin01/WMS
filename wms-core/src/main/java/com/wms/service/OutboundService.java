@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.wms.model.repository.DocumentRepository;
-import com.wms.model.dto.OutboundListDto;
+import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.entity.DocumentEntity;
 
 import jakarta.transaction.Transactional;
@@ -14,10 +14,11 @@ import jakarta.transaction.Transactional;
 @Service
 @Transactional
 public class OutboundService {
+    // ED - 12
     @Autowired
     private DocumentRepository documentRepository;
 
-    // 문서 전부 가져오기
+    // 출고 문서 전부 가져오기 ED - 12
     public List<OutboundListDto> findAll() {
         List<DocumentEntity> documentEntities = documentRepository.findAll();
 
@@ -30,4 +31,5 @@ public class OutboundService {
                 .map((entity) -> OutboundListDto.from(entity))
                 .toList();
     }
+
 }

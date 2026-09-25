@@ -1,4 +1,4 @@
-package com.wms.model.dto;
+package com.wms.model.dto.outbound;
 
 import java.time.LocalDateTime;
 
@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class OutboundListDto {
+    // ED - 12 : 출고 문서 목록 조회 응답용
     private Integer documentId;
     private String documentNo;
     private String partnerName;
