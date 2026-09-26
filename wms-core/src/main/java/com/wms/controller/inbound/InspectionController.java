@@ -6,9 +6,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.wms.model.dto.inbound.CarryingDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
 import com.wms.service.InboundService;
@@ -31,4 +33,9 @@ public class InspectionController {
         return inboundService.inspectionFindAll(documentId);
     }
 
+    // 적재 1건 ED - 16
+    @PutMapping("")
+    public boolean carry(@RequestBody CarryingDto carryingDto) {
+        return inboundService.carry(carryingDto);
+    }
 }
