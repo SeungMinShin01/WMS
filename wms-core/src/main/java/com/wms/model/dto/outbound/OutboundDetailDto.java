@@ -31,6 +31,6 @@ public class OutboundDetailDto {
                 .status(documentEntity.getStatus())
                 .items(new ArrayList<>())
                 .build();
-    }
+    }  
 
 }
