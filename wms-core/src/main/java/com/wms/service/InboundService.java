@@ -13,6 +13,7 @@ import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
 import com.wms.model.dto.inbound.PutawayDto;
+import com.wms.model.dto.inbound.StockDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -152,7 +153,7 @@ public class InboundService {
                 }
                 StockEntity savedEntity = stockRepository.save(stockEntity);
 
-                // 5. 검수 결과에 칸, 재고 연결
+                // 5. 검수 결과에 칸, 재고 정보 저장
                 detailEntity.setLocationEntity(locationEntity);
                 detailEntity.setStockEntity(savedEntity);
                 detailRepository.save(detailEntity);
@@ -160,5 +161,21 @@ public class InboundService {
             }
         }
         return false;
+    }
+
+    // 전체 재고 조회 ED - 21
+    public List<StockDto> stockFindAll() {
+        List<StockDto> stockDtos = stockRepository.findAll().stream()
+                // 소비기한 빠른 순 조회 (FEFO)
+                .sorted((a, b) -> {
+                    return a.getLotEntity().getExpiryDate()
+                            .compareTo(b.getLotEntity().getExpiryDate());
+                })
+                .map((stock) -> {
+                    return StockDto.from(stock);
+                })
+                .toList();
+        return stockDtos;
+
     }
 }

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class InspectionResultDto {
+    // ED-15 : 검수 결과 조회
     private Integer detailId;
     private Integer documentItemId;
     private String productName;

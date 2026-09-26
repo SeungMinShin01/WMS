@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class PutawayDto {
+    // ED-16 : 적재 1건
     private Integer detailId;
     private Integer locationId;
 }

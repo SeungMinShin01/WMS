@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class InspectionDto {
+    // ED-14 : 검수 결과 하나 등록
     private Integer documentItemId;
     private Integer qty;
 
