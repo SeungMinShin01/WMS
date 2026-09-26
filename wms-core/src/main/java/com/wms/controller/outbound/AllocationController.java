@@ -6,12 +6,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.PickingDto;
+import com.wms.model.dto.outbound.ShipDto;
 import com.wms.service.OutboundService;
 
 @RestController
@@ -31,6 +33,12 @@ public class AllocationController {
     public List<PickingDto> pickingList(
             @PathVariable(name = "documentId") Integer documentId) {
         return outboundService.pickingList(documentId);
+    }
+
+    // 출고확정 1건 ED - 20
+    @PutMapping("")
+    public boolean ship(@RequestBody ShipDto shipDto) {
+        return outboundService.ship(shipDto);
     }
 
 }

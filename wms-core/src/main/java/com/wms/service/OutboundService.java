@@ -1,6 +1,7 @@
 package com.wms.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundItemDto;
 import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.dto.outbound.PickingDto;
+import com.wms.model.dto.outbound.ShipDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -111,5 +113,24 @@ public class OutboundService {
                 })
                 .toList();
         return pickingDtos;
+    }
+
+    // 출고확정 1건 ED - 20
+    public boolean ship(ShipDto shipDto) {
+        // 할당 결과 찾기
+        Optional<DocumentItemDetailEntity> optional = detailRepository.findById(shipDto.getDetailId());
+        if (optional.isPresent()) {
+            DocumentItemDetailEntity detailEntity = optional.get();
+
+            // 할당할때 연결(추가)해둔 재고엔티티에서 재고 꺼내기
+            StockEntity stockEntity = detailEntity.getStockEntity();
+
+            // 실제 수량도 빼고(예약 재고만큼) 선점(예약) 재고 풀기
+            stockEntity.setQty(stockEntity.getQty() - detailEntity.getQty());
+            stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detailEntity.getQty());
+            stockRepository.save(stockEntity);
+            return true;
+        }
+        return false;
     }
 }
