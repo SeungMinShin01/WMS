@@ -19,7 +19,7 @@ public class OutboundDetailDto {
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
     private String status; 
-    private List<OutboundDetailItemDto> items;
+    private List<OutboundItemDto> items;
 
     public static OutboundDetailDto from(DocumentEntity documentEntity) {
         return OutboundDetailDto.builder()

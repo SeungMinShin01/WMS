@@ -21,4 +21,9 @@ public class OutboundService {
         List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {return OutboundListDto.from(entity);}).toList();
         return documentDtos;
     }
+
+    // ED-17 출고 문서 상세 조회
+    public List<OutboundDetailDto> getOutboundDetailList() {
+        
+    }
 }
