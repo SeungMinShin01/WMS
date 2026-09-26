@@ -5,13 +5,17 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import com.wms.model.dto.inbound.InboundDetailDto;
 import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
+import com.wms.model.dto.inbound.InspectionDto;
+import com.wms.model.dto.inbound.InspectionResultDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 
@@ -22,7 +26,7 @@ import jakarta.transaction.Transactional;
 public class InboundService {
     @Autowired private DocumentRepository documentRepository;
     @Autowired private DocumentItemRepository documentItemRepository;
-    @Autowired private DocumentItemDetailEntity documentItemDetailEntity;
+    @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
 
     // ED-10 입고 문서 목록 조회
     public List<InboundListDto> findAll(){
@@ -65,6 +69,26 @@ public class InboundService {
             }
         });
         return inboundDetailDto;
+    }
+
+    // ED-14 검수 결과 1건 등록
+    public Integer inspectionSave(InspectionDto inspectionDto) {
+        DocumentItemEntity documentItemEntity = documentItemRepository.findById(inspectionDto.getDocumentItemId()).orElse(null);
+        DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
+        DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
+        return savedEntity.getDetailId();
+    }
+
+    // ED-15 검수 결과 조회
+    public List<InspectionResultDto> inspectionFindAll(Integer documentId) {
+        List<DocumentItemDetailEntity> detailEntities = documentItemDetailRepository.findAll();
+        List<InspectionResultDto> inspectionResultDtos = new ArrayList<>();
+        detailEntities.forEach((detailEntity)->{
+            if(detailEntity.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)){
+                inspectionResultDtos.add(InspectionResultDto.from(detailEntity));
+            }
+        });
+        return inspectionResultDtos;
     }
 
     
