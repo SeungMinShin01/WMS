@@ -11,7 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data @NoArgsConstructor @AllArgsConstructor @Builder 
-public class DocumentDto {
+public class OutboundListDto {
     private Integer documentId;
     private String documentNo; // IN-20261001-001
     private String type; // INBOUND / OUTBOUND
@@ -20,8 +20,8 @@ public class DocumentDto {
     private LocalDateTime completedAt;
     private String status;
 
-    public static DocumentDto from(DocumentEntity entity) {
-        return DocumentDto.builder()
+    public static OutboundListDto from(DocumentEntity entity) {
+        return OutboundListDto.builder()
                 .documentId(entity.getDocumentId())
                 .documentNo(entity.getDocumentNo())
                 .type(entity.getType())

@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.wms.model.dto.DocumentDto;
+import com.wms.model.dto.OutboundListDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.repository.DocumentRepository;
 
@@ -16,9 +16,9 @@ public class OutboundService {
     private DocumentRepository documentRepository;
     
     // ED-12 출고 문서 목록 조회
-    public List<DocumentDto> getOutboundList() {
+    public List<OutboundListDto> getOutboundList() {
         List<DocumentEntity> documentEntities = documentRepository.findByTypeOrderByExpectedAtAsc("OUTBOUND");
-        List<DocumentDto> documentDtos = documentEntities.stream().map((entity) -> {return DocumentDto.from(entity);}).toList();
+        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {return OutboundListDto.from(entity);}).toList();
         return documentDtos;
     }
 }
