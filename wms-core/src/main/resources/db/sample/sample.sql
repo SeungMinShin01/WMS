@@ -44,14 +44,6 @@ INSERT INTO document (document_no, type, partner_id, expected_at) VALUES
 
 -- 5. 요청 줄 (입고는 LOT 있음, 출고는 NULL)
 INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
-(1, 3, 4,    60),   -- 문서1: 크래커 60
-(2, 1, 1,    60),   -- 문서2: 라면 LOT-01 60
-(2, 1, 2,    40),   -- 문서2: 라면 LOT-02 40
-(2, 2, 3,    80),   -- 문서2: 컵라면 80
-(3, 1, NULL, 90);   -- 문서3(출고): 라면 90
-
--- 5. 요청 줄 (입고는 LOT 있음, 출고는 NULL)
-INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
 (1, 3, 4,    60),   -- 1: 문서1 크래커 60
 (2, 1, 1,    60),   -- 2: 문서2 라면 LOT-01 60
 (2, 1, 2,    40),   -- 3: 문서2 라면 LOT-02 40
