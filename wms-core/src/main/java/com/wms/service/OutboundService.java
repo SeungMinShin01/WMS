@@ -13,6 +13,7 @@ import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundItemDto;
 import com.wms.model.dto.outbound.OutboundListDto;
+import com.wms.model.dto.outbound.PickingDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -91,5 +92,24 @@ public class OutboundService {
 
         return savedEntity.getDetailId();
 
+    }
+
+    // 피킹 리스트 조회 ED - 19
+    public List<PickingDto> pickingList(Integer documentId) {
+        List<PickingDto> pickingDtos = detailRepository.findAll().stream()
+                // 모든 할당결과에서 해당 문서의 것만 필터
+                .filter((detail) -> {
+                    return detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId);
+                })
+                // 칸 코드 순서대로 정렬 (오름차순)
+                .sorted((a, b) -> {
+                    return a.getLocationEntity().getLocationCode()
+                            .compareTo(b.getLocationEntity().getLocationCode());
+                })
+                .map((detail) -> {
+                    return PickingDto.from(detail);
+                })
+                .toList();
+        return pickingDtos;
     }
 }
