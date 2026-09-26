@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.DocumentDto;
-import com.wms.service.DocumentService;
+import com.wms.service.OutboundService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -15,12 +15,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OutboundController {
 
-    private final DocumentService documentService;
+    private final OutboundService outboundService;
 
     // ED-12 출고 문서 목록 조회
     @GetMapping ("/wms/outbounds")
     public List<DocumentDto> getOutboundList() {
-        return documentService.getOutboundList();
+        return outboundService.getOutboundList();
     }
 
 }
