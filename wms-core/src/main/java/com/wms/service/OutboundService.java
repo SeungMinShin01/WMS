@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.wms.model.dto.OutboundListDto;
+import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.repository.DocumentRepository;
 
