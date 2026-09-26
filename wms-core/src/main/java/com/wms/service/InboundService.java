@@ -2,6 +2,7 @@ package com.wms.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -11,12 +12,17 @@ import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.PutawayDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.entity.LocationEntity;
+import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
+import com.wms.model.repository.LocationRepository;
+import com.wms.model.repository.StockRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -32,6 +38,11 @@ public class InboundService {
     // ED - 14
     @Autowired
     private DocumentItemDetailRepository detailRepository;
+    // ED - 16
+    @Autowired
+    private LocationRepository locationRepository;
+    @Autowired
+    private StockRepository stockRepository;
 
     public List<InboundListDto> findAll() {
         // 문서를 전부 다 가져오기 입출고
@@ -105,5 +116,49 @@ public class InboundService {
             }
         });
         return inspectionResultDtos;
+    }
+
+    // 적재 1건 ED - 16
+    public boolean putaway(PutawayDto putawayDto) {
+        // 검수 결과 조회
+        Optional<DocumentItemDetailEntity> optional = detailRepository.findById(putawayDto.getDetailId());
+        if (optional.isPresent()) {
+            DocumentItemDetailEntity detailEntity = optional.get();
+
+            // 적재할 location 정보 조회
+            Optional<LocationEntity> optional2 = locationRepository.findById(putawayDto.getLocationId());
+            if (optional2.isPresent()) {
+                LocationEntity locationEntity = optional2.get();
+
+                // 같은 칸에 해당 재고가 있는지 (같은 LOT도 포함) 확인
+                StockEntity stockEntity = null;
+                for (StockEntity stock : stockRepository.findAll()) {
+                    if (stock.getLotEntity().getLotId().equals(detailEntity.getLotEntity().getLotId())
+                            && stock.getLocationEntity().getLocationId().equals(locationEntity.getLocationId())) {
+                        // 재고의 LOT == 품목 상세 LOT && 재고의 위치 == 지정한 위치
+                        stockEntity = stock; // 일치하면 stock을 담아둠 (해당 칸에 동일한 LOT가 있을경우)
+                    }
+                }
+                if (stockEntity == null) {
+                    // 해당칸에 동일한 상품이 없을 경우, 새로 만듦
+                    stockEntity = StockEntity.builder()
+                            .lotEntity(detailEntity.getLotEntity())
+                            .locationEntity(locationEntity)
+                            .qty(detailEntity.getQty())
+                            .build();
+                } else {
+                    // 이미 있으면, 이전에 담아둔 엔티티에 수량만 더함
+                    stockEntity.setQty(stockEntity.getQty() + detailEntity.getQty());
+                }
+                StockEntity savedEntity = stockRepository.save(stockEntity);
+
+                // 5. 검수 결과에 칸, 재고 연결
+                detailEntity.setLocationEntity(locationEntity);
+                detailEntity.setStockEntity(savedEntity);
+                detailRepository.save(detailEntity);
+                return true;
+            }
+        }
+        return false;
     }
 }
