@@ -1,6 +1,5 @@
 package com.wms.model.dto.outbound;
 
-import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemEntity;
 
 import lombok.AllArgsConstructor;

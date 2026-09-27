@@ -3,7 +3,6 @@ package com.wms.model.dto.outbound;
 import java.time.LocalDateTime;
 
 import com.wms.model.entity.DocumentEntity;
-import com.wms.model.entity.PartnerEntity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

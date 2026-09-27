@@ -38,7 +38,6 @@ public class OutboundService {
     
     // ED-12 출고 문서 목록 조회
     public List<OutboundListDto> getOutboundList() {
-        // 문서타입이 OUTBOUND만 가져오기
         List<DocumentEntity> documentEntities = documentRepository.findByTypeOrderByExpectedAtAsc("OUTBOUND");
         List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {return OutboundListDto.from(entity);}).toList();
         return documentDtos;
