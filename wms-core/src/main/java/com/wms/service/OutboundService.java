@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.outbound.AllocationDto;
+import com.wms.model.dto.outbound.ConfirmShipmentDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundItemDto;
 import com.wms.model.dto.outbound.OutboundListDto;
@@ -57,21 +58,21 @@ public class OutboundService {
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
         });
-    return outboundDetailDto;
+        return outboundDetailDto;
     }
 
     // ED-18 할당 1건 (피킹리스트 생성)
     public Integer allocate(AllocationDto allocationDto) {
-    DocumentItemEntity documentItemEntity = documentItemRepository.findById(allocationDto.getDocumentItemId()).orElse(null);
-    StockEntity stockEntity = stockRepository.findById(allocationDto.getStockId()).orElse(null);
+        DocumentItemEntity documentItemEntity = documentItemRepository.findById(allocationDto.getDocumentItemId()).orElse(null);
+        StockEntity stockEntity = stockRepository.findById(allocationDto.getStockId()).orElse(null);
 
-    DocumentItemDetailEntity detailEntity = allocationDto.toEntity(documentItemEntity, stockEntity);
-    DocumentItemDetailEntity savedDetail = documentItemDetailRepository.save(detailEntity);
+        DocumentItemDetailEntity detailEntity = allocationDto.toEntity(documentItemEntity, stockEntity);
+        DocumentItemDetailEntity savedDetail = documentItemDetailRepository.save(detailEntity);
 
-    stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() + allocationDto.getQty());
-    stockRepository.save(stockEntity);
+        stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() + allocationDto.getQty());
+        stockRepository.save(stockEntity);
 
-    return savedDetail.getDetailId();
+        return savedDetail.getDetailId();
     }
 
     // ED-19 피킹 리스트 조회
@@ -102,5 +103,21 @@ public class OutboundService {
             pickingListDtos.add(PickingListDto.from(detailEntity));
         });
         return pickingListDtos;
+    }
+    
+    // ED-20 출고확정 
+    public Boolean confirmShipment(ConfirmShipmentDto confirmShipmentDto) {
+        DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(confirmShipmentDto.getDetailId()).orElse(null);
+        
+        if (detailEntity == null) {
+            return false;
+        }
+
+        StockEntity stockEntity = detailEntity.getStockEntity();
+        stockEntity.setQty(stockEntity.getQty() - detailEntity.getQty());
+        stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detailEntity.getQty());
+        stockRepository.save(stockEntity);
+
+        return true;
     }
 }

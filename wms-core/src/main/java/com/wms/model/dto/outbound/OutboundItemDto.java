@@ -15,12 +15,12 @@ public class OutboundItemDto {
     private String productName;
     private Integer expectedQty;
 
-    public static OutboundItemDto from(DocumentItemEntity documentItemEntity){
+    public static OutboundItemDto from(DocumentItemEntity Entity){
         return OutboundItemDto.builder()
-            .documentItemId(documentItemEntity.getDocumentItemId())
-            .productCode(documentItemEntity.getProductEntity().getProductCode())
-            .productName(documentItemEntity.getProductEntity().getProductName())
-            .expectedQty(documentItemEntity.getExpectedQty())
+            .documentItemId(Entity.getDocumentItemId())
+            .productCode(Entity.getProductEntity().getProductCode())
+            .productName(Entity.getProductEntity().getProductName())
+            .expectedQty(Entity.getExpectedQty())
             .build();
     }
 

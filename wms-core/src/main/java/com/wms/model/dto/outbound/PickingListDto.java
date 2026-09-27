@@ -16,14 +16,14 @@ public class PickingListDto {
     private String lotCode;
     private Integer qty;
 
-    public static PickingListDto from( DocumentItemDetailEntity documentItemDetailEntity ){
+    public static PickingListDto from( DocumentItemDetailEntity Entity ){
         return PickingListDto.builder()
-            .detailId(documentItemDetailEntity.getDetailId())
-            .locationCode(documentItemDetailEntity.getLocationEntity().getLocationCode())
-            .productCode(documentItemDetailEntity.getDocumentItemEntity().getProductEntity().getProductCode())
-            .productName(documentItemDetailEntity.getDocumentItemEntity().getProductEntity().getProductName())
-            .lotCode(documentItemDetailEntity.getLotEntity().getLotCode())
-            .qty(documentItemDetailEntity.getQty())
+            .detailId(Entity.getDetailId())
+            .locationCode(Entity.getLocationEntity().getLocationCode())
+            .productCode(Entity.getDocumentItemEntity().getProductEntity().getProductCode())
+            .productName(Entity.getDocumentItemEntity().getProductEntity().getProductName())
+            .lotCode(Entity.getLotEntity().getLotCode())
+            .qty(Entity.getQty())
             .build();
     }
 
