@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundListDto;
+import com.wms.model.dto.outbound.PickingListDto;
 import com.wms.service.OutboundService;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -35,5 +36,13 @@ public class OutboundController {
     @PostMapping ("/wms/allocations")
     public Integer allocate(@RequestBody AllocationDto allocationDto) {
     return outboundService.allocate(allocationDto);
-}
+    }
+
+
+    // ED-19 피킹 리스트 조회
+    @GetMapping ("/wms/allocations/{documentId}")
+    public List<PickingListDto> getPickingList(@PathVariable (name = "documentId") Integer documentId){
+        return  outboundService.getPickingList(documentId);
+    }
+    
 }
