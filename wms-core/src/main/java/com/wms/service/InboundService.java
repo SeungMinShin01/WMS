@@ -57,9 +57,18 @@ public class InboundService {
         inbounds.sort((a,b)->a.getExpectedAt().compareTo(b.getExpectedAt()));
 
         // 4. Dto 변경
+        List<DocumentItemEntity> allItems = documentItemRepository.findAll();
         List<InboundListDto> inboundListDtos = new ArrayList<>();
         inbounds.forEach((documentEntity)->{
-            inboundListDtos.add(InboundListDto.from(documentEntity));
+            int itemCount = 0;
+            int totalQty = 0;
+            for(DocumentItemEntity item : allItems){
+                if(item.getDocumentEntity().getDocumentId().equals(documentEntity.getDocumentId())){
+                    itemCount++;
+                    totalQty += item.getExpectedQty();
+                }
+            }
+            inboundListDtos.add(InboundListDto.from(documentEntity, itemCount, totalQty));
         });
         return inboundListDtos;
     }
