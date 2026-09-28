@@ -21,14 +21,14 @@ public class OutboundDetailDto {
     private String status; 
     private List<OutboundItemDto> items;
 
-    public static OutboundDetailDto from(DocumentEntity documentEntity) {
+    public static OutboundDetailDto from(DocumentEntity Entity) {
         return OutboundDetailDto.builder()
-                .documentId(documentEntity.getDocumentId())
-                .documentNo(documentEntity.getDocumentNo())
-                .partnerName(documentEntity.getPartnerEntity().getPartnerName())
-                .expectedAt(documentEntity.getExpectedAt())
-                .completedAt(documentEntity.getCompletedAt())
-                .status(documentEntity.getStatus())
+                .documentId(Entity.getDocumentId())
+                .documentNo(Entity.getDocumentNo())
+                .partnerName(Entity.getPartnerEntity().getPartnerName())
+                .expectedAt(Entity.getExpectedAt())
+                .completedAt(Entity.getCompletedAt())
+                .status(Entity.getStatus())
                 .items(new ArrayList<>())
                 .build();
     }  
