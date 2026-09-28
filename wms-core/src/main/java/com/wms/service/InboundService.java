@@ -83,7 +83,15 @@ public class InboundService {
 
     // ED-14 검수 결과 1건 등록
     public Integer inspectionSave(InspectionDto inspectionDto) {
+        // 수량 검사, 0-음수-빈값 보냄x
+        if (inspectionDto.getQty() == null || inspectionDto.getQty() <= 0) return null;
         DocumentItemEntity documentItemEntity = documentItemRepository.findById(inspectionDto.getDocumentItemId()).orElse(null);
+        // NullPointException error 해결 , 조회 직후 null 이면 멈추기
+        if (documentItemEntity == null) return null;
+        // 품목이 속한 문서가 입고인지 확인
+        if (!documentItemEntity.getDocumentEntity().getType().equals("INBOUND")) return null;
+        // 문서 상태가 waiting일때만 허용
+        if (!documentItemEntity.getDocumentEntity().getStatus().equals("WAITING")) return null;
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
         return savedEntity.getDetailId();
@@ -120,6 +128,10 @@ public class InboundService {
         // 검수 결과 조회
         DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(carryingDto.getDetailId()).orElse(null);
         if(detailEntity == null) return false;
+
+        // 취소된 입고의 물건 들여보내지 않기 
+        String status = detailEntity.getDocumentItemEntity().getDocumentEntity().getStatus();
+        if (status.equals("CANCELED")) return false;
 
         // 이미 적재됐으면 중복 적재 방지
         if(detailEntity.getLocationEntity() != null) return false;
