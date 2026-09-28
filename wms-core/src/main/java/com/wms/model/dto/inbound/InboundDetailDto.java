@@ -1,6 +1,8 @@
 package com.wms.model.dto.inbound;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.wms.model.entity.DocumentEntity;
 
@@ -13,7 +15,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Data
 @Builder
-public class InboundListDto {
+public class InboundDetailDto {
+    // ED - 13 : 입고 문서 상세 조회
     private Integer documentId;
     private String documentNo;
     private String partnerName;
@@ -21,8 +24,11 @@ public class InboundListDto {
     private LocalDateTime completedAt;
     private String status;
 
-    public static InboundListDto from(DocumentEntity entity) {
-        return InboundListDto.builder()
+    @Builder.Default
+    private List<InboundItemDto> items = new ArrayList<>();
+
+    public static InboundDetailDto from(DocumentEntity entity) {
+        return InboundDetailDto.builder()
                 .documentId(entity.getDocumentId())
                 .documentNo(entity.getDocumentNo())
                 .partnerName(entity.getPartnerEntity().getPartnerName())

@@ -1,6 +1,6 @@
 # - main, develop, feature/** 브랜치에 push될 때 돈다
 #   (feature에서 먼저 빌드 확인 → 통과하면 develop에 올린다)
-# - 배포(CD)는 아직 없음. 서버가 생기면 cd.yml을 따로 추가한다.
+# - 배포(CD)는 아직 없음. 서버가 생기면 cd.yml을 따로 추가
 
 name: WMS CI
 
@@ -10,26 +10,92 @@ on:
   workflow_dispatch: # Actions 탭에서 수동 실행 버튼
 
 jobs:
+  # 커밋 메시지 형식 (hook을 안 켠 사람 대비)
+  commit-msg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 이전 커밋까지 다 받아야 비교할 수 있다
+
+      - name: check commit messages
+        run: |
+
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            RANGE="origin/develop..HEAD"
+          else
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          fi
+
+
+          PATTERN='^(feat|fix|refactor|perf|test|docs|chore|merge|release)(\((global|document|inbound|stock|outbound|product|partner|location|portal|frontend)\))?: .{1,50}( \(ED-[0-9]+\))?$'
+          FAIL=0
+
+          SHAS=$(git rev-list --no-merges "$RANGE")
+
+          for sha in $SHAS; do
+            msg=$(git log -1 --format=%s "$sha")
+
+            # git이 자동으로 만드는 메시지는 건너뛴다
+            case "$msg" in
+              Merge*|Revert*|fixup!*|squash!*) continue ;;
+            esac
+
+            if echo "$msg" | grep -Eq "$PATTERN"; then
+              echo "✅ $sha  $msg"
+            else
+              echo "❌ $sha  $msg"
+              FAIL=1
+            fi
+          done
+
+          if [ "$FAIL" = "1" ]; then
+            echo ""
+            echo "커밋 메시지 형식: <type>(<scope>): <제목> (ED-숫자)  — docs/commit_message_rules.md 5.2"
+            exit 1
+          fi
+
+  # 백엔드 빌드 (컴파일 + jar)
   backend:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Java 17 세팅
+      # Java 17
       - name: set java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # 2. Gradle 세팅 + 캐시 (funda의 pnpm store 캐시와 같은 역할)
+      # Gradle 캐시
       - name: set gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # 3. 빌드 (컴파일 + jar 생성)
-      #    -x test : 테스트는 일단 뺀다. 테스트가 MySQL에 붙어야 해서 CI에서 실패하기 때문.
       - name: build
         run: |
           chmod +x gradlew
           ./gradlew build -x test --no-daemon
+
+  # 프론트 빌드
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 버전은 frontend/.nvmrc 에서 읽는다 (로컬과 CI를 같은 파일로 맞춤)
+      - name: set node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # lock 파일대로 정확한 버전 설치
+      - run: npm ci
+
+      # import 오타 · 없는 파일 · JSX 문법 에러를 잡는다
+      - run: npm run build
