@@ -1,15 +1,15 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { HashRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 
-// HashRouter: 주소가 /wms/#/inbounds 처럼 # 뒤에 붙는다.
-// 백엔드 API 주소가 /wms/... 라서 BrowserRouter를 쓰면 새로고침할 때 API와 겹친다.
+// BrowserRouter (수업과 같음): 화면 주소는 / , API 주소는 /wms/... 라 겹치지 않는다.
+// 배포 때는 스프링에 "화면 주소로 오면 index.html" 컨트롤러 하나가 필요하다.
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <HashRouter>
+    <BrowserRouter>
       <App />
-    </HashRouter>
+    </BrowserRouter>
   </StrictMode>,
 );
