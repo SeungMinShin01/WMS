@@ -7,6 +7,7 @@ export default function InboundPage(props) {
   const 조회 = (event) => {
     event.preventDefault();
   };
+  
 
   return (
     <>
