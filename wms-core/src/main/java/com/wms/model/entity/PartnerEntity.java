@@ -16,7 +16,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Data
 @Builder
-public class PartnerEntity extends BaseTime {
+public class PartnerEntity extends BaseTime { 
+    // 유린님
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer partnerId;
