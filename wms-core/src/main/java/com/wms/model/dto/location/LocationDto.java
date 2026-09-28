@@ -1,5 +1,4 @@
 
-/*
 package src.main.java.com.wms.model.dto.location;
 
 import lombok.Getter;
@@ -36,4 +35,3 @@ public static LocationDto from( LocationEntity entity ){
 // from() (Entity ➔ DTO) DB에서 꺼내온 날것의 데이터(Entity)를 택배 상자 DTO로 변환
 // static이 있는 이유는 Entity에서 변환을 하기 때문임.
 // get 다음 대문자
-*/
