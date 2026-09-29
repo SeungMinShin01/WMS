@@ -1,8 +1,17 @@
+package com.wms.model.dto.product;
 
-package src.main.java.com.wms.model.dto.product;
+import java.time.LocalDateTime;
 
+import com.wms.model.entity.ProductEntity;
 
-@Getter @Setter @Tostring @Builder @NoArgsConstructor @AllArgsConstructor
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+@Getter @Setter @ToString @Builder @NoArgsConstructor @AllArgsConstructor
 public class ProductDto {
     private Integer productId;
     private String productCode;
@@ -11,23 +20,30 @@ public class ProductDto {
     private String unit;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-public ProductEntity toEntity() {
+    
+// 1. DTO -> ENTITY
+    public ProductEntity toEntity(){
         return ProductEntity.builder()
-            .productCode( this.productCode )
-            .productName( this.productName )
-            .spec( this.spec )
-            .unit( this.unit )
-            .build();
-        }
-public static ProductDto from( ProductEntity entity ){
+                            .productCode( this.productCode )
+                            .productName( this.productName )
+                            .spec( this.spec )
+                            .unit( this.unit )
+                            .build();                           
+    }
+// 2. ENTITY -> DTO
+    public static  ProductDto from( ProductEntity entity ){
         return ProductDto.builder()
-            .productId( entity.getProductId() )
             .productCode( entity.getProductCode() )
-            .productName( entity.getproductName() )
+            .productName( entity.getProductName() )
             .spec( entity.getSpec() )
             .unit( entity.getUnit() )
             .createdAt( entity.getCreatedAt() )
-            .updatedAt( entity.getupdateAt() )
+            .updatedAt( entity.getUpdatedAt() )
             .build();
+
     }
+
+
+
+
 }
