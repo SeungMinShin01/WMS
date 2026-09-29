@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.wms.model.entity.DocumentEntity;
 
 import lombok.AllArgsConstructor;
@@ -20,7 +21,9 @@ public class InboundDetailDto {
     private Integer documentId;
     private String documentNo;
     private String partnerName;
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime expectedAt;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime completedAt;
     private String status;
 
