@@ -1,12 +1,10 @@
 package com.wms.service;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.PathVariable;
 
 import com.wms.model.dto.inbound.CarryingDto;
 import com.wms.model.dto.inbound.InboundDetailDto;
@@ -14,7 +12,6 @@ import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
-import com.wms.model.dto.inbound.StockDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -24,17 +21,15 @@ import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.LocationRepository;
-import com.wms.model.repository.StockRepository;
 
-import jakarta.transaction.Transactional;
 
 @Service 
-@Transactional 
+@org.springframework.transaction.annotation.Transactional 
 public class InboundService {
     @Autowired private DocumentRepository documentRepository;
     @Autowired private DocumentItemRepository documentItemRepository;
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
-    @Autowired private StockRepository stockRepository;
+    @Autowired private StockService stockService;
     // ED-16
     @Autowired private LocationRepository locationRepository;
 
@@ -118,20 +113,6 @@ public class InboundService {
         return inspectionResultDtos;
     }
 
-    // ED-21 재고 조회
-     public List<StockDto> stockFindAll() {
-        List<StockEntity> stockEntities = stockRepository.findAll();
-        // FEFO정렬: 유통기한 오름차순 -> 유통기한없는 lot는 맨 뒤로 -> 같으면 stockId순으로 
-        stockEntities.sort(
-            Comparator.comparing((StockEntity s)->s.getLotEntity().getExpiryDate(),
-            Comparator.nullsLast(Comparator.naturalOrder()))
-            .thenComparing(StockEntity::getStockId)
-        );
-        List<StockDto> stockDtos = new ArrayList<>();
-        stockEntities.forEach(stockEntity -> stockDtos.add(StockDto.from(stockEntity)));
-        return stockDtos;
-    }
-
     // ED-16 적재 1건
     public boolean carry(CarryingDto carryingDto) {
         // 검수 결과 조회
@@ -149,28 +130,8 @@ public class InboundService {
         LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId()).orElse(null);
         if(locationEntity == null || !locationEntity.getIsActive()) return false;
 
-        // 같은 lot + 같은 칸의 재고 찾기
-        StockEntity stockEntity = null;
-        List<StockEntity> stockEntities = stockRepository.findAll();
-        for(StockEntity s : stockEntities){
-            if(s.getLotEntity().getLotId().equals(detailEntity.getLotEntity().getLotId())
-                    && s.getLocationEntity().getLocationId().equals(locationEntity.getLocationId())){
-                        stockEntity = s;
-                        break;
-                }
-        }
-        if(stockEntity != null){
-            // 있으면 수량 +
-            stockEntity.setQty(stockEntity.getQty() + detailEntity.getQty());
-        }else {
-            // 없으면 새재고 생성
-            stockEntity = StockEntity.builder()
-            .lotEntity(detailEntity.getLotEntity())
-            .locationEntity(locationEntity)
-            .qty(detailEntity.getQty())
-            .build();
-            stockEntity = stockRepository.save(stockEntity);
-        }
+        // 재고 증가는 StockService에 맡긴다
+        StockEntity stockEntity = stockService.increase(detailEntity.getLotEntity(), locationEntity, detailEntity.getQty());
 
         // 검수 결과에 적재 위치와 재고 연결
         detailEntity.setLocationEntity(locationEntity);
