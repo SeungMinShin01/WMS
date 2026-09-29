@@ -18,6 +18,9 @@ import com.wms.model.dto.outbound.ConfirmShipmentDto;
 import com.wms.service.OutboundService;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+
 @CrossOrigin (origins = "http://localhost:5173" , allowCredentials = "true")
 @RestController
 public class OutboundController {
@@ -39,6 +42,17 @@ public class OutboundController {
     @PostMapping ("/wms/allocations")
     public Integer allocate(@RequestBody AllocationDto allocationDto) {
     return outboundService.allocate(allocationDto);
+    }
+    
+    // ED-18 확장 : 출고 문서 자동 할당 (할당 규칙 v3)
+    // 성공 → 201 + 피킹리스트 / 실패 → GlobalExceptionHandler 가 400·404·409 + 메시지로 응답
+    // 기존 GET /wms/allocations/{documentId}(피킹 조회)와 주소는 같지만 POST 라서 충돌하지 않음
+    @PostMapping("/wms/allocations/{documentId}")
+    public ResponseEntity<List<PickingListDto>> autoAllocate(@PathVariable(name = "documentId") Integer documentId) {
+        // 주소의 {documentId} 값을 받아 서비스의 자동 할당 실행 → 결과 피킹리스트
+        List<PickingListDto> pickingList = outboundService.autoAllocate(documentId);
+        // 새 할당(detail)이 만들어졌으니 201 Created, 본문에는 피킹리스트
+        return ResponseEntity.status(HttpStatus.CREATED).body(pickingList);
     }
 
 
