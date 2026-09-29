@@ -2,7 +2,9 @@ package com.wms.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -54,39 +56,82 @@ public class StockService {
         return stockRepository.save(newStock);
     }
 
-    // 적치 추천 - 같은 LOT 칸 -> 같은 품목 칸 -> 빈 칸 순, 다른 품목이 있는 칸은 제외
-    public  List<LocationRecommendDto> recommend(LotEntity lotEntity){
+    // 칸 하나의 현재 상태 (적재하려는 LOT 기준)
+    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount) {}
+
+    // 칸 하나 조사
+    private LocationCheck check(LocationEntity loc, LotEntity lot, List<StockEntity> stocks){
+        int total = 0;
+        boolean hasSameLot = false;
+        boolean hasSameProductOtherLot = false;
+        Set<Integer> otherProducts = new HashSet<>();
+        for(StockEntity s : stocks){
+            if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0) continue;
+            total += s.getQty();
+            Integer productId = s.getLotEntity().getProductEntity().getProductId();
+            if(s.getLotEntity().getLotId().equals(lot.getLotId()))  hasSameLot = true;
+            else if (productId.equals(lot.getProductEntity().getProductId())) hasSameProductOtherLot = true;
+            else                                                              otherProducts.add(productId);
+        }
+        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size());
+    }
+
+    // 여유 수량 - capacity가 null이면 제한 없음
+    private int freeQty(LocationEntity loc, int total){
+        return loc.getCapacity() == null ? Integer.MAX_VALUE : loc.getCapacity() - total;
+    }
+
+    // 정책 위반 사유 (없으면 null) - 추천에서 제외할 칸
+    private String policyViolation(LocationCheck c, boolean mixLot){
+        if(mixLot){
+            // 혼용적재: 같은 품목끼리 (LOT 달라도 OK)
+            if(c.otherProductCount() > 0) return "다른 품목이 있는 칸";
+        }else{
+            // 기본: 품목마다 LOT 1개, 품목은 제한 없음
+            if(c.hasSameProductOtherLot()) return "같은 품목의 다른 LOT가 있는 칸";
+        }
+        return null;
+    }
+
+    // 적치 추천 - 제외: 미사용-꽉찬칸-정책위반 / 순위: 같은 LOT->잔량 칸->빈칸/ 같은 순위: Best fit(딱 맞는 칸)
+    public List<LocationRecommendDto> recommend(LotEntity lot, int qty, boolean mixLot){
         List<StockEntity> stocks = stockRepository.findAll();
         List<LocationEntity> locations = locationRepository.findAll();
-        locations.sort((a,b)-> a.getLocationCode().compareTo(b.getLocationCode()));
-
-        List<LocationRecommendDto> sameLot = new ArrayList<>();
-        List<LocationRecommendDto> sameProduct = new ArrayList<>();
-        List<LocationRecommendDto> empty = new ArrayList<>();
+        List<LocationRecommendDto> candidates = new ArrayList<>();
 
         for(LocationEntity loc : locations){
-            if(!loc.getIsActive()) continue;    // 미사용칸 제외
+            if(!loc.getIsActive()) continue;    // 미사용 칸
+            LocationCheck c = check(loc, lot, stocks);
+            int free = freeQty(loc, c.total());
+            if(free <= 0) continue;             // 꽉 찬 칸
+            if(policyViolation(c, mixLot) != null) continue;    // 정책 위반 칸
 
-            int total = 0;
-            boolean hasSameLot = false, hasSameProduct = false, hasOther = false;
-            for(StockEntity s : stocks){
-                if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0) continue;
-                total += s.getQty();
-                if(s.getLotEntity().getLotId().equals(lotEntity.getLotId())) hasSameLot = true;
-                else if(s.getLotEntity().getProductEntity().getProductId().equals(lotEntity.getProductEntity().getProductId())) hasSameProduct = true;
-                else hasOther = true;
-            }
+            int priority;
+            String reason;
+            if(c.hasSameLot())  {priority = 1; reason = "같은 LOT 적치 중";}
+            else if(c.total()>0){priority = 2; reason = mixLot ? "같은 품목(다른 LOT 칸" : "다른 품목 잔량 칸";}
+            else                {priority = 3; reason = "빈 칸";}
 
-            if(hasOther) continue;  // 다른 품목이 있는 칸은 추천 안함(혼적방지)
-            if(hasSameLot)              sameLot.add(new LocationRecommendDto(loc.getLocationId(), loc.getLocationCode(), "같은 LOT 적치 중", total));
-            else if(hasSameProduct)     sameProduct.add(new LocationRecommendDto(loc.getLocationId(),loc.getLocationCode(), "같은 품목 적치 중", total));
-            else                        empty.add(new LocationRecommendDto(loc.getLocationId(),loc.getLocationCode(), "빈 칸", 0)); 
+            candidates.add(LocationRecommendDto.builder()
+                        .locationId(loc.getLocationId())
+                        .locationCode(loc.getLocationCode())
+                        .reason(reason)
+                        .currentQty(c.total())
+                        .freeQty(free == Integer.MAX_VALUE ? null : free)   // null = 제한 없음
+                        .fits(free >= qty)
+                        .priority(priority)
+                        .build());
         }
-        
-        List<LocationRecommendDto> result = new ArrayList<>();
-        result.addAll(sameLot);
-        result.addAll(sameProduct);
-        result.addAll(empty);
-        return result.size() > 5 ? result.subList(0, 5) : result;   // 상위 5개
+
+        candidates.sort(Comparator
+            .comparing(LocationRecommendDto::getPriority)                               // 1->2->3
+            .thenComparing(LocationRecommendDto::getFits, Comparator.reverseOrder())    // 전량 들어가는 칸 먼저
+            .thenComparingInt(d -> {
+                int f = d.getFreeQty() == null ? Integer.MAX_VALUE : d.getFreeQty();
+                return d.getFits() ? f : -f;    // 전량 칸: 여유 작은 순(Best Fit) / 부족 칸: 여유 큰 순
+            })
+            .thenComparing(LocationRecommendDto::getLocationCode)   // 같으면 칸 코드 순
+        );
+        return candidates.size() > 5 ? candidates.subList(0, 5) : candidates; 
     }
 }

@@ -24,6 +24,8 @@ import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.LocationRepository;
 
+import jakarta.persistence.EntityNotFoundException;
+
 @Service 
 @Transactional 
 public class InboundService {
@@ -156,11 +158,11 @@ public class InboundService {
         return true;
     }
 
-    // 적치 추천 (검수 기록 1건 기준)
-    public List<LocationRecommendDto> recommend(Integer detailId){
-        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId).orElse(null);
-        if(detail==null) return new ArrayList<>();
-        return stockService.recommend(detail.getLotEntity());
+    // 적치 추천 (검수 기록 1건 기준) — 없는 검수 기록이면 404
+    public List<LocationRecommendDto> recommend(Integer detailId, boolean mixLot){
+        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
+        return stockService.recommend(detail.getLotEntity(), detail.getQty(), mixLot);
     }
     
 }

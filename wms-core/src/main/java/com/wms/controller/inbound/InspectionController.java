@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.inbound.CarryingDto;
@@ -42,9 +43,10 @@ public class InspectionController {
         return inboundService.carry(carryingDto);
     }
 
-    // 적치 추천 (검수 기록 1건 기준)
+    // 적치 추천 (검수 기록 1건 기준) — mixLot=true면 혼용적재 모드
     @GetMapping("/recommend/{detailId}")
-    public List<LocationRecommendDto> recommend(@PathVariable(name = "detailId") Integer detailId) {
-        return inboundService.recommend(detailId);
+    public List<LocationRecommendDto> recommend(@PathVariable(name = "detailId") Integer detailId,
+                                                @RequestParam(name = "mixLot", defaultValue = "false") boolean mixLot) {
+        return inboundService.recommend(detailId, mixLot);
     }
 }
