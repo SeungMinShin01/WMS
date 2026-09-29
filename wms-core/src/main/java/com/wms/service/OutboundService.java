@@ -182,7 +182,7 @@ public class OutboundService {
                 }
             }
 
-            // 3-4. v3 정렬 — 재고 행 두 개씩 비교, 앞 기준이 같을 때만 다음 기준으로
+            // 3-4. 정렬 — 재고 행 두 개씩 비교, 앞 기준이 같을 때만 다음 기준으로
             //   LOT 기준(1 ~ 2-3)을 칸 기준(3-1 ~ 3-3)보다 모두 앞에 둬서 LOT이 한 덩어리로 묶임
             candidates.sort(Comparator
                 // [LOT] 1 : 소비기한 빠른 순 (FEFO)
@@ -215,7 +215,7 @@ public class OutboundService {
                         .build();
                 documentItemDetailRepository.save(allocationDto.toEntity(item, s));
 
-                s.setAllocatedQty(s.getAllocatedQty() + take);         // 선점 증가 (찜)
+                s.setAllocatedQty(s.getAllocatedQty() + take);         // 선점 증가
                 stockRepository.save(s);
 
                 need -= take;                                          // 남은 필요량 감소
@@ -226,7 +226,7 @@ public class OutboundService {
         documentEntity.setStatus("ALLOCATED");                         // 대기 → 할당됨
         documentRepository.save(documentEntity);
 
-        // 결과로 피킹리스트(로케이션 코드순) 반환 → 기존 메서드 재사용
+        // 결과로 피킹리스트(로케이션 코드순) 반환
         return getPickingList(documentId);
     }
 
