@@ -18,7 +18,8 @@ public class OutboundListDto {
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
     private String status;
-
+    private String contact;
+    private LocalDateTime createdAt; 
     public static OutboundListDto from(DocumentEntity entity) {
         return OutboundListDto.builder()
                 .documentId(entity.getDocumentId())
