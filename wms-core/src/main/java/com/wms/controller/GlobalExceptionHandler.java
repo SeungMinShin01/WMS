@@ -34,4 +34,5 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> serverError(Exception e){
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
     }
+
 }
