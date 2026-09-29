@@ -21,14 +21,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 @RestController
 @RequestMapping("/wms/inspections")
 public class InspectionController {
-    @Autowired  private InboundService inboundService;
+    @Autowired
+    private InboundService inboundService;
 
     // 검수 1건 등록 ED - 14
     @PostMapping("")
     public Integer inspectionSave(@RequestBody InspectionDto inspectionDto) {
         return inboundService.inspectionSave(inspectionDto);
     }
-
 
     // 검수 결과 상세 조회 ED - 15
     @GetMapping("/{documentId}")

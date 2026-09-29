@@ -13,22 +13,22 @@ import com.wms.model.dto.inbound.InboundDetailDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.service.InboundService;
 
-@RestController 
+@RestController
 @RequestMapping("/wms/inbounds")
 public class InboundController {
-    @Autowired private InboundService inboundService;
+    @Autowired
+    private InboundService inboundService;
 
     // ED-10 입고 문서 목록 조회
     @GetMapping("")
-    public List<InboundListDto> findAll(){
+    public List<InboundListDto> findAll() {
         return inboundService.findAll();
     }
-    
+
     // ED-13 입고 문서 상세 조회
     @GetMapping("/{documentId}")
-    public InboundDetailDto detailFind(@PathVariable (name="documentId") Integer documentId){
+    public InboundDetailDto detailFind(@PathVariable(name = "documentId") Integer documentId) {
         return inboundService.detailFind(documentId);
-    } 
+    }
 
-    
 }
