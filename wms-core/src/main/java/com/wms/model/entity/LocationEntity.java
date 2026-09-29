@@ -27,6 +27,5 @@ public class LocationEntity extends BaseTime {
     @Builder.Default
     private Boolean isActive = true;
     
-    @Builder.Default
-    private Integer maxQty = 180;   // 칸당 적재 가능 수량 (단위:Box)
+    private Integer capacity; // 칸당 최대 적재량 (단위: BOX), null = 제한 없음 (V2)
 }
