@@ -9,7 +9,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data @NoArgsConstructor @AllArgsConstructor @Builder 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class OutboundListDto {
     private Integer documentId;
     private String documentNo; // IN-20261001-001
@@ -18,6 +21,7 @@ public class OutboundListDto {
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
     private String status;
+    private LocalDateTime createdAt;
 
     public static OutboundListDto from(DocumentEntity entity) {
         return OutboundListDto.builder()

@@ -29,6 +29,7 @@ export default function InboundPage(props) {
     event.preventDefault();   // 새로고침 막기
     목록조회();
   };
+  
 
   // 화면이 처음 열릴때 목록 한번 불러오기
   useEffect(()=>{

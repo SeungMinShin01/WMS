@@ -1,6 +1,5 @@
 package com.wms.service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,31 +75,12 @@ public class OutboundService {
 
     // ED-19 피킹 리스트 조회
     public List<PickingListDto> getPickingList(Integer documentId){
-        List<DocumentItemDetailEntity> detailEntities = documentItemDetailRepository.findAll();
-
-        List<DocumentItemDetailEntity> filtered = new ArrayList<>();
-        detailEntities.forEach( (detailEntity) -> {
-            if (detailEntity.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
-                filtered.add(detailEntity);
-            }
-        });
-    
-        for (int i = 0; i < filtered.size(); i++) {
-            for (int j = i + 1; j < filtered.size(); j++) {
-                String codeI = filtered.get(i).getLocationEntity().getLocationCode();
-                String codeJ = filtered.get(j).getLocationEntity().getLocationCode();
-                if (codeJ.compareTo(codeI) < 0) {
-                    DocumentItemDetailEntity temp = filtered.get(i);
-                    filtered.set(i, filtered.get(j));
-                    filtered.set(j, temp);
-                }
-            }
-        }
-
-        List<PickingListDto> pickingListDtos = new ArrayList<>();
-        filtered.forEach((detailEntity) -> {
-            pickingListDtos.add(PickingListDto.from(detailEntity));
-        });
+        List<PickingListDto> pickingListDtos = documentItemDetailRepository.findAll().stream()
+            .filter((detail) -> detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId))
+            .sorted((a, b) -> a.getLocationEntity().getLocationCode()
+                               .compareTo(b.getLocationEntity().getLocationCode()))
+            .map((detail) -> PickingListDto.from(detail))
+            .toList();
         return pickingListDtos;
     }
     

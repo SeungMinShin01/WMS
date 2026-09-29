@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class LocationEntity extends BaseTime {
+    // 유린님
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer locationId;
