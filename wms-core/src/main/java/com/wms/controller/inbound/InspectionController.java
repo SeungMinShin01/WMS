@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/wms/inspections")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class InspectionController {
     @Autowired  private InboundService inboundService;
 

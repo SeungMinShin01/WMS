@@ -19,7 +19,7 @@ public class InspectionResultDto {
     private String productCode;
     private String productName;
     private String lotCode;
-    private LocalDate expirDate;
+    private LocalDate expiryDate;
     private Integer expectedQty;
 
     private Integer detailId;

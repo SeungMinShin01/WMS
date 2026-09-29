@@ -13,7 +13,6 @@ import com.wms.service.StockService;
 
 @RestController
 @RequestMapping("/wms/stocks")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class StockController {
     @Autowired private StockService stockService;
 

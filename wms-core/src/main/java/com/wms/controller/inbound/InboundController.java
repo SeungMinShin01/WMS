@@ -15,7 +15,6 @@ import com.wms.service.InboundService;
 
 @RestController 
 @RequestMapping("/wms/inbounds")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class InboundController {
     @Autowired private InboundService inboundService;
 
