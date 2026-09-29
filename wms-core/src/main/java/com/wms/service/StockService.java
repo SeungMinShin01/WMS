@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.inbound.LocationRecommendDto;
-import com.wms.model.dto.inbound.StockDto;
+import com.wms.model.dto.stock.StockDto;
 import com.wms.model.entity.LocationEntity;
 import com.wms.model.entity.LotEntity;
 import com.wms.model.entity.StockEntity;

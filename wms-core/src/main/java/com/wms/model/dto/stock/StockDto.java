@@ -1,4 +1,4 @@
-package com.wms.model.dto.inbound;
+package com.wms.model.dto.stock;
 
 import java.time.LocalDate;
 
