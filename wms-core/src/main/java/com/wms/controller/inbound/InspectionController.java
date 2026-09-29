@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.wms.model.dto.inbound.CarryingDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.service.InboundService;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -40,5 +41,11 @@ public class InspectionController {
     @PutMapping("")
     public boolean carry(@RequestBody CarryingDto carryingDto) {
         return inboundService.carry(carryingDto);
+    }
+
+    // 적치 추천 (검수 기록 1건 기준)
+    @GetMapping("/recommend/{detailId}")
+    public List<LocationRecommendDto> recommend(@PathVariable(name = "detailId") Integer detailId) {
+        return inboundService.recommend(detailId);
     }
 }

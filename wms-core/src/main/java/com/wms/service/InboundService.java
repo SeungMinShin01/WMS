@@ -12,6 +12,7 @@ import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -139,5 +140,11 @@ public class InboundService {
         return true;
     }
 
+    // 적치 추천 (검수 기록 1건 기준)
+    public List<LocationRecommendDto> recommend(Integer detailId){
+        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId).orElse(null);
+        if(detail==null) return new ArrayList<>();
+        return stockService.recommend(detail.getLotEntity());
+    }
     
 }
