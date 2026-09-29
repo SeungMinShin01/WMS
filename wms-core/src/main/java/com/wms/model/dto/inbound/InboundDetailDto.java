@@ -37,7 +37,7 @@ public class InboundDetailDto {
                 .partnerName(entity.getPartnerEntity().getPartnerName())
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
-                .status(entity.getStatus())
+                .status(entity.getStatus().name())
                 .build();
     }
 }
