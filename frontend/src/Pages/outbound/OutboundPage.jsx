@@ -4,6 +4,10 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { Link } from "react-router-dom";
 
+// 문서 상태 영어 값 → 화면에 보여줄 한글 (값에 없는 상태는 영어 그대로)
+const 상태이름 = { WAITING: "접수", ALLOCATED: "할당", PICKING: "피킹중", SHIPPED: "출고완료", CANCELED: "취소" };
+const 상태표시 = (status) => 상태이름[status] || status;
+
 // 05 출고예정 — 담당: 김지환
 export default function OutboundPage(props) {
   // 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
@@ -51,7 +55,8 @@ export default function OutboundPage(props) {
         <select name="status">
           <option value="">전체</option>
           <option value="WAITING">접수</option>
-          <option value="ALLOCATED">출고지시됨</option>
+          <option value="ALLOCATED">할당</option>
+          <option value="PICKING">피킹중</option>
           <option value="SHIPPED">출고완료</option>
           <option value="CANCELED">취소</option>
         </select>
@@ -96,7 +101,7 @@ export default function OutboundPage(props) {
               <td></td>
               <td></td>
               {/* 품목수, 총수량: 응답에 없어서 빈 칸 */}
-              <td>{outbound.status}</td>
+              <td>{상태표시(outbound.status)}</td>
               <td></td>
               <td></td>
               {/* 출고지시번호, 등록일시: 응답에 없어서 빈 칸 */}
