@@ -162,6 +162,7 @@ public class InboundService {
     public List<LocationRecommendDto> recommend(Integer detailId, boolean mixLot){
         DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
                 .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
+                // LOT , 수량꺼내서 재고 쪽으로 넘기기
         return stockService.recommend(detail.getLotEntity(), detail.getQty(), mixLot);
     }
     
