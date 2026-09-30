@@ -72,4 +72,10 @@ public class OutboundController {
     public ResponseEntity<String> confirmShipment(@PathVariable (name = "documentId") Integer documentId) {
         return ResponseEntity.ok(outboundService.confirmShipment(documentId));
     }
+
+    // 주문 취소 → 200 + "CANCELED" / 피킹중·출고완료·이미 취소 → 409
+    @PutMapping ("/wms/outbounds/{documentId}/cancel")
+    public ResponseEntity<String> cancelOutbound(@PathVariable (name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(outboundService.cancelOutbound(documentId));
+    }
 }

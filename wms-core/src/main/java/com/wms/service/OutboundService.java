@@ -110,11 +110,64 @@ public class OutboundService {
             stockRepository.save(stockEntity);
         }
 
+        
+
         // 4. 문서 상태 PICKING → SHIPPED + 완료 시각 기록
         documentEntity.moveTo(DocumentStatus.SHIPPED);
         documentEntity.setCompletedAt(LocalDateTime.now());
         documentRepository.save(documentEntity);
 
         return documentEntity.getStatus().name();
+    }
+
+    // 주문 취소 (문서 단위) : 거래처가 주문을 철회했을 때
+    // 접수(WAITING)·할당(ALLOCATED) 상태에서만 가능 → 피킹이 시작되면 물건을 이미 꺼냈을 수 있어서 불가
+    // 할 일 : 이 문서가 잡은 선점을 풀고 → 피킹 줄 삭제 → 문서 CANCELED
+    public String cancelOutbound(Integer documentId) {
+
+        // 1. 문서 조회 : 없으면 404
+        DocumentEntity documentEntity = documentRepository.findById(documentId)
+                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
+        // 출고 문서가 아니면 400
+        if (documentEntity.getType() != DocumentType.OUTBOUND) {
+            throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
+        }
+
+        // 2. 상태 검사
+        DocumentStatus status = documentEntity.getStatus();
+        // 이미 취소된 문서 → 409 (더블클릭 방어 : 두 번째 요청은 여기서 막힘)
+        if (status == DocumentStatus.CANCELED) {
+            throw new IllegalStateException("이미 취소된 문서입니다");
+        }
+        // 접수·할당이 아니면 (피킹중·출고완료) → 409
+        if (status != DocumentStatus.WAITING && status != DocumentStatus.ALLOCATED) {
+            throw new IllegalStateException("접수·할당 상태에서만 취소할 수 있습니다. 현재 상태: " + status);
+        }
+
+        // 3. 이 문서의 피킹 줄(할당 내역)마다 선점 풀기 + 줄 삭제
+        //    접수 상태면 피킹 줄이 없어서 이 반복은 그냥 지나감
+        for (DocumentItemDetailEntity detail : documentItemDetailRepository.findAll()) {
+            // 다른 문서의 줄은 건너뜀
+            if (!detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) continue;
+
+            StockEntity stockEntity = detail.getStockEntity();   // 이 줄이 선점한 재고 행
+            // 선점 수량이 이 줄 수량보다 적으면 데이터가 꼬인 것 → DB 제약 오류(500) 대신 409 로 알려줌
+            if (stockEntity.getAllocatedQty() < detail.getQty()) {
+                throw new IllegalStateException("재고 선점 수량이 맞지 않습니다: " + detail.getLocationEntity().getLocationCode()
+                        + " · 줄 수량 " + detail.getQty() + " · 선점 " + stockEntity.getAllocatedQty());
+            }
+            // 이 문서가 잡은 만큼만 선점에서 뺌 → 가용(실물 − 선점)이 그만큼 늘어남
+            stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());
+            stockRepository.save(stockEntity);
+
+            // 피킹 줄 삭제 (취소된 문서의 피킹리스트는 필요 없음)
+            documentItemDetailRepository.delete(detail);
+        }
+
+        // 4. 문서 상태 → CANCELED (WAITING·ALLOCATED → CANCELED 는 canGoTo 에서 이미 허용)
+        documentEntity.moveTo(DocumentStatus.CANCELED);
+        documentRepository.save(documentEntity);
+
+        return documentEntity.getStatus().name();   // "CANCELED"
     }
 }
