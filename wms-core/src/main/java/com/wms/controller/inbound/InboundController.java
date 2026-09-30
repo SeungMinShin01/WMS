@@ -3,6 +3,7 @@ package com.wms.controller.inbound;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,14 +22,14 @@ public class InboundController {
 
     // ED-10 입고 문서 목록 조회
     @GetMapping("")
-    public List<InboundListDto> findAll() {
-        return inboundService.findAll();
+    public ResponseEntity<List<InboundListDto>> findAll() {
+        return ResponseEntity.ok(inboundService.findAll());
     }
 
     // ED-13 입고 문서 상세 조회
     @GetMapping("/{documentId}")
-    public InboundDetailDto detailFind(@PathVariable(name = "documentId") Integer documentId) {
-        return inboundService.detailFind(documentId);
+    public ResponseEntity<InboundDetailDto> detailFind(@PathVariable(name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(inboundService.detailFind(documentId));
     }
 
 }

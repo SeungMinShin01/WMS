@@ -3,6 +3,7 @@ package com.wms.controller.stock;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +18,7 @@ public class StockController {
 
     // 전체 재고 조회 ED - 21
     @GetMapping("")
-    public List<StockDto> stockFindAll() {
-        return stockService.stockFindAll();
+    public ResponseEntity<List<StockDto>> stockFindAll() {
+        return ResponseEntity.ok(stockService.stockFindAll());
     }
 }

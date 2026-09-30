@@ -3,6 +3,8 @@ package com.wms.controller.inbound;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,14 +29,14 @@ public class InspectionController {
 
     // 검수 1건 등록 ED - 14
     @PostMapping("")
-    public Integer inspectionSave(@RequestBody InspectionDto inspectionDto) {
-        return inboundService.inspectionSave(inspectionDto);
+    public ResponseEntity<Integer> inspectionSave(@RequestBody InspectionDto inspectionDto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(inboundService.inspectionSave(inspectionDto));
     }
 
     // 검수 결과 상세 조회 ED - 15
     @GetMapping("/{documentId}")
-    public List<InspectionResultDto> inspectionFindAll(@PathVariable(name = "documentId") Integer documentId) {
-        return inboundService.inspectionFindAll(documentId);
+    public ResponseEntity<List<InspectionResultDto>> inspectionFindAll(@PathVariable(name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(inboundService.inspectionFindAll(documentId));
     }
 
     // 적재 1건 ED - 16
@@ -45,8 +47,8 @@ public class InspectionController {
 
     // 적치 추천 (검수 기록 1건 기준) — mixLot=true면 혼용적재 모드
     @GetMapping("/recommend/{detailId}")
-    public List<LocationRecommendDto> recommend(@PathVariable(name = "detailId") Integer detailId,
+    public ResponseEntity<List<LocationRecommendDto>> recommend(@PathVariable(name = "detailId") Integer detailId,
                                                 @RequestParam(name = "mixLot", defaultValue = "false") boolean mixLot) {
-        return inboundService.recommend(detailId, mixLot);
+        return ResponseEntity.ok(inboundService.recommend(detailId, mixLot));
     }
 }
