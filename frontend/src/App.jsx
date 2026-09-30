@@ -20,7 +20,7 @@ export default function App(props) {
       {/* Layout 안의 <Outlet /> 자리에 아래 자식 화면이 들어간다 */}
       <Route path="/" element={<Layout />}>
         <Route index element={<InboundPage />} />
-
+        
         <Route path="inbounds" element={<InboundPage />} />
         <Route path="inbounds/inspection" element={<InspectionPage />} />
         <Route path="outbounds" element={<OutboundPage />} />
