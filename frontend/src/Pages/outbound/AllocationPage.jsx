@@ -5,14 +5,15 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 
 // 06 출고지시 — 담당: 김지환
-// 흐름 : ① 주문 선택 → ② 품목 체크 → ③ 추천 받기(미리보기) → ④ 추천 수정 → ⑤ 피킹리스트 생성 → ⑥ 출고확정
+// 흐름 : ① 주문 선택 → ② 품목 체크 → ③ 추천 받기(미리보기) → ④ 추천 수정 → ⑤ 피킹리스트 생성 → ⑥ 출고확정(문서 단위)
+// 문서 상태 : WAITING → (일부 할당) ALLOCATED → (전부 할당) PICKING → (출고확정) SHIPPED
 export default function AllocationPage(props) {
   // ─────────────── 1. 주소창의 documentId 읽기 ───────────────
   const [searchParams, setSearchParams] = useSearchParams();
   const documentId = searchParams.get("documentId"); // 없으면 null
 
   // ─────────────── 2. 상태변수 ───────────────
-  const [orders, setOrders] = useState([]);       // 접수(WAITING)·피킹중(PICKING) 주문 목록
+  const [orders, setOrders] = useState([]);       // 접수(WAITING)·할당(ALLOCATED)·피킹중(PICKING) 주문 목록
   const [detail, setDetail] = useState(null);     // 선택한 주문 상세 (null = 선택 안 함)
   const [stocks, setStocks] = useState([]);       // 전체 재고 목록 (추천 수정할 때 select 에 씀)
   const [checked, setChecked] = useState([]);     // 체크한 품목 줄 id 목록 [21, 22]
@@ -22,13 +23,13 @@ export default function AllocationPage(props) {
 
   // ─────────────── 3. 조회 함수 (할당 후 다시 불러야 해서 useEffect 밖에 만듦) ───────────────
 
-  // ED-12 출고 목록 : 접수 + 피킹중만
+  // ED-12 출고 목록 : 접수 + 할당 + 피킹중만
   const getOrders = async () => {
     const response = await axios.get("/wms/outbounds");
     let result = [];
     for (let i = 0; i < response.data.length; i++) {
       const status = response.data[i].status;
-      if (status === "WAITING" || status === "PICKING") {
+      if (status === "WAITING" || status === "ALLOCATED" || status === "PICKING") {
         result.push(response.data[i]);
       }
     }
@@ -45,7 +46,7 @@ export default function AllocationPage(props) {
   const getDetail = async () => {
     if (documentId === null) return;
     const response = await axios.get("/wms/outbounds/" + documentId);
-    setDetail(response.data); // {documentNo, partnerName, status, items:[{documentItemId, productCode, productName, expectedQty}]}
+    setDetail(response.data); // {documentNo, partnerName, status, items:[{documentItemId, productCode, productName, expectedQty, allocatedQty, availableQty}]}
   };
 
   // ED-19 피킹리스트
@@ -69,14 +70,13 @@ export default function AllocationPage(props) {
     setPreviews([]);
   }, [documentId]);
 
-  // ─────────────── 6. 이미 할당된 품목인지 ───────────────
-  // 피킹리스트에 같은 품목코드 줄이 있으면 할당된 것으로 봄 → 체크박스 막음
-  const 할당됨 = (item) => {
-    for (let i = 0; i < pickings.length; i++) {
-      if (pickings[i].productCode === item.productCode) return true;
-    }
-    return false;
-  };
+  // ─────────────── 6. 상태 판단 도우미 ───────────────
+  // 할당 가능한 문서인지 : 대기(WAITING) 또는 일부 할당(ALLOCATED)
+  const 할당가능문서 = () => detail !== null && (detail.status === "WAITING" || detail.status === "ALLOCATED");
+  // 이미 할당된 품목 줄인지 : 서버가 보내준 allocatedQty 로 판단
+  const 할당됨 = (item) => item.allocatedQty > 0;
+  // 체크할 수 있는 품목 줄 : 할당 가능한 문서 + 아직 할당 안 된 줄
+  const 체크가능품목 = () => (detail === null ? [] : detail.items.filter((item) => 할당가능문서() && !할당됨(item)));
 
   // ─────────────── 7. 체크박스 ───────────────
   const 체크 = (documentItemId) => {
@@ -85,6 +85,12 @@ export default function AllocationPage(props) {
     } else {
       setChecked([...checked, documentItemId]);                   // 없으면 넣기
     }
+  };
+
+  // 품목 전체선택 : 체크 가능한 줄이 전부 체크돼 있으면 전부 해제, 아니면 전부 체크
+  const 품목전체선택 = () => {
+    const ids = 체크가능품목().map((item) => item.documentItemId);
+    setChecked(ids.length > 0 && checked.length === ids.length ? [] : ids);
   };
 
   // ─────────────── 8. 추천 받기 (미리보기, 저장 안 함) ───────────────
@@ -174,7 +180,7 @@ export default function AllocationPage(props) {
       await axios.put("/wms/outbounds/" + documentId + "/ship");
       alert("출고확정되었습니다");
       getDetail();  // 문서 상태 SHIPPED 로 새로고침 → 버튼 대신 "출고 완료" 표시
-      getOrders();  // 목록에서 빠짐 (WAITING·PICKING 만 보여주므로)
+      getOrders();  // 목록 새로고침
       getStocks();  // 실재고 감소 반영
     } catch (error) {
       alert(error.response.data); // 이미 출고된 문서면 "이미 출고된 문서입니다" (409)
@@ -223,7 +229,7 @@ export default function AllocationPage(props) {
         title="주문 품목"
         desc={detail === null ? "주문을 선택하세요" : detail.documentNo + " · " + detail.partnerName + " · " + detail.status}
       >
-        {detail !== null && detail.status === "WAITING" && (
+        {할당가능문서() && (
           <button className="btn primary" onClick={추천받기} disabled={loading}>
             {loading ? "처리 중..." : "추천 받기"}
           </button>
@@ -232,17 +238,27 @@ export default function AllocationPage(props) {
       <table className="grid">
         <thead>
           <tr>
-            <th>선택</th>
+            <th>
+              {/* 전체선택 : 체크 가능한 품목이 있을 때만 */}
+              <input
+                type="checkbox"
+                disabled={체크가능품목().length === 0}
+                checked={체크가능품목().length > 0 && checked.length === 체크가능품목().length}
+                onChange={품목전체선택}
+              />
+            </th>
             <th>품목코드</th>
             <th>품목명</th>
             <th>주문수량</th>
-            <th>할당</th>
+            <th>할당수량</th>
+            <th>출고가능재고</th>
+            <th>상태</th>
           </tr>
         </thead>
         <tbody>
           {detail === null ? (
             <tr>
-              <td colSpan="5">위에서 주문을 선택하세요</td>
+              <td colSpan="7">위에서 주문을 선택하세요</td>
             </tr>
           ) : (
             detail.items.map((item) => (
@@ -251,14 +267,19 @@ export default function AllocationPage(props) {
                   <input
                     type="checkbox"
                     checked={checked.includes(item.documentItemId)}
-                    disabled={할당됨(item) || detail.status !== "WAITING"}
+                    disabled={할당됨(item) || !할당가능문서()}
                     onChange={() => 체크(item.documentItemId)}
                   />
                 </td>
                 <td>{item.productCode}</td>
                 <td>{item.productName}</td>
                 <td>{item.expectedQty}</td>
-                <td>{할당됨(item) ? "할당됨" : "-"}</td>
+                <td>{item.allocatedQty}</td>
+                {/* 할당 안 된 줄인데 출고가능재고가 주문수량보다 적으면 빨간색 → 추천 받으면 "가용 부족" */}
+                <td style={{ color: !할당됨(item) && item.availableQty < item.expectedQty ? "red" : "" }}>
+                  {item.availableQty}
+                </td>
+                <td>{할당됨(item) ? "할당됨" : item.availableQty < item.expectedQty ? "재고 부족" : "-"}</td>
               </tr>
             ))
           )}

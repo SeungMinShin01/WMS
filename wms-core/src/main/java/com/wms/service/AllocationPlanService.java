@@ -69,16 +69,18 @@ public class AllocationPlanService {
     // 2. 검증 메서드 (PickingListService 도 같이 씀)
     // ─────────────────────────────────────────────
 
-    // 문서 검사 : 없는 문서 404 / 출고 문서 아님 400 / 대기 상태 아님 409
-    // 대기 상태 검사가 "더블클릭 방어" 역할도 함 (이미 PICKING 으로 넘어간 문서는 다시 못 함)
+    // 문서 검사 : 없는 문서 404 / 출고 문서 아님 400 / 대기·할당 상태 아님 409
+    // WAITING(아직 하나도 할당 안 함), ALLOCATED(일부만 할당함) 에서만 할당 가능
+    // 이미 PICKING 으로 넘어간 문서는 다시 못 함 → "더블클릭 방어" 역할도 함
     public DocumentEntity checkAllocatable(Integer documentId) {
         DocumentEntity documentEntity = documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
-        if (documentEntity.getStatus() != DocumentStatus.WAITING) {
-            throw new IllegalStateException("대기 상태에서만 할당할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
+        DocumentStatus status = documentEntity.getStatus();
+        if (status != DocumentStatus.WAITING && status != DocumentStatus.ALLOCATED) {
+            throw new IllegalStateException("대기·할당 상태에서만 할당할 수 있습니다. 현재 상태: " + status);
         }
         return documentEntity;
     }
@@ -105,9 +107,30 @@ public class AllocationPlanService {
         return sum;
     }
 
+    // 이 품목 줄의 "출고 가능 재고" 합계 (주문 품목 화면에 보여줄 값)
+    // 추천 계산(buildPlan)과 같은 조건 : 같은 상품 · 운영 중인 칸 · 소비기한 있음 · 잔여일 충분 · 가용 > 0
+    public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> allStocks) {
+        int sum = 0;
+        for (StockEntity s : allStocks) {
+            if (!isShippable(item, s, shipDate)) continue;          // 조건 불통과 재고는 제외
+            int available = s.getQty() - s.getAllocatedQty();       // 가용 = 실물 − 선점
+            if (available > 0) sum += available;
+        }
+        return sum;
+    }
+
+    // 재고 1행이 이 품목 줄에 출고 가능한지 true/false 로만 판단 (예외 안 던짐)
+    private boolean isShippable(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
+        if (!s.getLotEntity().getProductEntity().getProductId().equals(item.getProductEntity().getProductId())) return false; // 다른 상품
+        if (!s.getLocationEntity().getIsActive()) return false;                                                             // 안 쓰는 칸
+        LocalDate expiry = s.getLotEntity().getExpiryDate();
+        if (expiry == null) return false;                                                                                   // 소비기한 없음
+        return ChronoUnit.DAYS.between(shipDate, expiry) >= item.getProductEntity().getMinShipDays();                       // 잔여일 충분
+    }
+
     // 재고 1행이 이 품목 줄에 출고 가능한지 검사
     // 다른 상품 400 / 사용 안 하는 칸 409 / 소비기한 없음 409 / 잔여일 부족 409
-    // FEFO 순서(더 빠른 소비기한이 있는데 늦은 걸 골랐는지)는 검사하지 않음 → 사용자 수정 허용 (시연용)
+    // FEFO 순서(더 빠른 소비기한이 있는데 늦은 걸 골랐는지)는 검사하지 않음 → 사용자 수정 허용
     public void checkShippable(DocumentItemEntity item, StockEntity stock, LocalDate shipDate) {
         Integer productId = item.getProductEntity().getProductId();
         if (!stock.getLotEntity().getProductEntity().getProductId().equals(productId)) {
@@ -172,7 +195,7 @@ public class AllocationPlanService {
         return s.getQty() - s.getAllocatedQty() - planned.getOrDefault(s.getStockId(), 0);
     }
 
-    // 추천 계산 (DB 저장 X) : 품목 줄마다 v3 규칙으로 재고 행과 수량을 정해 목록으로 돌려줌
+    // 추천 계산 (DB 저장 X) : 품목 줄마다 재고 행과 수량을 정해 목록으로 돌려줌
     // [LOT 정하기] 1 소비기한 빠른 순 → 2-1 LOT 가용 합계 많은 순 → 2-2 LOT 첫 적재일 빠른 순 → 2-3 lotId
     // [칸 정하기]  3-1 칸 가용수량 많은 순 → 3-2 칸 적재일 빠른 순 → 3-3 stockId
     private List<PlanRow> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
@@ -183,20 +206,14 @@ public class AllocationPlanService {
         List<PlanRow> plan = new ArrayList<>();                    // 결과
 
         for (DocumentItemEntity item : items) {
-            Integer productId = item.getProductEntity().getProductId();   // 이 줄의 품목
-            int minShipDays = item.getProductEntity().getMinShipDays();   // 출고 허용 잔여일
             int need = item.getExpectedQty();                             // 채워야 할 수량
 
-            // (1) 자격 조건으로 후보 거르기
+            // (1) 자격 조건으로 후보 거르기 (같은 상품 · 운영 칸 · 소비기한 · 잔여일 + 꺼낼 수량 있음)
             List<StockEntity> candidates = new ArrayList<>();
             for (StockEntity s : allStocks) {
-                if (!s.getLotEntity().getProductEntity().getProductId().equals(productId)) continue; // 다른 상품
-                if (availableOf(s, planned) <= 0) continue;                                           // 꺼낼 게 없음
-                if (!s.getLocationEntity().getIsActive()) continue;                                   // 안 쓰는 칸
-                LocalDate expiry = s.getLotEntity().getExpiryDate();
-                if (expiry == null) continue;                                                         // 소비기한 없음
-                if (ChronoUnit.DAYS.between(shipDate, expiry) < minShipDays) continue;                // 잔여일 부족
-                candidates.add(s);                                                                    // 모두 통과 → 후보
+                if (!isShippable(item, s, shipDate)) continue;   // 출고 조건 불통과
+                if (availableOf(s, planned) <= 0) continue;      // 꺼낼 게 없음
+                candidates.add(s);                               // 모두 통과 → 후보
             }
 
             // (2) 후보 가용 합계가 필요량보다 적으면 409

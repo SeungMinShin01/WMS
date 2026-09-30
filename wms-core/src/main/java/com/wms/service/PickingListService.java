@@ -42,7 +42,7 @@ public class PickingListService {
     // rows : 사용자가 최종 확정한 [ {documentItemId, stockId, qty}, ... ]
     public List<PickingListDto> createPickingList(Integer documentId, List<AllocationDto> rows) {
 
-        // 1. 문서 검사 (404 / 400 / 409 대기 아님)
+        // 1. 문서 검사 (404 / 400 / 409 대기·할당 상태 아님)
         DocumentEntity documentEntity = allocationPlanService.checkAllocatable(documentId);
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();
 
@@ -123,24 +123,30 @@ public class PickingListService {
             stockRepository.save(stock);
         }
 
-        // 7. 문서의 전 품목이 할당됐으면 상태 전이 (WAITING → ALLOCATED → PICKING)
-        moveToPickingIfAllAllocated(documentEntity);
+        // 7. 문서 상태 정리 (일부 할당 → ALLOCATED / 전부 할당 → PICKING)
+        updateStatusAfterAllocation(documentEntity);
 
         // 8. 결과로 피킹리스트 반환
         return getPickingList(documentId);
     }
 
-    // 문서의 모든 품목 줄이 요청 수량만큼 채워졌으면 PICKING 으로 이동
-    // 하나라도 덜 채워졌으면 WAITING 유지 (나머지 품목은 나중에 따로 할당)
-    // WAITING → PICKING 직행은 canGoTo 에서 막혀 있어서 ALLOCATED 를 거쳐 감
-    private void moveToPickingIfAllAllocated(DocumentEntity documentEntity) {
+    // 할당 후 문서 상태 정리
+    //   일부 품목만 할당됨 → ALLOCATED (WAITING 이었으면 ALLOCATED 로)
+    //   전 품목 할당됨     → PICKING   (WAITING → ALLOCATED → PICKING, canGoTo 규칙상 ALLOCATED 를 거쳐야 함)
+    private void updateStatusAfterAllocation(DocumentEntity documentEntity) {
+        boolean allFilled = true;
         for (DocumentItemEntity item : allocationPlanService.itemsOf(documentEntity.getDocumentId())) {
             if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
-                return;   // 덜 채워진 줄 있음 → 상태 그대로
+                allFilled = false;   // 덜 채워진 줄이 하나라도 있음
+                break;
             }
         }
-        documentEntity.moveTo(DocumentStatus.ALLOCATED);
-        documentEntity.moveTo(DocumentStatus.PICKING);
+        if (documentEntity.getStatus() == DocumentStatus.WAITING) {
+            documentEntity.moveTo(DocumentStatus.ALLOCATED);   // 하나라도 할당했으니 ALLOCATED
+        }
+        if (allFilled) {
+            documentEntity.moveTo(DocumentStatus.PICKING);     // 전부 채워졌으면 PICKING
+        }
         documentRepository.save(documentEntity);
     }
 

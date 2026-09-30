@@ -1,5 +1,6 @@
 package com.wms.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -36,6 +37,9 @@ public class OutboundService {
     // ED-20
     @Autowired
     private DocumentItemDetailRepository documentItemDetailRepository;
+    // ED-17 : 할당 수량 · 출고 가능 재고 계산에 사용
+    @Autowired
+    private AllocationPlanService allocationPlanService;
 
     // ED-12 출고 문서 목록 조회
     public List<OutboundListDto> getOutboundList() {
@@ -56,11 +60,17 @@ public class OutboundService {
                 }
         OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
 
+        LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();   // 출고 가능 판단 기준일 (출고 예정일)
+        List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체 (품목마다 재사용)
+
         List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
         documentItemEntities.forEach((documentItemEntity) -> {
 
             if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {
                 OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
+                // 할당 수량 · 출고 가능 재고 채우기 (추천 받기 전에 화면에서 재고 부족을 미리 보게)
+                outboundItemDto.setAllocatedQty(allocationPlanService.allocatedSum(documentItemEntity.getDocumentItemId()));
+                outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, allStocks));
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
         });
@@ -90,6 +100,11 @@ public class OutboundService {
         for (DocumentItemDetailEntity detail : documentItemDetailRepository.findAll()) {
             if (!detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) continue; // 다른 문서 건너뜀
             StockEntity stockEntity = detail.getStockEntity();
+            // 재고 숫자가 이상하면 DB 제약(CHECK) 오류(500) 대신 409 로 원인을 알려줌
+            if (stockEntity.getAllocatedQty() < detail.getQty() || stockEntity.getQty() < detail.getQty()) {
+                throw new IllegalStateException("재고 수량이 맞지 않습니다: " + detail.getLocationEntity().getLocationCode()
+                        + " · 출고 " + detail.getQty() + " · 실물 " + stockEntity.getQty() + " · 선점 " + stockEntity.getAllocatedQty());
+            }
             stockEntity.setQty(stockEntity.getQty() - detail.getQty());
             stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());
             stockRepository.save(stockEntity);
