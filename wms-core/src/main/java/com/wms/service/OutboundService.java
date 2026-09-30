@@ -22,6 +22,7 @@ import com.wms.model.dto.outbound.PickingListDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.entity.DocumentStatus;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
@@ -60,7 +61,7 @@ public class OutboundService {
     public OutboundDetailDto getOutboundDetail(Integer documentId) {
         DocumentEntity documentEntity = documentRepository.findById(documentId).orElseThrow(() -> 
             new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
-                if (!documentEntity.getType().equals("OUTBOUND")) {
+                if (documentEntity.getType() != DocumentType.OUTBOUND) {
                     throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
                 }
         OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
@@ -103,12 +104,12 @@ public class OutboundService {
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
 
         // 입고 문서 번호로 요청 → 400
-        if (!documentEntity.getType().equals("OUTBOUND")) {
+        if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
 
         // 대기 상태가 아님 (이미 할당·출고·취소) → 409 : 더블 클릭, 재요청 방어
-        if (!documentEntity.getStatus().equals("WAITING")) {
+        if (documentEntity.getStatus() != DocumentStatus.WAITING) {
             throw new IllegalStateException("대기 상태에서만 할당할 수 있습니다. 현재 상태: "
                     + documentEntity.getStatus());
         }
@@ -229,7 +230,8 @@ public class OutboundService {
         }
 
         // 문서 상태 변경
-        documentEntity.setStatus("ALLOCATED");                         // 대기 → 할당됨
+        documentEntity.moveTo(DocumentStatus.ALLOCATED);                         // 대기 → 할당됨
+        documentEntity.moveTo(DocumentStatus.PICKING);                           // ALLOCATED → PICKING (피킹 단계 확정 전까지는 조건 없이 바로 이동)
         documentRepository.save(documentEntity);
 
         // 결과로 피킹리스트(로케이션 코드순) 반환
