@@ -1,10 +1,12 @@
 package com.wms.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.inbound.CarryingDto;
 import com.wms.model.dto.inbound.InboundDetailDto;
@@ -12,6 +14,7 @@ import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -24,8 +27,10 @@ import com.wms.model.repository.LocationRepository;
 import com.wms.model.entity.DocumentStatus;
 import com.wms.model.entity.DocumentType;
 
-@Service
-@org.springframework.transaction.annotation.Transactional
+import jakarta.persistence.EntityNotFoundException;
+
+@Service 
+@Transactional 
 public class InboundService {
     @Autowired
     private DocumentRepository documentRepository;
@@ -77,7 +82,7 @@ public class InboundService {
     // ED-13 입고 문서 상세 조회
     public InboundDetailDto detailFind(Integer documentId) {
         // 문서 하나 조회
-        DocumentEntity documentEntity = documentRepository.findById(documentId).orElse(null);
+        DocumentEntity documentEntity = documentRepository.findById(documentId).orElseThrow(()->new EntityNotFoundException("입고 문서가 없습니다."));
         InboundDetailDto inboundDetailDto = InboundDetailDto.from(documentEntity);
 
         // 문서에 포함된 품목 가져오기
@@ -95,20 +100,24 @@ public class InboundService {
     public Integer inspectionSave(InspectionDto inspectionDto) {
         // 수량 검사, 0-음수-빈값 보냄x
         if (inspectionDto.getQty() == null || inspectionDto.getQty() <= 0)
-            return null;
+            throw new IllegalArgumentException("검수 수량은 1 이상이어야 합니다.");
         DocumentItemEntity documentItemEntity = documentItemRepository.findById(inspectionDto.getDocumentItemId())
-                .orElse(null);
-        // NullPointException error 해결 , 조회 직후 null 이면 멈추기
-        if (documentItemEntity == null)
-            return null;
+                .orElseThrow(()->new EntityNotFoundException("문서 품목이 없습니다."));
+
         // 품목이 속한 문서가 입고인지 확인
         if (documentItemEntity.getDocumentEntity().getType() != DocumentType.INBOUND)
-            return null;
-        // 문서 상태가 waiting일때만 허용
-        if (documentItemEntity.getDocumentEntity().getStatus().isFinal())
-            return null;
+            throw new IllegalArgumentException("입고 문서의 품목이 아닙니다.");
+        
+        DocumentEntity documentEntity = documentItemEntity.getDocumentEntity();
+        // 검수는 대기(waiting) 문서만 - 전 품목 검수 끝나면 검수 완료(inspected)로 넘어감
+        if(documentEntity.getStatus() != DocumentStatus.WAITING) 
+            throw new IllegalStateException("대기 상태 문서만 검수할 수 있습니다. (현재: "+ documentEntity.getStatus() + ")");
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
+
+        // 문서의 모든 품목이 검수됐으면 대기 -> 검수 완료
+        if(allItemsInspected(documentEntity.getDocumentId()))
+            documentEntity.moveTo(DocumentStatus.INSPECTED);
         return savedEntity.getDetailId();
     }
 
@@ -128,23 +137,21 @@ public class InboundService {
     public boolean carry(CarryingDto carryingDto) {
         // 검수 결과 조회
         DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(carryingDto.getDetailId())
-                .orElse(null);
-        if (detailEntity == null)
-            return false;
+                .orElseThrow(()-> new EntityNotFoundException("검수 기록이 없습니다."));
 
-        // 취소된 입고의 물건 들여보내지 않기
-
-        if (detailEntity.getDocumentItemEntity().getDocumentEntity().getStatus() == DocumentStatus.CANCELED)
-            return false;
+        DocumentEntity documentEntity = detailEntity.getDocumentItemEntity().getDocumentEntity();
+        // 적재는 검수 완료(INSPECTED) 문서만 — 대기·취소·완료 문서는 거부
+        if (documentEntity.getStatus() != DocumentStatus.INSPECTED)
+            throw new IllegalStateException("전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: " + documentEntity.getStatus() + ")");
 
         // 이미 적재됐으면 중복 적재 방지
         if (detailEntity.getLocationEntity() != null)
-            return false;
+            throw new IllegalStateException("이미 적재된 검수 기록입니다. (위치: " + detailEntity.getLocationEntity().getLocationCode() + ")");
 
         // 적재할 칸 조회
-        LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId()).orElse(null);
-        if (locationEntity == null || !locationEntity.getIsActive())
-            return false;
+        LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId()).orElseThrow(()->new EntityNotFoundException("로케이션이 없습니다."));
+        if (!locationEntity.getIsActive())
+            throw new IllegalArgumentException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
 
         // 재고 증가는 StockService에 맡긴다
         StockEntity stockEntity = stockService.increase(detailEntity.getLotEntity(), locationEntity,
@@ -153,7 +160,46 @@ public class InboundService {
         // 검수 결과에 적재 위치와 재고 연결
         detailEntity.setLocationEntity(locationEntity);
         detailEntity.setStockEntity(stockEntity);
+        if(allDetailsCarried(documentEntity.getDocumentId())){
+            documentEntity.moveTo(DocumentStatus.COMPLETED);
+            documentEntity.setCompletedAt(LocalDateTime.now());
+        }
         return true;
     }
 
+    // 문서의 모든 품목 줄에 검수 기록이 있는가
+    private boolean allItemsInspected(Integer documentId){
+        List<DocumentItemDetailEntity> details = documentItemDetailRepository.findAll();
+        for(DocumentItemEntity item : documentItemRepository.findAll()){
+            if(!item.getDocumentEntity().getDocumentId().equals(documentId)) continue;
+            boolean inspected = false;
+            for(DocumentItemDetailEntity d : details) {
+                if(d.getDocumentItemEntity().getDocumentItemId().equals(item.getDocumentItemId())){
+                    inspected = true;
+                    break;
+                }
+            }
+            if(!inspected) return false;
+        }
+        return true;
+    }
+
+    // 문서의 모든 검수 기록이 적재됐는가
+    private boolean allDetailsCarried(Integer documentId){
+        for(DocumentItemDetailEntity d : documentItemDetailRepository.findAll()){
+            if(d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId) && d.getLocationEntity() == null)
+                return false;
+        }
+        return true;
+    }
+
+
+    // 적치 추천 (검수 기록 1건 기준) — 없는 검수 기록이면 404
+    public List<LocationRecommendDto> recommend(Integer detailId, boolean mixLot){
+        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
+                // LOT , 수량꺼내서 재고 쪽으로 넘기기
+        return stockService.recommend(detail.getLotEntity(), detail.getQty(), mixLot);
+    }
+    
 }

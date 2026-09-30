@@ -53,12 +53,12 @@ INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
 (4, 3, NULL, 20);   -- 7: 문서4(출고) 크래커 20
 
 -- 6. 칸 5개
-INSERT INTO location (location_code, is_active) VALUES
-('A-01-01', TRUE),   -- 1
-('A-01-02', TRUE),   -- 2
-('A-02-01', TRUE),   -- 3
-('B-01-01', TRUE),   -- 4
-('B-01-02', TRUE);   -- 5
+INSERT INTO location (location_code, capacity, is_active) VALUES
+('A-01-01',  60, TRUE),   -- 1  팔레트 랙
+('A-01-02',  60, TRUE),   -- 2
+('A-02-01',  60, TRUE),   -- 3
+('B-01-01', 200, TRUE),   -- 4  평치
+('B-01-02', 200, TRUE);   -- 5
 
 -- 7. 문서1(크래커 60)은 검수·적재까지 끝난 상태로 둔다
 --    → 입고-6 재고 조회, 출고-3 할당을 입고 흐름 없이도 테스트할 수 있게

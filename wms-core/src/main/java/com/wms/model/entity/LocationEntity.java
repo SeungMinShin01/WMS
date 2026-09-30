@@ -26,4 +26,6 @@ public class LocationEntity extends BaseTime {
 
     @Builder.Default
     private Boolean isActive = true;
+    
+    private Integer capacity; // 칸당 최대 적재량 (단위: BOX), null = 제한 없음 (V2)
 }

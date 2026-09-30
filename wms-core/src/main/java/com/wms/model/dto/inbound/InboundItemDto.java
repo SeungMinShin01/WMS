@@ -1,6 +1,7 @@
 package com.wms.model.dto.inbound;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 import com.wms.model.entity.DocumentItemEntity;
 
@@ -21,6 +22,7 @@ public class InboundItemDto {
     private String lotCode;
     private LocalDate expiryDate;
     private Integer expectedQty;
+    private Long remainingDays; // 소비기한까지 남은 일수(오늘 기준, 지나면 음수)
 
     public static InboundItemDto from(DocumentItemEntity entity) {
         return InboundItemDto.builder()
@@ -30,6 +32,8 @@ public class InboundItemDto {
                 .lotCode(entity.getLotEntity().getLotCode())
                 .expiryDate(entity.getLotEntity().getExpiryDate())
                 .expectedQty(entity.getExpectedQty())
+                // ChronoUnit.DAYS.between(A, B): A부터B까지 며칠인지 계산
+                .remainingDays(ChronoUnit.DAYS.between(LocalDate.now(),entity.getLotEntity().getExpiryDate()))
                 .build();
     }
 }

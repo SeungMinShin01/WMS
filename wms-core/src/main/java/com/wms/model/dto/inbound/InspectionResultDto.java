@@ -16,12 +16,9 @@ import lombok.NoArgsConstructor;
 public class InspectionResultDto {
     // ED-15 품목별 검수 현황(검수 전이면 detailId / qty / locationCode 가 null)
     private Integer documentItemId;
-    private String productCode;
     private String productName;
     private String lotCode;
-    private LocalDate expirDate;
     private Integer expectedQty;
-
     private Integer detailId;
     private Integer qty;
     private String locationCode;

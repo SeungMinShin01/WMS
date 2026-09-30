@@ -12,15 +12,6 @@ const 임시로케이션 = [
   { locationId: 4, locationCode: "B-01-01" },
   { locationId: 5, locationCode: "B-01-02" },
 ];
-const 추천더미 = [
-  { locationId: 1, locationCode: "A-01-01", reason: "같은 품목·소비기한 적치 중", freeQty: 1000 },
-  { locationId: 4, locationCode: "B-01-01", reason: "빈 칸 · 출고구 근접", freeQty: 4000 },
-  { locationId: 5, locationCode: "B-01-02", reason: "빈 칸 · 같은 통로", freeQty: 4000 },
-];
-
-// 소비기한까지 남은 일수 (백엔드 remainingDays 생기기 전까지 임시로 프론트 계산)
-const 남은일수 = (expiryDate) =>
-  Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
 
 
 // 04 입고검수 — 담당: 조현우
@@ -33,6 +24,7 @@ export default function InspectionPage(props) {
   const [memos, setMemos] = useState({});                      // { documentItemId: 비고 } — DB 컬럼 없음, 화면만
   const [locations, setLocations] = useState({});              // { detailId: locationId }
   const [focusDetailId, setFocusDetailId] = useState(null);    // 추천칸을 적용할 적치 줄
+  const [recommend, setRecommend] = useState([]); 
   
   // ED-10 목록 → 선택한 상태만 남기기
   const 목록조회 = async () => {
@@ -55,6 +47,7 @@ export default function InspectionPage(props) {
     setQtys({});
     setMemos({});
     setLocations({});
+    setRecommend([]);
     setFocusDetailId(null);
   };
 
@@ -230,7 +223,7 @@ export default function InspectionPage(props) {
                       <td>{item.productCode}</td>
                       <td className="left">{item.productName}</td>
                       <td>{item.expiryDate}</td>
-                      <td className="num">{남은일수(item.expiryDate)}일</td>
+                      <td className="num">{item.remainingDays}일</td>
                       <td className="num">{item.expectedQty.toLocaleString()}</td>
                       <td className="num">
                         {done !== undefined ? (
@@ -293,7 +286,15 @@ export default function InspectionPage(props) {
                   results.map((r) => (
                     <tr
                       key={r.detailId}
-                      onClick={() => setFocusDetailId(r.detailId)}
+                      onClick={async () => {
+                        setFocusDetailId(r.detailId);
+                        try {
+                          const response = await axios.get(`/wms/inspections/recommend/${r.detailId}`);
+                          setRecommend(response.data);
+                        } catch (e) {
+                          setRecommend([]);   // 추천 실패해도 드롭다운으로 적치 가능 (회의 결정 1)
+                        }
+                      }}
                       className={focusDetailId === r.detailId ? "on" : ""}
                     >
                       <td className="left">{r.productName}</td>
@@ -330,17 +331,17 @@ export default function InspectionPage(props) {
                   <th>순위</th>
                   <th>로케이션</th>
                   <th>추천 사유</th>
-                  <th>여유 수량</th>
+                  <th>현재 수량</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {추천더미.map((rec, index) => (
+                {recommend.map((rec, index) => (
                   <tr key={rec.locationId}>
                     <td>{index + 1}</td>
                     <td>{rec.locationCode}</td>
                     <td className="left">{rec.reason}</td>
-                    <td className="num">{rec.freeQty.toLocaleString()}</td>
+                    <td className="num">{rec.currentQty.toLocaleString()}</td>
                     <td>
                       <button className="btn" onClick={() => 추천적용(rec.locationId)}>적용</button>
                     </td>
@@ -348,7 +349,7 @@ export default function InspectionPage(props) {
                 ))}
               </tbody>
             </table>
-            <p className="hint">※ 추천 칸은 예시 데이터입니다. (추천 로직은 추후 백엔드에서 구현)</p>
+            <p className="hint">※  같은 LOT 칸 → 같은 품목 칸 → 빈 칸 순으로 추천합니다. 다른 품목이 있는 칸은 제외됩니다.</p>
           </div>
         </div>
       )}
