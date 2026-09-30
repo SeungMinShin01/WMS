@@ -1,12 +1,28 @@
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 // 07 재고현황 — 담당: 조현우
 export default function StockPage(props) {
+  // ED-21 재고 목록 (FEFO 정렬)
+  const [stocks, setStocks] = useState([]);   
+
+  const 재고조회 = async () => {
+    const response = await axios.get("/wms/stocks");
+    setStocks(response.data);
+  }
+
   // 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const 조회 = (event) => {
     event.preventDefault();
+    재고조회();
   };
+  useEffect(()=>{
+    재고조회();
+  },[])
+
+  // 소비기한까지 남은 일수 
 
   return (
     <>
@@ -36,7 +52,7 @@ export default function StockPage(props) {
       </form>
 
       {/* 그리드 제목줄 + 표. 줄(tr)은 나중에 useState 배열을 .map 으로 */}
-      <GridTitle title="품목별 재고" desc="총 0건">
+      <GridTitle title="품목별 재고" desc={`총 ${stocks.length}건`}>
         <button className="btn">신규</button>
       </GridTitle>
       <table className="grid">
@@ -47,6 +63,7 @@ export default function StockPage(props) {
             <th>품목명</th>
             <th>규격</th>
             <th>단위</th>
+            <th>LOT</th>
             <th>실물</th>
             <th>선점</th>
             <th>가용</th>
@@ -56,7 +73,28 @@ export default function StockPage(props) {
             <th>상태</th>
           </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>
+          {stocks.map((s, index) => {
+            const days = s.remainingDays;
+            return (
+              <tr key={s.stockId}>
+                <td>{index + 1}</td>
+                <td>{s.productCode}</td>
+                <td className="left">{s.productName}</td>
+                <td>{s.spec ?? "—"}</td>
+                <td>{s.unit}</td>
+                <td>{s.lotCode}</td>
+                <td className="num">{s.qty.toLocaleString()}</td>
+                <td className="num">{s.allocatedQty.toLocaleString()}</td>
+                <td className="num">{s.availableQty.toLocaleString()}</td>
+                <td>{s.locationCode}</td>
+                <td>{s.expiryDate ?? "—"}</td>
+                <td className="num">{days === null ? "—" : `${days}일`}</td>
+                <td>{days !== null && days <= 30 ? "임박" : "정상"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
       </table>
     </>
   );
