@@ -81,19 +81,15 @@ public class StockService {
         return loc.getCapacity() == null ? Integer.MAX_VALUE : loc.getCapacity() - total;
     }
 
-    // 정책 위반 사유 (없으면 null) - 추천에서 제외할 칸
+    // 정책 위반 사유 (없으면 null) - 적치 추천에서 제외할 칸들
     private String policyViolation(LocationCheck c, boolean mixLot){
-        if(mixLot){
-            // 혼용적재: 같은 품목끼리 (LOT 달라도 OK)
-            if(c.otherProductCount() > 0) return "다른 품목이 있는 칸";
-        }else{
-            // 기본: 품목마다 LOT 1개, 품목은 제한 없음
-            if(c.hasSameProductOtherLot()) return "같은 품목의 다른 LOT가 있는 칸";
-        }
+        if(mixLot) return null;                     // 혼용적재 ON: 같은 품목 다른 LOT도 허용 -> 제외 없음
+        // 혼용적재 OFF: 이 칸에 넣으면 LOT가 섞이므로 추천에서 뺌(다른 품목 칸은 유지)
+        if(c.hasSameProductOtherLot()) return "같은 품목의 다른 LOT가 있는 칸";
         return null;
     }
 
-    // 적치 추천 - 제외: 미사용-꽉찬칸-정책위반 / 순위: 같은 LOT->잔량 칸->빈칸/ 같은 순위: Best fit(딱 맞는 칸)
+        // 적치 추천 - 제외: 미사용·꽉 찬 칸·(OFF) 같은 품목 다른 LOT 칸 / 순위: 같은 LOT → 같은 품목 다른 LOT → 다른 품목 잔량 → 빈 칸 / 같은 순위: Best Fit
     public List<LocationRecommendDto> recommend(LotEntity lot, int qty, boolean mixLot){
         List<StockEntity> stocks = stockRepository.findAll();
         List<LocationEntity> locations = locationRepository.findAll();
@@ -108,9 +104,10 @@ public class StockService {
 
             int priority;
             String reason;
-            if(c.hasSameLot())  {priority = 1; reason = "같은 LOT 적치 중";}
-            else if(c.total()>0){priority = 2; reason = mixLot ? "같은 품목(다른 LOT 칸" : "다른 품목 잔량 칸";}
-            else                {priority = 3; reason = "빈 칸";}
+            if(c.hasSameLot())                  {priority = 1; reason = "같은 LOT 적치 중";}
+            else if(c.hasSameProductOtherLot()) {priority = 2; reason = "같은 품목(다른 LOT) 칸";}   // ON일 때만 여기까지 옴
+            else if(c.total() > 0)              {priority = 3; reason = "다른 품목 잔량 칸";}
+            else                                {priority = 4; reason = "빈 칸";}
 
             candidates.add(LocationRecommendDto.builder()
                         .locationId(loc.getLocationId())
