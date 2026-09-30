@@ -13,14 +13,31 @@ export default function OutboundPage(props) {
   // 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const [outbounds, setOutbounds] = useState([]);
   const [viewList, setViewList] = useState([]);
-  useEffect(() => {
-      async function getOutbounds() {
+  // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
+  const getOutbounds = async () => {
     const response = await axios.get("http://localhost:8080/wms/outbounds");
-    setOutbounds(response.data);
-    setViewList(response.data);
-    }
+    setOutbounds(response.data);   // 원본 목록 (검색할 때 기준)
+    setViewList(response.data);    // 화면에 보여줄 목록 (검색 조건은 초기화됨)
+  };
+
+  // 최초 1번 목록 조회
+  useEffect(() => {
     getOutbounds();
-  } , []);
+  }, []);
+
+  // 주문 취소 : 접수·할당 상태에서만 버튼이 보임
+  const 주문취소 = async (outbound) => {
+    // 실수 클릭 방지 확인창
+    if (!confirm(outbound.documentNo + " 주문을 취소할까요? ")) return;
+    try {
+      await axios.put("http://localhost:8080/wms/outbounds/" + outbound.documentId + "/cancel");
+      alert("주문이 취소되었습니다");
+      getOutbounds();   // 상태가 취소로 바뀐 목록 다시 불러오기
+    } catch (error) {
+      // 서버 메시지가 있으면 그대로, 서버 연결 자체가 안 되면 고정 문장
+      alert(error.response ? error.response.data : "서버에 연결할 수 없습니다");
+    }
+  };
   const 조회 = (event) => {
     event.preventDefault();
     const status = event.target.status.value;        // name="status" select 값 ("" 이면 전체)
@@ -82,6 +99,7 @@ export default function OutboundPage(props) {
             <th>상태</th>
             <th>출고지시번호</th>
             <th>등록일시</th>
+            <th>관리</th>
           </tr>
         </thead>
         <tbody>
@@ -105,6 +123,14 @@ export default function OutboundPage(props) {
               <td></td>
               <td></td>
               {/* 출고지시번호, 등록일시: 응답에 없어서 빈 칸 */}
+              <td>
+                {/* 접수·할당 상태에서만 취소 버튼, 나머지는 "-" */}
+                {outbound.status === "WAITING" || outbound.status === "ALLOCATED" ? (
+                  <button className="btn danger" onClick={() => 주문취소(outbound)}>취소</button>
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
