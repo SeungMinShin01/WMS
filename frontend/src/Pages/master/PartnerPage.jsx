@@ -42,7 +42,7 @@ export default function PartnerPage(props) {
             <th>등록일</th>
           </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>{/* 백에서 받은 데이터 */}</tbody>
       </table>
     </>
   );
