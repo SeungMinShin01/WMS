@@ -23,6 +23,8 @@ import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.LocationRepository;
+import com.wms.model.entity.DocumentStatus;
+import com.wms.model.entity.DocumentType;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -49,7 +51,7 @@ public class InboundService {
         // inbound만 필터링
         List<DocumentEntity> inbounds = new ArrayList<>();
         documentEntities.forEach((documentEntity) -> {
-            if (documentEntity.getType().equals("INBOUND")) {
+            if (documentEntity.getType() == DocumentType.INBOUND) {
                 inbounds.add(documentEntity);
             }
         });
@@ -104,10 +106,10 @@ public class InboundService {
         if (documentItemEntity == null)
             return null;
         // 품목이 속한 문서가 입고인지 확인
-        if (!documentItemEntity.getDocumentEntity().getType().equals("INBOUND"))
+        if (documentItemEntity.getDocumentEntity().getType() != DocumentType.INBOUND)
             return null;
         // 문서 상태가 waiting일때만 허용
-        if (!documentItemEntity.getDocumentEntity().getStatus().equals("WAITING"))
+        if (documentItemEntity.getDocumentEntity().getStatus().isFinal())
             return null;
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
@@ -135,8 +137,8 @@ public class InboundService {
             return false;
 
         // 취소된 입고의 물건 들여보내지 않기
-        String status = detailEntity.getDocumentItemEntity().getDocumentEntity().getStatus();
-        if (status.equals("CANCELED"))
+
+        if (detailEntity.getDocumentItemEntity().getDocumentEntity().getStatus() == DocumentStatus.CANCELED)
             return false;
 
         // 이미 적재됐으면 중복 적재 방지

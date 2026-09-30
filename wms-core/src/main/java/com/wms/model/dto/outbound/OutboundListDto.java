@@ -27,11 +27,11 @@ public class OutboundListDto {
         return OutboundListDto.builder()
                 .documentId(entity.getDocumentId())
                 .documentNo(entity.getDocumentNo())
-                .type(entity.getType())
+                .type(entity.getType().name())
                 .partnerName(entity.getPartnerEntity().getPartnerName())
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
-                .status(entity.getStatus())
+                .status(entity.getStatus().name())
                 .build();
     }
 }
