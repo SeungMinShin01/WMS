@@ -3,46 +3,67 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
+// 재고 상태: 임박(30일 이하) > 부족(가용 0) > 정상
+const 상태표시 = { NORMAL: "정상", SHORT: "부족", NEAR: "임박" };
+const 재고상태 = (s) => {
+  if (s.remainingDays !== null && s.remainingDays <= 30) return "NEAR";
+  if (s.availableQty <= 0) return "SHORT";
+  return "NORMAL";
+};
+
 // 07 재고현황 — 담당: 조현우
 export default function StockPage(props) {
-  // ED-21 재고 목록 (FEFO 정렬)
-  const [stocks, setStocks] = useState([]);   
+  const [stocks, setStocks] = useState([]);   // ED-21 재고 전체 (FEFO 정렬)
+  const [조건, set조건] = useState({ productCode: "", productName: "", zone: "", status: "" });
 
   const 재고조회 = async () => {
     const response = await axios.get("/wms/stocks");
     setStocks(response.data);
-  }
+  };
 
-  // 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
+  // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
   const 조회 = (event) => {
     event.preventDefault();
+    const form = new FormData(event.target);
+    set조건({
+      productCode: form.get("productCode").trim(),
+      productName: form.get("productName").trim(),
+      zone: form.get("zone"),
+      status: form.get("status"),
+    });
     재고조회();
   };
-  useEffect(()=>{
-    재고조회();
-  },[])
 
-  // 소비기한까지 남은 일수 
+  useEffect(() => {
+    재고조회();
+  }, []);
+
+  // 조회 조건에 맞는 재고만 (구역 = 로케이션 코드 첫 글자)
+  const 보여줄목록 = stocks.filter((s) =>
+    (조건.productCode === "" || s.productCode.includes(조건.productCode)) &&
+    (조건.productName === "" || s.productName.includes(조건.productName)) &&
+    (조건.zone === "" || s.locationCode.startsWith(조건.zone)) &&
+    (조건.status === "" || 재고상태(s) === 조건.status)
+  );
 
   return (
     <>
       <PageTitle title="재고 현황" path="홈 > 재고관리 > 재고현황" />
 
-      {/* 조회조건: form 안에 label + input 나열. 조회 버튼은 submit */}
       <form className="search" onSubmit={조회}>
         <label>품목코드</label>
         <input type="text" name="productCode" defaultValue="SKU-" />
         <label>품목명</label>
         <input type="text" name="productName" placeholder="품목명 입력" />
         <label>구역</label>
-        <select name="zone">
+        <select name="zone" defaultValue="">
           <option value="">전체</option>
           <option value="A">A</option>
           <option value="B">B</option>
           <option value="C">C</option>
         </select>
         <label>재고상태</label>
-        <select name="status">
+        <select name="status" defaultValue="">
           <option value="">전체</option>
           <option value="NORMAL">정상</option>
           <option value="SHORT">부족</option>
@@ -51,8 +72,7 @@ export default function StockPage(props) {
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
-      {/* 그리드 제목줄 + 표. 줄(tr)은 나중에 useState 배열을 .map 으로 */}
-      <GridTitle title="품목별 재고" desc={`총 ${stocks.length}건`}>
+      <GridTitle title="품목별 재고" desc={`총 ${보여줄목록.length}건`}>
         <button className="btn">신규</button>
       </GridTitle>
       <table className="grid">
@@ -74,26 +94,23 @@ export default function StockPage(props) {
           </tr>
         </thead>
         <tbody>
-          {stocks.map((s, index) => {
-            const days = s.remainingDays;
-            return (
-              <tr key={s.stockId}>
-                <td>{index + 1}</td>
-                <td>{s.productCode}</td>
-                <td className="left">{s.productName}</td>
-                <td>{s.spec ?? "—"}</td>
-                <td>{s.unit}</td>
-                <td>{s.lotCode}</td>
-                <td className="num">{s.qty.toLocaleString()}</td>
-                <td className="num">{s.allocatedQty.toLocaleString()}</td>
-                <td className="num">{s.availableQty.toLocaleString()}</td>
-                <td>{s.locationCode}</td>
-                <td>{s.expiryDate ?? "—"}</td>
-                <td className="num">{days === null ? "—" : `${days}일`}</td>
-                <td>{days !== null && days <= 30 ? "임박" : "정상"}</td>
-              </tr>
-            );
-          })}
+          {보여줄목록.map((s, index) => (
+            <tr key={s.stockId}>
+              <td>{index + 1}</td>
+              <td>{s.productCode}</td>
+              <td className="left">{s.productName}</td>
+              <td>{s.spec ?? "—"}</td>
+              <td>{s.unit}</td>
+              <td>{s.lotCode}</td>
+              <td className="num">{s.qty.toLocaleString()}</td>
+              <td className="num">{s.allocatedQty.toLocaleString()}</td>
+              <td className="num">{s.availableQty.toLocaleString()}</td>
+              <td>{s.locationCode}</td>
+              <td>{s.expiryDate ?? "—"}</td>
+              <td className="num">{s.remainingDays === null ? "—" : `${s.remainingDays}일`}</td>
+              <td>{상태표시[재고상태(s)]}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </>

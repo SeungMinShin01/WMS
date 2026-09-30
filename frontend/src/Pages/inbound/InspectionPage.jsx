@@ -3,35 +3,32 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const 상태명= {WAITING: "입고예정", INSPECTED: "검수완료", COMPLETED: "입고완료", CANCELED: "취소"};
-
-const 임시로케이션 = [
-  { locationId: 1, locationCode: "A-01-01" },
-  { locationId: 2, locationCode: "A-01-02" },
-  { locationId: 3, locationCode: "A-02-01" },
-  { locationId: 4, locationCode: "B-01-01" },
-  { locationId: 5, locationCode: "B-01-02" },
-];
-
+const 상태명 = { WAITING: "입고예정", INSPECTED: "검수완료", COMPLETED: "입고완료", CANCELED: "취소" };
 
 // 04 입고검수 — 담당: 조현우
 export default function InspectionPage(props) {
-  const [inbounds, setInbounds] = useState([]);                // ED-10 검수 대상 목록
-  const [status, setStatus] = useState("WAITING,INSPECTED");   // 상태 필터
+  const [inbounds, setInbounds] = useState([]);                // ED-10 입고 문서 전체
+  const [조건, set조건] = useState({ from: "", to: "", partnerName: "", status: "WAITING,INSPECTED" }); // 조회 조건
   const [selected, setSelected] = useState(null);              // ED-13 선택한 문서 (items 포함)
   const [results, setResults] = useState([]);                  // ED-15 검수 결과
-  const [qtys, setQtys] = useState({});                        // { documentItemId: 입력 수량 }
-  const [memos, setMemos] = useState({});                      // { documentItemId: 비고 } — DB 컬럼 없음, 화면만
-  const [locations, setLocations] = useState({});              // { detailId: locationId }
-  const [focusDetailId, setFocusDetailId] = useState(null);    // 추천칸을 적용할 적치 줄
-  const [recommend, setRecommend] = useState([]); 
-  const [mixLot, setMixLot] = useState(false);                 // 혼용적재 (같은 품목-다른LOT허용)
-  
-  // ED-10 목록 → 선택한 상태만 남기기
+  const [qtys, setQtys] = useState({});                        // { documentItemId: 실제 입고수량 입력 }
+  const [memos, setMemos] = useState({});                      // { documentItemId: 비고 입력 }
+  const [locations, setLocations] = useState({});              // { detailId: 적치할 locationId }
+  const [로케이션목록, set로케이션목록] = useState([]);          // 선택 가능한 로케이션 (사용 중인 칸)
+  const [focusDetailId, setFocusDetailId] = useState(null);    // 추천을 적용할 적치 줄
+  const [recommend, setRecommend] = useState([]);              // 추천 적치칸
+  const [mixLot, setMixLot] = useState(false);                 // 혼용적재 (같은 품목 · 다른 LOT 허용)
+
+  // ED-10 목록
   const 목록조회 = async () => {
     const response = await axios.get("/wms/inbounds");
-    const 허용상태 = status.split(",");
-    setInbounds(response.data.filter((inbound) => 허용상태.includes(inbound.status)));
+    setInbounds(response.data);
+  };
+
+  // 적치 로케이션 선택 목록
+  const 로케이션조회 = async () => {
+    const response = await axios.get("/wms/inspections/locations");
+    set로케이션목록(response.data);
   };
 
   // ED-15 검수 결과
@@ -52,7 +49,7 @@ export default function InspectionPage(props) {
     setFocusDetailId(null);
   };
 
-  // 저장 후 선택 문서 상태 다시 받기 (입력값은 유지)
+  // 저장 후 선택 문서 상태 다시 받기
   const 문서새로고침 = async () => {
     const response = await axios.get(`/wms/inbounds/${selected.documentId}`);
     setSelected(response.data);
@@ -60,38 +57,56 @@ export default function InspectionPage(props) {
     목록조회();
   };
 
+  // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
   const 조회 = (event) => {
     event.preventDefault();
+    const form = new FormData(event.target);
+    set조건({
+      from: form.get("from"),
+      to: form.get("to"),
+      partnerName: form.get("partnerName").trim(),
+      status: form.get("status"),
+    });
     목록조회();
   };
 
   useEffect(() => {
     목록조회();
+    로케이션조회();
   }, []);
 
-  // 이미 검수된 품목의 수량 { documentItemId: 수량 } — 있으면 입력칸 대신 숫자로 보여줌 (중복 검수 방지)
-  const 검수된수량 = {};
+  // 조회 조건에 맞는 문서만
+  const 보여줄목록 = inbounds.filter((d) =>
+    조건.status.split(",").includes(d.status) &&
+    (조건.from === "" || d.expectedAt >= 조건.from) &&
+    (조건.to === "" || d.expectedAt <= 조건.to) &&
+    (조건.partnerName === "" || d.partnerName.includes(조건.partnerName))
+  );
+
+  // 이미 검수된 품목 { documentItemId: 검수 결과 } — 있으면 입력칸 대신 값으로 보여줌
+  const 검수된 = {};
   results.forEach((r) => {
-    검수된수량[r.documentItemId] = (검수된수량[r.documentItemId] ?? 0) + r.qty;
+    검수된[r.documentItemId] = r;
   });
 
-  const 실제수량 = (item) => 검수된수량[item.documentItemId] ?? Number(qtys[item.documentItemId] || 0);
+  const 실제수량 = (item) => 검수된[item.documentItemId]?.qty ?? Number(qtys[item.documentItemId] || 0);
   const 예정합계 = selected ? selected.items.reduce((sum, item) => sum + item.expectedQty, 0) : 0;
   const 실제합계 = selected ? selected.items.reduce((sum, item) => sum + 실제수량(item), 0) : 0;
+  const 적재수 = results.filter((r) => r.locationCode !== null).length;
 
   // [예정수량 일괄 적용] — 아직 검수 안 한 품목만
   const 일괄적용 = () => {
     const next = {};
     selected.items.forEach((item) => {
-      if (검수된수량[item.documentItemId] === undefined) next[item.documentItemId] = item.expectedQty;
+      if (검수된[item.documentItemId] === undefined) next[item.documentItemId] = item.expectedQty;
     });
     setQtys(next);
   };
 
-  // ED-14 검수 저장 — 품목마다 1건씩 POST
+  // ED-14 검수 저장 — 수량을 입력한 품목만 1건씩 POST (비고 포함)
   const 검수저장 = async () => {
     const 대상 = selected.items.filter(
-      (item) => 검수된수량[item.documentItemId] === undefined && Number(qtys[item.documentItemId]) > 0
+      (item) => 검수된[item.documentItemId] === undefined && Number(qtys[item.documentItemId]) > 0
     );
     if (대상.length === 0) {
       alert("저장할 검수 수량이 없습니다.");
@@ -103,6 +118,7 @@ export default function InspectionPage(props) {
         await axios.post("/wms/inspections", {
           documentItemId: item.documentItemId,
           qty: Number(qtys[item.documentItemId]),
+          remark: memos[item.documentItemId] ?? null,
         });
       } catch (error) {
         실패메시지.push(`${item.productName}: ${error.response?.data ?? "오류"}`);
@@ -110,10 +126,11 @@ export default function InspectionPage(props) {
     }
     alert(`검수 저장 ${대상.length - 실패메시지.length}건` + (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""));
     setQtys({});
+    setMemos({});
     문서새로고침();
   };
 
-  // ED-16 적치 저장 — 로케이션을 고른 줄만 1건씩 PUT
+  // ED-16 적치 저장 — 로케이션을 고른 줄만 1건씩 PUT. 마지막 줄까지 적재되면 서버가 자동 입고완료 처리
   const 적치저장 = async () => {
     const 대상 = results.filter((r) => r.locationCode === null && locations[r.detailId]);
     if (대상.length === 0) {
@@ -133,16 +150,9 @@ export default function InspectionPage(props) {
     }
     alert(`적치 저장 ${대상.length - 실패메시지.length}건` + (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""));
     setLocations({});
+    setRecommend([]);
+    setFocusDetailId(null);
     문서새로고침();
-  };
-
-  // 추천칸 [적용] → 선택한 적치 줄의 로케이션 채우기 (화면만)
-  const 추천적용 = (locationId) => {
-    if (focusDetailId === null) {
-      alert("적치 지정에서 줄을 먼저 선택하세요.");
-      return;
-    }
-    setLocations({ ...locations, [focusDetailId]: locationId });
   };
 
   // 적치 추천 조회 — mixLot 값을 같이 보냄
@@ -158,6 +168,19 @@ export default function InspectionPage(props) {
 
   const focusResult = results.find((r) => r.detailId === focusDetailId);
 
+  // 추천칸 [적용] → 선택한 적치 줄의 로케이션을 그 칸으로 바꿈 (저장은 [적치 저장])
+  const 추천적용 = (locationId) => {
+    if (focusResult === undefined) {
+      alert("적치 지정에서 줄을 먼저 선택하세요.");
+      return;
+    }
+    if (focusResult.locationCode !== null) {
+      alert("이미 적재된 줄입니다.");
+      return;
+    }
+    setLocations({ ...locations, [focusDetailId]: locationId });
+  };
+
   return (
     <>
       <PageTitle title="입고 검수" path="홈 > 입고관리 > 입고검수" />
@@ -168,16 +191,17 @@ export default function InspectionPage(props) {
         <label>화주명</label>
         <input type="text" name="partnerName" />
         <label>상태</label>
-        <select name="status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="WAITING,INSPECTED">검수 대상 (등록·검수·적치)</option>
-          <option value="WAITING">등록</option>
+        <select name="status" defaultValue="WAITING,INSPECTED">
+          <option value="WAITING,INSPECTED">검수 대상 (입고예정·검수완료)</option>
+          <option value="WAITING">입고예정</option>
           <option value="INSPECTED">검수완료</option>
+          <option value="COMPLETED">입고완료</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
       {/* ── 검수 대상 목록 (ED-10) ── */}
-      <GridTitle title="검수 대상 입고예정" desc={`총 ${inbounds.length}건`} />
+      <GridTitle title="검수 대상 입고예정" desc={`총 ${보여줄목록.length}건`} />
       <table className="grid">
         <thead>
           <tr>
@@ -188,12 +212,10 @@ export default function InspectionPage(props) {
             <th>품목수</th>
             <th>예정수량</th>
             <th>상태</th>
-            <th>실제 입고수량 합계</th>
-            <th>비고</th>
           </tr>
         </thead>
         <tbody>
-          {inbounds.map((inbound, index) => (
+          {보여줄목록.map((inbound, index) => (
             <tr
               key={inbound.documentId}
               onClick={() => 문서선택(inbound.documentId)}
@@ -206,9 +228,6 @@ export default function InspectionPage(props) {
               <td className="num">{inbound.itemCount}</td>
               <td className="num">{inbound.totalExpectedQty.toLocaleString()}</td>
               <td>{상태명[inbound.status]}</td>
-              {/* 백엔드에 inspectedQty 없으면 — 로 표시 */}
-              <td className="num">{inbound.inspectedQty?.toLocaleString() ?? "—"}</td>
-              <td className="left"></td>
             </tr>
           ))}
         </tbody>
@@ -220,7 +239,7 @@ export default function InspectionPage(props) {
         <div className="two-col">
           {/* ── 왼쪽: 검수 입력 (ED-13 + ED-14) ── */}
           <div className="col-left">
-            <GridTitle title="검수 입력" desc={`${selected.documentNo} · ${selected.partnerName}`}>
+            <GridTitle title="검수 입력" desc={`${selected.documentNo} · ${selected.partnerName} · ${상태명[selected.status]}`}>
               <button className="btn" onClick={일괄적용}>예정수량 일괄 적용</button>
               <button className="btn primary" onClick={검수저장}>검수 저장</button>
             </GridTitle>
@@ -233,16 +252,12 @@ export default function InspectionPage(props) {
                   <th>남은일수</th>
                   <th>예정수량</th>
                   <th>실제 입고수량</th>
-                  <th>차이</th>
                   <th>비고</th>
                 </tr>
               </thead>
               <tbody>
                 {selected.items.map((item) => {
-                  const done = 검수된수량[item.documentItemId];   // undefined면 아직 검수 전
-                  const 입력 = qtys[item.documentItemId] ?? "";
-                  const 보여줄수량 = done ?? 입력;
-                  const 차이 = 보여줄수량 === "" ? null : Number(보여줄수량) - item.expectedQty;
+                  const done = 검수된[item.documentItemId];   // undefined면 아직 검수 전
                   return (
                     <tr key={item.documentItemId}>
                       <td>{item.productCode}</td>
@@ -252,26 +267,28 @@ export default function InspectionPage(props) {
                       <td className="num">{item.expectedQty.toLocaleString()}</td>
                       <td className="num">
                         {done !== undefined ? (
-                          done.toLocaleString()
+                          done.qty.toLocaleString()
                         ) : (
                           <input
                             type="number"
                             min="1"
                             style={{ width: "80px" }}
-                            value={입력}
+                            value={qtys[item.documentItemId] ?? ""}
                             onChange={(e) => setQtys({ ...qtys, [item.documentItemId]: e.target.value })}
                           />
                         )}
                       </td>
-                      <td className={차이 < 0 ? "num red" : "num"}>
-                        {차이 === null || 차이 === 0 ? "—" : 차이.toLocaleString()}
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          value={memos[item.documentItemId] ?? ""}
-                          onChange={(e) => setMemos({ ...memos, [item.documentItemId]: e.target.value })}
-                        />
+                      <td className="left">
+                        {done !== undefined ? (
+                          done.remark ?? ""
+                        ) : (
+                          <input
+                            type="text"
+                            style={{ width: "120px" }}
+                            value={memos[item.documentItemId] ?? ""}
+                            onChange={(e) => setMemos({ ...memos, [item.documentItemId]: e.target.value })}
+                          />
+                        )}
                       </td>
                     </tr>
                   );
@@ -280,20 +297,16 @@ export default function InspectionPage(props) {
                   <td colSpan={4}>합계</td>
                   <td className="num">{예정합계.toLocaleString()}</td>
                   <td className="num">{실제합계.toLocaleString()}</td>
-                  <td className={실제합계 - 예정합계 < 0 ? "num red" : "num"}>
-                    {(실제합계 - 예정합계).toLocaleString()}
-                  </td>
                   <td></td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {/* ── 오른쪽: 적치 지정 (ED-15 + ED-16) + 추천 적치칸 (화면만) ── */}
+          {/* ── 오른쪽: 적치 지정 (ED-15 + ED-16) + 추천 적치칸 ── */}
           <div className="col-right">
-            <GridTitle title="적치 지정" desc={`검수 ${results.length}건`}>
+            <GridTitle title="적치 지정" desc={`적재 ${적재수} / 검수 ${results.length}건`}>
               <button className="btn primary" onClick={적치저장}>적치 저장</button>
-              <button className="btn" disabled title="입고확정 API 준비 전">입고확정</button>
             </GridTitle>
             <table className="grid">
               <thead>
@@ -323,10 +336,11 @@ export default function InspectionPage(props) {
                         ) : (
                           <select
                             value={locations[r.detailId] ?? ""}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => setLocations({ ...locations, [r.detailId]: e.target.value })}
                           >
                             <option value="">선택</option>
-                            {임시로케이션.map((loc) => (
+                            {로케이션목록.map((loc) => (
                               <option key={loc.locationId} value={loc.locationId}>{loc.locationCode}</option>
                             ))}
                           </select>
@@ -384,7 +398,7 @@ export default function InspectionPage(props) {
             </table>
             <p className="hint">
               ※ 같은 LOT 칸 → (혼용적재 시) 같은 품목 다른 LOT 칸 → 다른 품목 잔량 칸 → 빈 칸 순으로 추천합니다.
-              혼용적재를 끄면 같은 품목의 다른 LOT가 있는 칸은 제외됩니다. 적치는 전 품목 검수 후 가능합니다.
+              적치는 전 품목 검수 후 가능하며, 모든 줄이 적재되면 자동으로 입고완료 처리됩니다.
             </p>
           </div>
         </div>
