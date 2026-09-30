@@ -28,20 +28,21 @@ public class OutboundController {
 
     // ED-12 출고 문서 목록 조회
     @GetMapping ("/wms/outbounds")
-    public List<OutboundListDto> getOutboundList() {
-        return outboundService.getOutboundList();
+    public ResponseEntity<List<OutboundListDto>> getOutboundList() {
+        return ResponseEntity.ok(outboundService.getOutboundList());
     }
 
     // ED-17 출고 문서 상세 조회
     @GetMapping ("/wms/outbounds/{documentId}")
-    public OutboundDetailDto getOutboundDetail(@PathVariable (name = "documentId") Integer documentId){
-        return outboundService.getOutboundDetail(documentId);
+    public ResponseEntity<OutboundDetailDto> getOutboundDetail(@PathVariable (name = "documentId") Integer documentId){
+        return ResponseEntity.ok(outboundService.getOutboundDetail(documentId));
     }
 
-    // ED-18 할당 1건 (피킹리스트 생성)
+    // ED-18 할당 1건 (수동 · 예외용)
     @PostMapping ("/wms/allocations")
-    public Integer allocate(@RequestBody AllocationDto allocationDto) {
-    return outboundService.allocate(allocationDto);
+    public ResponseEntity<Integer> allocate(@RequestBody AllocationDto allocationDto) {
+        Integer detailId = outboundService.allocate(allocationDto);      \
+        return ResponseEntity.status(HttpStatus.CREATED).body(detailId); // 201 + detailId
     }
     
     // ED-18 확장 : 출고 문서 자동 할당 (할당 규칙 v3)
@@ -58,14 +59,14 @@ public class OutboundController {
 
     // ED-19 피킹 리스트 조회
     @GetMapping ("/wms/allocations/{documentId}")
-    public List<PickingListDto> getPickingList(@PathVariable (name = "documentId") Integer documentId){
-        return  outboundService.getPickingList(documentId);
+    public ResponseEntity<List<PickingListDto>> getPickingList(@PathVariable (name = "documentId") Integer documentId){
+        return ResponseEntity.ok(outboundService.getPickingList(documentId));
     }
 
     // ED-20 출고확정
     @PutMapping ("/wms/allocations")
-    public Boolean confirmShipment(@RequestBody ConfirmShipmentDto confirmShipmentDto) {
-        return outboundService.confirmShipment(confirmShipmentDto);
+    public ResponseEntity<Boolean> confirmShipment(@RequestBody ConfirmShipmentDto confirmShipmentDto) {
+        return ResponseEntity.ok(outboundService.confirmShipment(confirmShipmentDto));
     }
     
 }
