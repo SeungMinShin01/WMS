@@ -32,6 +32,7 @@ public class OutboundListDto {
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
                 .status(entity.getStatus().name())
+                .createdAt(entity.getCreatedAt())
                 .build();
     }
 }
