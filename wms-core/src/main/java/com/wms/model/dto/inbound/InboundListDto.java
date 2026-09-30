@@ -36,7 +36,7 @@ public class InboundListDto {
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
                 .createdAt(entity.getCreatedAt())
-                .status(entity.getStatus())
+                .status(entity.getStatus().name())
                 .itemCount(itemCount)
                 .totalExpectedQty(totalExpectedQty)
                 .build();

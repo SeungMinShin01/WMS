@@ -48,7 +48,7 @@ export default function ProductPage(props) {
             <th>수정일</th>
           </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>{/* 백에서 받은 데이터 */}</tbody>
       </table>
     </>
   );

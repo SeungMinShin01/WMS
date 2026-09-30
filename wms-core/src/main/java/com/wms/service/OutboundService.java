@@ -28,25 +28,31 @@ import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.StockRepository;
 import jakarta.persistence.EntityNotFoundException;
+import com.wms.model.entity.DocumentType;
 
 @Service
-@Transactional 
+@Transactional
 public class OutboundService {
     // ED-12
-    @Autowired private DocumentRepository documentRepository;
+    @Autowired
+    private DocumentRepository documentRepository;
     // ED-17, ED-18
-    @Autowired private DocumentItemRepository documentItemRepository;
+    @Autowired
+    private DocumentItemRepository documentItemRepository;
     // ED-18
-    @Autowired private StockRepository stockRepository;
+    @Autowired
+    private StockRepository stockRepository;
     // ED-18
-    @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
+    @Autowired
+    private DocumentItemDetailRepository documentItemDetailRepository;
 
-
-    
     // ED-12 출고 문서 목록 조회
     public List<OutboundListDto> getOutboundList() {
-        List<DocumentEntity> documentEntities = documentRepository.findByTypeOrderByExpectedAtAsc("OUTBOUND");
-        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {return OutboundListDto.from(entity);}).toList();
+        List<DocumentEntity> documentEntities = documentRepository
+                .findByTypeOrderByExpectedAtAsc(DocumentType.OUTBOUND);
+        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {
+            return OutboundListDto.from(entity);
+        }).toList();
         return documentDtos;
     }
 
@@ -59,10 +65,9 @@ public class OutboundService {
                 }
         OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
 
-        
         List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
         documentItemEntities.forEach((documentItemEntity) -> {
-        
+
             if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {
                 OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
                 outboundDetailDto.getItems().add(outboundItemDto);
@@ -73,7 +78,8 @@ public class OutboundService {
 
     // ED-18 할당 1건 (피킹리스트 생성)
     public Integer allocate(AllocationDto allocationDto) {
-        DocumentItemEntity documentItemEntity = documentItemRepository.findById(allocationDto.getDocumentItemId()).orElse(null);
+        DocumentItemEntity documentItemEntity = documentItemRepository.findById(allocationDto.getDocumentItemId())
+                .orElse(null);
         StockEntity stockEntity = stockRepository.findById(allocationDto.getStockId()).orElse(null);
 
         DocumentItemDetailEntity detailEntity = allocationDto.toEntity(documentItemEntity, stockEntity);
@@ -236,15 +242,16 @@ public class OutboundService {
             throw new EntityNotFoundException("출고 문서가 없습니다: " + documentId);
         }
         List<PickingListDto> pickingListDtos = documentItemDetailRepository.findAll().stream()
-            .filter((detail) -> detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId))
-            .sorted((a, b) -> a.getLocationEntity().getLocationCode()
-                               .compareTo(b.getLocationEntity().getLocationCode()))
-            .map((detail) -> PickingListDto.from(detail))
-            .toList();
+                .filter((detail) -> detail.getDocumentItemEntity().getDocumentEntity().getDocumentId()
+                        .equals(documentId))
+                .sorted((a, b) -> a.getLocationEntity().getLocationCode()
+                        .compareTo(b.getLocationEntity().getLocationCode()))
+                .map((detail) -> PickingListDto.from(detail))
+                .toList();
         return pickingListDtos;
     }
-    
-    // ED-20 출고확정 
+
+    // ED-20 출고확정
     public Boolean confirmShipment(ConfirmShipmentDto confirmShipmentDto) {
         DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(confirmShipmentDto.getDetailId())
         .orElseThrow(() -> new EntityNotFoundException("할당 내역이 없습니다: " + confirmShipmentDto.getDetailId()));
