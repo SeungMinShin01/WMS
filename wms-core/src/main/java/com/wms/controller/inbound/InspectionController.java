@@ -3,6 +3,7 @@ package com.wms.controller.inbound;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,8 +19,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/wms/inspections")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class InspectionController {
-    @Autowired  private InboundService inboundService;
+    @Autowired
+    private InboundService inboundService;
 
     // 검수 1건 등록 ED - 14
     @PostMapping("")
@@ -27,7 +30,7 @@ public class InspectionController {
         return inboundService.inspectionSave(inspectionDto);
     }
 
-    // 검수 결과 조회 ED - 15
+    // 검수 결과 상세 조회 ED - 15
     @GetMapping("/{documentId}")
     public List<InspectionResultDto> inspectionFindAll(@PathVariable(name = "documentId") Integer documentId) {
         return inboundService.inspectionFindAll(documentId);

@@ -10,7 +10,10 @@ export default function LocationPage(props) {
 
   return (
     <>
-      <PageTitle title="창고·로케이션 관리" path="홈 > 기준정보 > 창고·로케이션" />
+      <PageTitle
+        title="창고·로케이션 관리"
+        path="홈 > 기준정보 > 창고·로케이션"
+      />
 
       {/* 조회조건: form 안에 label + input 나열. 조회 버튼은 submit */}
       <form className="search" onSubmit={조회}>
@@ -57,7 +60,7 @@ export default function LocationPage(props) {
             <th>비고</th>
           </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>{/* 백에서 받은 데이터 */}</tbody>
       </table>
     </>
   );

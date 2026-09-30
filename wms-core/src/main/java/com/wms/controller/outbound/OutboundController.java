@@ -3,6 +3,7 @@ package com.wms.controller.outbound;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +18,7 @@ import com.wms.model.dto.outbound.ConfirmShipmentDto;
 import com.wms.service.OutboundService;
 import org.springframework.web.bind.annotation.RequestBody;
 
-
+@CrossOrigin (origins = "http://localhost:5173" , allowCredentials = "true")
 @RestController
 public class OutboundController {
     @Autowired private OutboundService outboundService;

@@ -3,6 +3,8 @@ package com.wms.model.entity;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -28,7 +30,8 @@ public class DocumentEntity extends BaseTime {
     private Integer documentId;
 
     private String documentNo; // IN-20261001-001
-    private String type; // INBOUND / OUTBOUND
+    @Enumerated(EnumType.STRING)
+    private DocumentType type;
 
     @JoinColumn(name = "partner_id")
     @ManyToOne(fetch = FetchType.LAZY)
@@ -38,6 +41,16 @@ public class DocumentEntity extends BaseTime {
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private String status = "WAITING";
+    private DocumentStatus status = DocumentStatus.WAITING;
+
+    // 상태를 바꾸는 유일한 문. setStatus 는 직접 호출하지 않는다
+    public void moveTo(DocumentStatus next) {
+        if (!this.status.canGoTo(next)) {
+            throw new IllegalStateException(
+                    "문서 " + documentNo + " 상태를 " + status + " → " + next + " 로 바꿀 수 없습니다");
+        }
+        this.status = next;
+    }
 }
