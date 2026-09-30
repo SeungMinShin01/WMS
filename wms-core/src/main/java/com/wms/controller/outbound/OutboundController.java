@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.outbound.AllocationDto;
+import com.wms.model.dto.outbound.AllocationPreviewDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.dto.outbound.PickingListDto;
@@ -38,24 +39,32 @@ public class OutboundController {
         return ResponseEntity.ok(outboundService.getOutboundDetail(documentId));
     }
 
-    // ED-18 할당 1건 (수동 · 예외용)
+    // ED-18 할당 1건 (수동 · 예외용) → 201 + detailId
     @PostMapping ("/wms/allocations")
     public ResponseEntity<Integer> allocate(@RequestBody AllocationDto allocationDto) {
-        Integer detailId = outboundService.allocate(allocationDto);      \
-        return ResponseEntity.status(HttpStatus.CREATED).body(detailId); // 201 + detailId
+        Integer detailId = outboundService.allocate(allocationDto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(detailId);
     }
     
-    // ED-18 확장 : 출고 문서 자동 할당 (할당 규칙 v3)
-    // 성공 → 201 + 피킹리스트 / 실패 → GlobalExceptionHandler 가 400·404·409 + 메시지로 응답
+    // ED-18 확장 : 자동 할당 미리보기 (저장 안 함, 추천 결과만) → 200
+    @GetMapping("/wms/allocations/{documentId}/preview")
+    public ResponseEntity<List<AllocationPreviewDto>> previewAllocate(@PathVariable(name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(outboundService.previewAllocate(documentId));
+    }
+
+    // ED-18 확장 : 자동 할당 확정 → 201 + 피킹리스트 / 실패 → GlobalExceptionHandler 가 400·404·409 + 메시지
     // 기존 GET /wms/allocations/{documentId}(피킹 조회)와 주소는 같지만 POST 라서 충돌하지 않음
     @PostMapping("/wms/allocations/{documentId}")
     public ResponseEntity<List<PickingListDto>> autoAllocate(@PathVariable(name = "documentId") Integer documentId) {
-        // 주소의 {documentId} 값을 받아 서비스의 자동 할당 실행 → 결과 피킹리스트
         List<PickingListDto> pickingList = outboundService.autoAllocate(documentId);
-        // 새 할당(detail)이 만들어졌으니 201 Created, 본문에는 피킹리스트
         return ResponseEntity.status(HttpStatus.CREATED).body(pickingList);
     }
 
+    // 피킹 시작 : ALLOCATED → PICKING → 200 + 바뀐 상태
+    @PutMapping("/wms/outbounds/{documentId}/picking")
+    public ResponseEntity<String> startPicking(@PathVariable(name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(outboundService.startPicking(documentId));
+    }
 
     // ED-19 피킹 리스트 조회
     @GetMapping ("/wms/allocations/{documentId}")
