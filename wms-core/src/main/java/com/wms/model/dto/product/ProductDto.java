@@ -33,6 +33,7 @@ public class ProductDto {
 // 2. ENTITY -> DTO
     public static  ProductDto from( ProductEntity entity ){
         return ProductDto.builder()
+            .productId( entity.getProductId() ) 
             .productCode( entity.getProductCode() )
             .productName( entity.getProductName() )
             .spec( entity.getSpec() )
