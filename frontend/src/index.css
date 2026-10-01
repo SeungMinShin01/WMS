@@ -284,3 +284,43 @@ table.form input[readonly] {
   color: #c0392b;
   font-weight: bold;
 }
+
+/* ===== 상세 화면 상단 버튼 줄 ===== */
+.detail-bar {
+  display: flex; /* 자식을 가로로 나란히 */
+  justify-content: flex-end; /* 첫 자식은 맨 왼쪽, 마지막 자식은 맨 오른쪽 */
+  align-items: center;
+  margin: 4px 0 8px;
+}
+.detail-bar .bar-left,
+.detail-bar .bar-right {
+  display: flex;
+  margin-right: 4px;
+  gap: 4px; /* 같은 쪽 버튼끼리 간격 */
+}
+
+/* 헤더(수정 불가) — 한 줄에 항목 3개 */
+table.form.head th {
+  width: 100px;
+}
+table.form.head td {
+  min-width: 140px;
+}
+
+/* 좌우 나누기: 적치 지정 5 : 추천 적치칸 7 */
+.two-col {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+.two-col .col-left {
+  flex: 5;
+  min-width: 0;
+  overflow-x: auto;
+}
+.two-col .col-right {
+  flex: 7;
+  min-width: 0;
+  overflow-x: auto;
+}
