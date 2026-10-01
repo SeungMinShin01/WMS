@@ -34,12 +34,11 @@ public class StockApiTest {
             mockMvc.perform(get("/wms/stocks"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(13)))
-                    .andExpect(jsonPath("$[0].expiryDate").value("2027-01-05")); // 초코파이가 가장 빠름
+                    .andExpect(jsonPath("$[0].expiryDate").value("2027-01-05"));
         }
 
         @Test
         void 가용수량_재고빼기할당() throws Exception {
-            // stockId 3 : 진라면 재고 60, 할당 40 → 가용 20
             mockMvc.perform(get("/wms/stocks"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$[?(@.stockId == 3)].availableQty", hasItem(20)));
@@ -47,7 +46,6 @@ public class StockApiTest {
 
         @Test
         void 적재하면_재고줄_늘어남() throws Exception {
-            // 문서4 신라면 80 → 빈 칸 B-02-02 에 적재하면 재고 줄이 하나 생김
             mockMvc.perform(put("/wms/inspections")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"detailId\": 14, \"locationId\": 12}"))
@@ -59,5 +57,4 @@ public class StockApiTest {
         }
     }
 
-    // 실패: 재고 조회는 입력값이 없어 실패 케이스 없음
 }
