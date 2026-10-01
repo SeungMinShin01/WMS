@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
@@ -6,85 +6,101 @@ import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 
 // 문서 상태 영어 값 → 화면에 보여줄 한글 (값에 없는 상태는 영어 그대로)
-const 상태이름 = {
-  WAITING: "접수",
-  ALLOCATED: "할당",
-  PICKING: "피킹중",
+const STATUS_NAME = {
+  WAITING: "출고예정",
+  ALLOCATED: "출고할당",
+  PICKING: "재고피킹",
   SHIPPED: "출고완료",
   CANCELED: "취소",
 };
-const 상태표시 = (status) => 상태이름[status] || status;
 
 // 06 출고문서 — 담당: 김지환
 // 목록 줄 클릭 → 상세(헤더 + 주문 품목) → [출고지시] / [피킹리스트]로 이동
 export default function OutboundPage(props) {
   const navigate = useNavigate();
-  const [outbounds, setOutbounds] = useState([]);
-  const [viewList, setViewList] = useState([]);
+  const [outbounds, setOutbounds] = useState([]); // ED-12 출고 문서 전체
+  const [filter, setFilter] = useState({
+    from: "",
+    to: "",
+    partnerName: "",
+    documentNo: "",
+    status: "",
+  }); // 조회 조건
   const [detail, setDetail] = useState(null); // 선택한 문서 상세 (null = 목록 화면)
 
   // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
-  const getOutbounds = async () => {
+  const getList = async () => {
     const response = await axios.get("/wms/outbounds");
-    setOutbounds(response.data); // 원본 목록 (검색할 때 기준)
-    setViewList(response.data); // 화면에 보여줄 목록 (검색 조건은 초기화됨)
+    setOutbounds(response.data);
   };
 
   // 최초 1번 목록 조회
   useEffect(() => {
-    getOutbounds();
+    getList();
   }, []);
 
   // 목록 줄 클릭 → ED-17 주문 상세
-  const 문서선택 = async (documentId) => {
+  const selectDocument = async (documentId) => {
     const response = await axios.get("/wms/outbounds/" + documentId);
     setDetail(response.data);
   };
 
-  const 뒤로가기 = () => {
+  const goBack = () => {
     setDetail(null);
   };
 
-  const 출고지시하기 = () => {
+  const goAllocation = () => {
     navigate(`/outbounds/allocation/${detail.documentId}`);
   };
 
-  const 피킹리스트보기 = () => {
+  const goPicking = () => {
     navigate(`/outbounds/picking/${detail.documentId}`);
   };
 
   // 주문 취소 : 접수·할당 상태에서만 버튼이 보임
-  const 주문취소 = async (event, outbound) => {
+  const cancelOrder = async (event, outbound) => {
     event.stopPropagation(); // 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게
     if (!confirm(outbound.documentNo + " 주문을 취소할까요? ")) return;
     try {
       await axios.put("/wms/outbounds/" + outbound.documentId + "/cancel");
       alert("주문이 취소되었습니다");
-      getOutbounds(); // 상태가 취소로 바뀐 목록 다시 불러오기
+      getList(); // 상태가 취소로 바뀐 목록 다시 불러오기
     } catch (error) {
       alert(error.response ? error.response.data : "서버에 연결할 수 없습니다");
     }
   };
 
-  const 조회 = (event) => {
+  // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
+  const handleSearch = (event) => {
     event.preventDefault();
-    const status = event.target.status.value;
-    const from = event.target.from.value;
-    const to = event.target.to.value;
-    const partnerName = event.target.partnerName.value;
-    let result = [];
-    for (let i = 0; i < outbounds.length; i++) {
-      const row = outbounds[i];
-      const date = row.expectedAt.substring(0, 10);
-      if (status !== "" && row.status !== status) continue;
-      if (from !== "" && date < from) continue;
-      if (to !== "" && date > to) continue;
-      if (partnerName !== "" && !row.partnerName.includes(partnerName))
-        continue;
-      result.push(row);
-    }
-    setViewList(result);
+    setFilter({
+      from: event.target.from.value,
+      to: event.target.to.value,
+      partnerName: event.target.partnerName.value.trim(),
+      documentNo: event.target.documentNo.value.trim(),
+      status: event.target.status.value,
+    });
+    getList();
   };
+
+  // 조회 조건에 맞는 문서만 (빈 조건은 통과)
+  const visibleList = outbounds.filter((outbound) => {
+    const day = outbound.expectedAt.substring(0, 10); // "2026-10-07T15:00:00" → "2026-10-07"
+    if (filter.status !== "" && outbound.status !== filter.status) return false;
+    if (filter.from !== "" && day < filter.from) return false;
+    if (filter.to !== "" && day > filter.to) return false;
+    if (
+      filter.partnerName !== "" &&
+      !outbound.partnerName.includes(filter.partnerName)
+    )
+      return false;
+    if (
+      filter.documentNo !== "" &&
+      !outbound.documentNo.includes(filter.documentNo)
+    )
+      return false;
+    return true;
+  });
 
   return (
     <>
@@ -93,7 +109,7 @@ export default function OutboundPage(props) {
       {detail === null ? (
         <>
           {/* ── 목록 ── */}
-          <form className="search" onSubmit={조회}>
+          <form className="search" onSubmit={handleSearch}>
             <label>출고요청일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>배송지명</label>
@@ -103,16 +119,16 @@ export default function OutboundPage(props) {
             <label>상태</label>
             <select name="status">
               <option value="">전체</option>
-              <option value="WAITING">접수</option>
-              <option value="ALLOCATED">할당</option>
-              <option value="PICKING">피킹중</option>
+              <option value="WAITING">출고예정</option>
+              <option value="ALLOCATED">출고할당</option>
+              <option value="PICKING">재고피킹</option>
               <option value="SHIPPED">출고완료</option>
               <option value="CANCELED">취소</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
           </form>
 
-          <GridTitle title="출고문서 목록" desc={`총 ${viewList.length}건`}>
+          <GridTitle title="출고문서 목록" desc={`총 ${visibleList.length}건`}>
             <button className="btn">신규</button>
           </GridTitle>
           <table className="grid">
@@ -133,10 +149,10 @@ export default function OutboundPage(props) {
               </tr>
             </thead>
             <tbody>
-              {viewList.map((outbound, index) => (
+              {visibleList.map((outbound, index) => (
                 <tr
                   key={outbound.documentId}
-                  onClick={() => 문서선택(outbound.documentId)}
+                  onClick={() => selectDocument(outbound.documentId)}
                 >
                   <td>{index + 1}</td>
                   <td>{outbound.documentNo}</td>
@@ -146,15 +162,15 @@ export default function OutboundPage(props) {
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
                   <td></td>
                   <td></td>
-                  <td>{상태표시(outbound.status)}</td>
+                  <td>{STATUS_NAME[outbound.status]}</td>
                   <td></td>
                   <td></td>
                   <td>
                     {outbound.status === "WAITING" ||
                     outbound.status === "ALLOCATED" ? (
                       <button
-                        className="btn danger"
-                        onClick={(e) => 주문취소(e, outbound)}
+                        className="btn danger plain"
+                        onClick={(e) => cancelOrder(e, outbound)}
                       >
                         취소
                       </button>
@@ -174,26 +190,28 @@ export default function OutboundPage(props) {
           <DocumentHeader
             type="OUTBOUND"
             doc={detail}
-            statusName={상태표시(detail.status)}
+            statusName={STATUS_NAME[detail.status]}
           />
 
-          <GridTitle title="주문 품목" desc={`총 ${detail.items.length}건`}>
-            <button className="btn" onClick={뒤로가기}>
+          <div className="detail-bar">
+            <button className="btn" onClick={goBack}>
               목록
             </button>
             {(detail.status === "WAITING" || detail.status === "ALLOCATED") && (
-              <button className="btn primary" onClick={출고지시하기}>
+              <button className="btn primary" onClick={goAllocation}>
                 출고지시
               </button>
             )}
             {(detail.status === "ALLOCATED" ||
               detail.status === "PICKING" ||
               detail.status === "SHIPPED") && (
-              <button className="btn" onClick={피킹리스트보기}>
+              <button className="btn" onClick={goPicking}>
                 피킹리스트
               </button>
             )}
-          </GridTitle>
+          </div>
+
+          <GridTitle title="주문 품목" desc={`총 ${detail.items.length}건`} />
           <table className="grid">
             <thead>
               <tr>

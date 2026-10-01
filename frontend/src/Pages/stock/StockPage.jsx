@@ -1,11 +1,11 @@
-import PageTitle from "../../Layout/PageTitle";
-import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import PageTitle from "../../Layout/PageTitle";
+import GridTitle from "../../Layout/GridTitle";
 
 // 재고 상태: 임박(30일 이하) > 부족(가용 0) > 정상
-const 상태표시 = { NORMAL: "정상", SHORT: "부족", NEAR: "임박" };
-const 재고상태 = (s) => {
+const STOCK_STATUS_NAME = { NORMAL: "정상", SHORT: "부족", NEAR: "임박" };
+const getStockStatus = (s) => {
   if (s.remainingDays !== null && s.remainingDays <= 30) return "NEAR";
   if (s.availableQty <= 0) return "SHORT";
   return "NORMAL";
@@ -13,44 +13,52 @@ const 재고상태 = (s) => {
 
 // 07 재고현황 — 담당: 조현우
 export default function StockPage(props) {
-  const [stocks, setStocks] = useState([]);   // ED-21 재고 전체 (FEFO 정렬)
-  const [조건, set조건] = useState({ productCode: "", productName: "", zone: "", status: "" });
+  const [stocks, setStocks] = useState([]); // ED-21 재고 전체 (FEFO 정렬)
+  const [filter, setFilter] = useState({
+    productCode: "",
+    productName: "",
+    zone: "",
+    status: "",
+  });
 
-  const 재고조회 = async () => {
+  const getList = async () => {
     const response = await axios.get("/wms/stocks");
     setStocks(response.data);
   };
 
   // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
-  const 조회 = (event) => {
+  const handleSearch = (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    set조건({
+    setFilter({
       productCode: form.get("productCode").trim(),
       productName: form.get("productName").trim(),
       zone: form.get("zone"),
       status: form.get("status"),
     });
-    재고조회();
+    getList();
   };
 
   useEffect(() => {
-    재고조회();
+    getList();
   }, []);
 
   // 조회 조건에 맞는 재고만 (구역 = 로케이션 코드 첫 글자)
-  const 보여줄목록 = stocks.filter((s) =>
-    (조건.productCode === "" || s.productCode.includes(조건.productCode)) &&
-    (조건.productName === "" || s.productName.includes(조건.productName)) &&
-    (조건.zone === "" || s.locationCode.startsWith(조건.zone)) &&
-    (조건.status === "" || 재고상태(s) === 조건.status)
+  const visibleList = stocks.filter(
+    (s) =>
+      (filter.productCode === "" ||
+        s.productCode.includes(filter.productCode)) &&
+      (filter.productName === "" ||
+        s.productName.includes(filter.productName)) &&
+      (filter.zone === "" || s.locationCode.startsWith(filter.zone)) &&
+      (filter.status === "" || getStockStatus(s) === filter.status),
   );
 
   return (
     <>
       <PageTitle title="재고 현황" path="홈 > 재고관리 > 재고현황" />
 
-      <form className="search" onSubmit={조회}>
+      <form className="search" onSubmit={handleSearch}>
         <label>품목코드</label>
         <input type="text" name="productCode" defaultValue="SKU-" />
         <label>품목명</label>
@@ -72,9 +80,10 @@ export default function StockPage(props) {
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
-      <GridTitle title="품목별 재고" desc={`총 ${보여줄목록.length}건`}>
-        <button className="btn">신규</button>
-      </GridTitle>
+      <GridTitle
+        title="품목별 재고"
+        desc={`총 ${visibleList.length}건`}
+      ></GridTitle>
       <table className="grid">
         <thead>
           <tr>
@@ -94,7 +103,7 @@ export default function StockPage(props) {
           </tr>
         </thead>
         <tbody>
-          {보여줄목록.map((s, index) => (
+          {visibleList.map((s, index) => (
             <tr key={s.stockId}>
               <td>{index + 1}</td>
               <td>{s.productCode}</td>
@@ -107,8 +116,10 @@ export default function StockPage(props) {
               <td className="num">{s.availableQty.toLocaleString()}</td>
               <td>{s.locationCode}</td>
               <td>{s.expiryDate ?? "—"}</td>
-              <td className="num">{s.remainingDays === null ? "—" : `${s.remainingDays}일`}</td>
-              <td>{상태표시[재고상태(s)]}</td>
+              <td className="num">
+                {s.remainingDays === null ? "—" : `${s.remainingDays}일`}
+              </td>
+              <td>{STOCK_STATUS_NAME[getStockStatus(s)]}</td>
             </tr>
           ))}
         </tbody>

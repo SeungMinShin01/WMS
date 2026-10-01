@@ -239,21 +239,6 @@ table.form input[readonly] {
   margin-left: 6px;
 }
 
-/* ===== 두 칸 나누기 (왼쪽 상세 / 오른쪽 품목처럼) ===== */
-.two-col {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.col-left {
-  flex: 1;
-  min-width: 0;
-}
-.col-right {
-  flex: 1.3;
-  min-width: 0;
-}
-
 /* ===== 버튼 ===== */
 .btn {
   height: 24px;
@@ -275,6 +260,14 @@ table.form input[readonly] {
   border-color: #c0392b;
 }
 
+.btn.plain {
+  border: none;
+  background: none;
+  padding: 0 4px;
+}
+.btn.plain:hover {
+  text-decoration: underline;
+}
 /* ===== 기타 ===== */
 .note {
   color: #555;
@@ -285,18 +278,14 @@ table.form input[readonly] {
   font-weight: bold;
 }
 
-/* ===== 상세 화면 상단 버튼 줄 ===== */
+/* ===== 상세 화면 상단 버튼 줄 =====
+   헤더 바로 아래. [목록] → 이동 버튼 순서로, 오른쪽 끝에 붙는다 */
 .detail-bar {
   display: flex; /* 자식을 가로로 나란히 */
-  justify-content: flex-end; /* 첫 자식은 맨 왼쪽, 마지막 자식은 맨 오른쪽 */
+  justify-content: flex-end; /* 오른쪽 끝으로 */
   align-items: center;
+  gap: 4px; /* 버튼 사이 간격 */
   margin: 4px 0 8px;
-}
-.detail-bar .bar-left,
-.detail-bar .bar-right {
-  display: flex;
-  margin-right: 4px;
-  gap: 4px; /* 같은 쪽 버튼끼리 간격 */
 }
 
 /* 헤더(수정 불가) — 한 줄에 항목 3개 */

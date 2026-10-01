@@ -1,11 +1,11 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
 
-const 상태명 = {
+const STATUS_NAME = {
   WAITING: "입고예정",
   INSPECTED: "검수완료",
   COMPLETED: "입고완료",
@@ -18,122 +18,123 @@ export default function InspectionPage(props) {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 문서 전체
-  const [조건, set조건] = useState({
+  const [filter, setFilter] = useState({
     from: "",
     to: "",
     partnerName: "",
     status: "WAITING,INSPECTED",
   }); // 조회 조건
-  const [selected, setSelected] = useState(null); // ED-13 선택한 문서 (items 포함)
+  const [detail, setDetail] = useState(null); // ED-13 선택한 문서 (items 포함)
   const [results, setResults] = useState([]); // ED-15 검수 결과
   const [qtys, setQtys] = useState({}); // { documentItemId: 실제 입고수량 입력 }
   const [memos, setMemos] = useState({}); // { documentItemId: 비고 입력 }
 
   // ED-10 목록
-  const 목록조회 = async () => {
+  const getList = async () => {
     const response = await axios.get("/wms/inbounds");
     setInbounds(response.data);
   };
 
   // ED-15 검수 결과
-  const 결과조회 = async (documentId) => {
+  const getResults = async (documentId) => {
     const response = await axios.get(`/wms/inspections/${documentId}`);
     setResults(response.data);
   };
 
   // 목록 줄 클릭 → ED-13 상세 + ED-15 결과
-  const 문서선택 = async (documentId) => {
+  const selectDocument = async (documentId) => {
     const response = await axios.get(`/wms/inbounds/${documentId}`);
-    setSelected(response.data);
-    결과조회(documentId);
+    setDetail(response.data);
+    getResults(documentId);
     setQtys({});
     setMemos({});
   };
 
   // 저장 후 선택 문서 상태 다시 받기
-  const 문서새로고침 = async () => {
-    const response = await axios.get(`/wms/inbounds/${selected.documentId}`);
-    setSelected(response.data);
-    결과조회(selected.documentId);
-    목록조회();
+  const refreshDetail = async () => {
+    const response = await axios.get(`/wms/inbounds/${detail.documentId}`);
+    setDetail(response.data);
+    getResults(detail.documentId);
+    getList();
   };
 
   // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
-  const 조회 = (event) => {
+  const handleSearch = (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    set조건({
+    setFilter({
       from: form.get("from"),
       to: form.get("to"),
       partnerName: form.get("partnerName").trim(),
       status: form.get("status"),
     });
-    목록조회();
+    getList();
   };
 
   useEffect(() => {
-    목록조회();
-    if (documentId) 문서선택(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
+    getList();
+    if (documentId) selectDocument(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
   }, []);
 
   // 상세 → 목록으로 (주소도 목록 주소로)
-  const 뒤로가기 = () => {
-    setSelected(null);
+  const goBack = () => {
+    setDetail(null);
     navigate("/inbounds/inspection");
   };
 
   // 검수 끝난 문서 → 물품적재 화면의 같은 문서로
-  const 적재하기 = () => {
-    navigate(`/inbounds/putaway/${selected.documentId}`);
+  const goPutaway = () => {
+    navigate(`/inbounds/putaway/${detail.documentId}`);
   };
 
   // 조회 조건에 맞는 문서만
-  const 보여줄목록 = inbounds.filter(
+  const visibleList = inbounds.filter(
     (d) =>
-      조건.status.split(",").includes(d.status) &&
-      (조건.from === "" || d.expectedAt >= 조건.from) &&
-      (조건.to === "" || d.expectedAt <= 조건.to) &&
-      (조건.partnerName === "" || d.partnerName.includes(조건.partnerName)),
+      filter.status.split(",").includes(d.status) &&
+      (filter.from === "" || d.expectedAt >= filter.from) &&
+      (filter.to === "" || d.expectedAt <= filter.to) &&
+      (filter.partnerName === "" || d.partnerName.includes(filter.partnerName)),
   );
 
   // 이미 검수된 품목 { documentItemId: 검수 결과 } — 있으면 입력칸 대신 값으로 보여줌
-  const 검수된 = {};
+  const inspectedMap = {};
   results.forEach((r) => {
-    검수된[r.documentItemId] = r;
+    inspectedMap[r.documentItemId] = r;
   });
 
-  const 실제수량 = (item) =>
-    검수된[item.documentItemId]?.qty ?? Number(qtys[item.documentItemId] || 0);
-  const 예정합계 = selected
-    ? selected.items.reduce((sum, item) => sum + item.expectedQty, 0)
+  const getActualQty = (item) =>
+    inspectedMap[item.documentItemId]?.qty ??
+    Number(qtys[item.documentItemId] || 0);
+  const expectedTotal = detail
+    ? detail.items.reduce((sum, item) => sum + item.expectedQty, 0)
     : 0;
-  const 실제합계 = selected
-    ? selected.items.reduce((sum, item) => sum + 실제수량(item), 0)
+  const actualTotal = detail
+    ? detail.items.reduce((sum, item) => sum + getActualQty(item), 0)
     : 0;
 
   // [예정수량 일괄 적용] — 아직 검수 안 한 품목만
-  const 일괄적용 = () => {
+  const applyExpectedQty = () => {
     const next = {};
-    selected.items.forEach((item) => {
-      if (검수된[item.documentItemId] === undefined)
+    detail.items.forEach((item) => {
+      if (inspectedMap[item.documentItemId] === undefined)
         next[item.documentItemId] = item.expectedQty;
     });
     setQtys(next);
   };
 
   // ED-14 검수 저장 — 수량을 입력한 품목만 1건씩 POST (비고 포함)
-  const 검수저장 = async () => {
-    const 대상 = selected.items.filter(
+  const saveInspection = async () => {
+    const targets = detail.items.filter(
       (item) =>
-        검수된[item.documentItemId] === undefined &&
+        inspectedMap[item.documentItemId] === undefined &&
         Number(qtys[item.documentItemId]) > 0,
     );
-    if (대상.length === 0) {
+    if (targets.length === 0) {
       alert("저장할 검수 수량이 없습니다.");
       return;
     }
-    const 실패메시지 = [];
-    for (const item of 대상) {
+    const failMessages = [];
+    for (const item of targets) {
       try {
         await axios.post("/wms/inspections", {
           documentItemId: item.documentItemId,
@@ -141,28 +142,28 @@ export default function InspectionPage(props) {
           remark: memos[item.documentItemId] ?? null,
         });
       } catch (error) {
-        실패메시지.push(
+        failMessages.push(
           `${item.productName}: ${error.response?.data ?? "오류"}`,
         );
       }
     }
     alert(
-      `검수 저장 ${대상.length - 실패메시지.length}건` +
-        (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""),
+      `검수 저장 ${targets.length - failMessages.length}건` +
+        (failMessages.length > 0 ? `\n실패\n${failMessages.join("\n")}` : ""),
     );
     setQtys({});
     setMemos({});
-    문서새로고침();
+    refreshDetail();
   };
 
   return (
     <>
       <PageTitle title="입고검수" path="홈 > 입고관리 > 입고검수" />
 
-      {selected === null ? (
+      {detail === null ? (
         <>
           {/* ── 목록: 입고예정·검수완료 ── */}
-          <form className="search" onSubmit={조회}>
+          <form className="search" onSubmit={handleSearch}>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>화주명</label>
@@ -180,7 +181,7 @@ export default function InspectionPage(props) {
 
           <GridTitle
             title="검수 대상 입고문서"
-            desc={`총 ${보여줄목록.length}건`}
+            desc={`총 ${visibleList.length}건`}
           />
           <table className="grid">
             <thead>
@@ -195,10 +196,10 @@ export default function InspectionPage(props) {
               </tr>
             </thead>
             <tbody>
-              {보여줄목록.map((inbound, index) => (
+              {visibleList.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
-                  onClick={() => 문서선택(inbound.documentId)}
+                  onClick={() => selectDocument(inbound.documentId)}
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
@@ -208,7 +209,7 @@ export default function InspectionPage(props) {
                   <td className="num">
                     {inbound.totalExpectedQty.toLocaleString()}
                   </td>
-                  <td>{상태명[inbound.status]}</td>
+                  <td>{STATUS_NAME[inbound.status]}</td>
                 </tr>
               ))}
             </tbody>
@@ -216,25 +217,39 @@ export default function InspectionPage(props) {
         </>
       ) : (
         <>
-          <GridTitle title="입고 정보" desc={selected.documentNo} />
+          <GridTitle title="입고 정보" desc={detail.documentNo} />
           <DocumentHeader
             type="INBOUND"
-            doc={selected}
-            statusName={상태명[selected.status]}
+            doc={detail}
+            statusName={STATUS_NAME[detail.status]}
           />
-          {/* ── 상세: 헤더 + 검수 입력 ── */}
           <div className="detail-bar">
-            <button className="btn" onClick={뒤로가기}>
+            <button className="btn" onClick={goBack}>
               목록
             </button>
-            <span className="right">
-              {selected.status === "INSPECTED" && (
-                <button className="btn primary" onClick={적재하기}>
-                  적재하기
-                </button>
-              )}
-            </span>
+            {detail.status === "INSPECTED" && (
+              <button className="btn primary" onClick={goPutaway}>
+                적재하기
+              </button>
+            )}
           </div>
+
+          {/* ── 검수 입력 ── */}
+          <GridTitle
+            title="검수 입력"
+            desc={`예정 ${expectedTotal.toLocaleString()} · 실제 ${actualTotal.toLocaleString()}`}
+          >
+            {detail.status === "WAITING" && (
+              <>
+                <button className="btn" onClick={applyExpectedQty}>
+                  예정수량 일괄 적용
+                </button>
+                <button className="btn primary" onClick={saveInspection}>
+                  검수 저장
+                </button>
+              </>
+            )}
+          </GridTitle>
 
           <table className="grid">
             <thead>
@@ -249,8 +264,8 @@ export default function InspectionPage(props) {
               </tr>
             </thead>
             <tbody>
-              {selected.items.map((item) => {
-                const done = 검수된[item.documentItemId]; // undefined면 아직 검수 전
+              {detail.items.map((item) => {
+                const done = inspectedMap[item.documentItemId]; // undefined면 아직 검수 전
                 return (
                   <tr key={item.documentItemId}>
                     <td>{item.productCode}</td>
@@ -298,27 +313,12 @@ export default function InspectionPage(props) {
               })}
               <tr className="sum">
                 <td colSpan={4}>합계</td>
-                <td className="num">{예정합계.toLocaleString()}</td>
-                <td className="num">{실제합계.toLocaleString()}</td>
+                <td className="num">{expectedTotal.toLocaleString()}</td>
+                <td className="num">{actualTotal.toLocaleString()}</td>
                 <td></td>
               </tr>
             </tbody>
           </table>
-          <GridTitle
-            title="검수 입력"
-            desc={`예정 ${예정합계.toLocaleString()} · 실제 ${실제합계.toLocaleString()}`}
-          >
-            {selected.status === "WAITING" && (
-              <>
-                <button className="btn" onClick={일괄적용}>
-                  예정수량 일괄 적용
-                </button>
-                <button className="btn primary" onClick={검수저장}>
-                  검수 저장
-                </button>
-              </>
-            )}
-          </GridTitle>
           <p className="hint">
             ※ 전 품목 검수가 끝나면 문서가 검수완료로 바뀌고, [적재하기]로
             물품적재 화면에 넘어갑니다.

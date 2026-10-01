@@ -1,11 +1,11 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
 
-const 상태명 = {
+const STATUS_NAME = {
   WAITING: "입고예정",
   INSPECTED: "검수완료",
   COMPLETED: "입고완료",
@@ -18,124 +18,126 @@ export default function PutawayPage(props) {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 문서 전체
-  const [조건, set조건] = useState({
+  const [filter, setFilter] = useState({
     from: "",
     to: "",
     partnerName: "",
     status: "INSPECTED,COMPLETED",
   }); // 조회 조건
-  const [selected, setSelected] = useState(null); // ED-13 선택한 문서 (items 포함)
+  const [detail, setDetail] = useState(null); // ED-13 선택한 문서 (items 포함)
   const [results, setResults] = useState([]); // ED-15 검수 결과 (= 적치할 줄)
   const [locations, setLocations] = useState({}); // { detailId: 적치할 locationId }
-  const [로케이션목록, set로케이션목록] = useState([]); // 선택 가능한 로케이션 (사용 중인 칸)
+  const [locationOptions, setLocationOptions] = useState([]); // 선택 가능한 로케이션 (사용 중인 칸)
   const [focusDetailId, setFocusDetailId] = useState(null); // 추천을 적용할 적치 줄
   const [recommend, setRecommend] = useState([]); // 추천 적치칸
   const [mixLot, setMixLot] = useState(false); // 혼용적재 (같은 품목 · 다른 LOT 허용)
 
   // ED-10 목록
-  const 목록조회 = async () => {
+  const getList = async () => {
     const response = await axios.get("/wms/inbounds");
     setInbounds(response.data);
   };
 
   // 적치 로케이션 선택 목록
-  const 로케이션조회 = async () => {
+  const getLocations = async () => {
     const response = await axios.get("/wms/inspections/locations");
-    set로케이션목록(response.data);
+    setLocationOptions(response.data);
   };
 
   // ED-15 검수 결과
-  const 결과조회 = async (documentId) => {
+  const getResults = async (documentId) => {
     const response = await axios.get(`/wms/inspections/${documentId}`);
     setResults(response.data);
   };
 
   // 목록 줄 클릭 → ED-13 상세 + ED-15 결과
-  const 문서선택 = async (documentId) => {
+  const selectDocument = async (documentId) => {
     const response = await axios.get(`/wms/inbounds/${documentId}`);
-    setSelected(response.data);
-    결과조회(documentId);
+    setDetail(response.data);
+    getResults(documentId);
     setLocations({});
     setRecommend([]);
     setFocusDetailId(null);
   };
 
   // 저장 후 선택 문서 상태 다시 받기
-  const 문서새로고침 = async () => {
-    const response = await axios.get(`/wms/inbounds/${selected.documentId}`);
-    setSelected(response.data);
-    결과조회(selected.documentId);
-    목록조회();
+  const refreshDetail = async () => {
+    const response = await axios.get(`/wms/inbounds/${detail.documentId}`);
+    setDetail(response.data);
+    getResults(detail.documentId);
+    getList();
   };
 
   // 조회 버튼 - 입력한 조건 저장 + 목록 다시 불러오기
-  const 조회 = (event) => {
+  const handleSearch = (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    set조건({
+    setFilter({
       from: form.get("from"),
       to: form.get("to"),
       partnerName: form.get("partnerName").trim(),
       status: form.get("status"),
     });
-    목록조회();
+    getList();
   };
 
   useEffect(() => {
-    목록조회();
-    로케이션조회();
-    if (documentId) 문서선택(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
+    getList();
+    getLocations();
+    if (documentId) selectDocument(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
   }, []);
 
   // 상세 → 목록으로 (주소도 목록 주소로)
-  const 뒤로가기 = () => {
-    setSelected(null);
+  const goBack = () => {
+    setDetail(null);
     navigate("/inbounds/putaway");
   };
 
   // 조회 조건에 맞는 문서만
-  const 보여줄목록 = inbounds.filter(
+  const visibleList = inbounds.filter(
     (d) =>
-      조건.status.split(",").includes(d.status) &&
-      (조건.from === "" || d.expectedAt >= 조건.from) &&
-      (조건.to === "" || d.expectedAt <= 조건.to) &&
-      (조건.partnerName === "" || d.partnerName.includes(조건.partnerName)),
+      filter.status.split(",").includes(d.status) &&
+      (filter.from === "" || d.expectedAt >= filter.from) &&
+      (filter.to === "" || d.expectedAt <= filter.to) &&
+      (filter.partnerName === "" || d.partnerName.includes(filter.partnerName)),
   );
 
-  const 적재수 = results.filter((r) => r.locationCode !== null).length;
+  const putawayCount = results.filter((r) => r.locationCode !== null).length;
 
   // ED-16 적치 저장 — 로케이션을 고른 줄만 1건씩 PUT. 마지막 줄까지 적재되면 서버가 자동 입고완료 처리
-  const 적치저장 = async () => {
-    const 대상 = results.filter(
+  const savePutaway = async () => {
+    const targets = results.filter(
       (r) => r.locationCode === null && locations[r.detailId],
     );
-    if (대상.length === 0) {
+    if (targets.length === 0) {
       alert("적치 로케이션을 선택한 줄이 없습니다.");
       return;
     }
-    const 실패메시지 = [];
-    for (const r of 대상) {
+    const failMessages = [];
+    for (const r of targets) {
       try {
         await axios.put("/wms/inspections", {
           detailId: r.detailId,
           locationId: Number(locations[r.detailId]),
         });
       } catch (error) {
-        실패메시지.push(`${r.productName}: ${error.response?.data ?? "오류"}`);
+        failMessages.push(
+          `${r.productName}: ${error.response?.data ?? "오류"}`,
+        );
       }
     }
     alert(
-      `적치 저장 ${대상.length - 실패메시지.length}건` +
-        (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""),
+      `적치 저장 ${targets.length - failMessages.length}건` +
+        (failMessages.length > 0 ? `\n실패\n${failMessages.join("\n")}` : ""),
     );
     setLocations({});
     setRecommend([]);
     setFocusDetailId(null);
-    문서새로고침();
+    refreshDetail();
   };
 
   // 적치 추천 조회 — mixLot 값을 같이 보냄
-  const 추천조회 = async (detailId, mix) => {
+  const getRecommend = async (detailId, mix) => {
     setFocusDetailId(detailId);
     try {
       const response = await axios.get(
@@ -151,7 +153,7 @@ export default function PutawayPage(props) {
   const focusResult = results.find((r) => r.detailId === focusDetailId);
 
   // 추천칸 [적용] → 선택한 적치 줄의 로케이션을 그 칸으로 바꿈 (저장은 [적치 저장])
-  const 추천적용 = (locationId) => {
+  const applyRecommend = (locationId) => {
     if (focusResult === undefined) {
       alert("적치 지정에서 줄을 먼저 선택하세요.");
       return;
@@ -167,10 +169,10 @@ export default function PutawayPage(props) {
     <>
       <PageTitle title="물품적재" path="홈 > 입고관리 > 물품적재" />
 
-      {selected === null ? (
+      {detail === null ? (
         <>
           {/* ── 목록: 검수완료·입고완료 ── */}
-          <form className="search" onSubmit={조회}>
+          <form className="search" onSubmit={handleSearch}>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>화주명</label>
@@ -188,7 +190,7 @@ export default function PutawayPage(props) {
 
           <GridTitle
             title="적재 대상 입고문서"
-            desc={`총 ${보여줄목록.length}건`}
+            desc={`총 ${visibleList.length}건`}
           />
           <table className="grid">
             <thead>
@@ -204,10 +206,10 @@ export default function PutawayPage(props) {
               </tr>
             </thead>
             <tbody>
-              {보여줄목록.map((inbound, index) => (
+              {visibleList.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
-                  onClick={() => 문서선택(inbound.documentId)}
+                  onClick={() => selectDocument(inbound.documentId)}
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
@@ -217,7 +219,7 @@ export default function PutawayPage(props) {
                   <td className="num">
                     {inbound.totalExpectedQty.toLocaleString()}
                   </td>
-                  <td>{상태명[inbound.status]}</td>
+                  <td>{STATUS_NAME[inbound.status]}</td>
                   <td>{inbound.completedAt}</td>
                 </tr>
               ))}
@@ -227,16 +229,14 @@ export default function PutawayPage(props) {
       ) : (
         <>
           {/* ── 상세: 헤더 + 좌 적치지정 / 우 추천 ── */}
-
-          <GridTitle title="입고 정보" desc={selected.documentNo} />
+          <GridTitle title="입고 정보" desc={detail.documentNo} />
           <DocumentHeader
             type="INBOUND"
-            doc={selected}
-            statusName={상태명[selected.status]}
+            doc={detail}
+            statusName={STATUS_NAME[detail.status]}
           />
-          <br />
           <div className="detail-bar">
-            <button className="btn" onClick={뒤로가기}>
+            <button className="btn" onClick={goBack}>
               목록
             </button>
           </div>
@@ -246,10 +246,10 @@ export default function PutawayPage(props) {
             <div className="col-left">
               <GridTitle
                 title="적치 지정"
-                desc={`적재 ${적재수} / 검수 ${results.length}건`}
+                desc={`적재 ${putawayCount} / 검수 ${results.length}건`}
               >
-                {selected.status === "INSPECTED" && (
-                  <button className="btn primary" onClick={적치저장}>
+                {detail.status === "INSPECTED" && (
+                  <button className="btn primary" onClick={savePutaway}>
                     적치 저장
                   </button>
                 )}
@@ -273,7 +273,7 @@ export default function PutawayPage(props) {
                     results.map((r) => (
                       <tr
                         key={r.detailId}
-                        onClick={() => 추천조회(r.detailId, mixLot)}
+                        onClick={() => getRecommend(r.detailId, mixLot)}
                         className={focusDetailId === r.detailId ? "on" : ""}
                       >
                         <td className="left">{r.productName}</td>
@@ -294,7 +294,7 @@ export default function PutawayPage(props) {
                               }
                             >
                               <option value="">선택</option>
-                              {로케이션목록.map((loc) => (
+                              {locationOptions.map((loc) => (
                                 <option
                                   key={loc.locationId}
                                   value={loc.locationId}
@@ -329,7 +329,7 @@ export default function PutawayPage(props) {
                     onChange={(e) => {
                       setMixLot(e.target.checked);
                       if (focusDetailId !== null)
-                        추천조회(focusDetailId, e.target.checked);
+                        getRecommend(focusDetailId, e.target.checked);
                     }}
                   />
                   혼용적재 (같은 품목 · 다른 LOT 허용)
@@ -363,7 +363,7 @@ export default function PutawayPage(props) {
                       <td>
                         <button
                           className="btn"
-                          onClick={() => 추천적용(rec.locationId)}
+                          onClick={() => applyRecommend(rec.locationId)}
                         >
                           적용
                         </button>
