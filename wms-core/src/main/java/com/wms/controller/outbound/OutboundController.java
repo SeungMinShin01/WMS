@@ -1,4 +1,4 @@
-package com.wms.controller.product;
+package com.wms.controller.outbound;
 
 import java.util.List;
 
