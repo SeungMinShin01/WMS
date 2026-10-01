@@ -4,19 +4,40 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { Link } from "react-router-dom";
 
+// 문서 상태 영어 값 → 화면에 보여줄 한글 (값에 없는 상태는 영어 그대로)
+const 상태이름 = { WAITING: "접수", ALLOCATED: "할당", PICKING: "피킹중", SHIPPED: "출고완료", CANCELED: "취소" };
+const 상태표시 = (status) => 상태이름[status] || status;
+
 // 05 출고예정 — 담당: 김지환
 export default function OutboundPage(props) {
   // 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const [outbounds, setOutbounds] = useState([]);
   const [viewList, setViewList] = useState([]);
-  useEffect(() => {
-      async function getOutbounds() {
+  // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
+  const getOutbounds = async () => {
     const response = await axios.get("http://localhost:8080/wms/outbounds");
-    setOutbounds(response.data);
-    setViewList(response.data);
-    }
+    setOutbounds(response.data);   // 원본 목록 (검색할 때 기준)
+    setViewList(response.data);    // 화면에 보여줄 목록 (검색 조건은 초기화됨)
+  };
+
+  // 최초 1번 목록 조회
+  useEffect(() => {
     getOutbounds();
-  } , []);
+  }, []);
+
+  // 주문 취소 : 접수·할당 상태에서만 버튼이 보임
+  const 주문취소 = async (outbound) => {
+    // 실수 클릭 방지 확인창
+    if (!confirm(outbound.documentNo + " 주문을 취소할까요? ")) return;
+    try {
+      await axios.put("http://localhost:8080/wms/outbounds/" + outbound.documentId + "/cancel");
+      alert("주문이 취소되었습니다");
+      getOutbounds();   // 상태가 취소로 바뀐 목록 다시 불러오기
+    } catch (error) {
+      // 서버 메시지가 있으면 그대로, 서버 연결 자체가 안 되면 고정 문장
+      alert(error.response ? error.response.data : "서버에 연결할 수 없습니다");
+    }
+  };
   const 조회 = (event) => {
     event.preventDefault();
     const status = event.target.status.value;        // name="status" select 값 ("" 이면 전체)
@@ -51,7 +72,8 @@ export default function OutboundPage(props) {
         <select name="status">
           <option value="">전체</option>
           <option value="WAITING">접수</option>
-          <option value="ALLOCATED">출고지시됨</option>
+          <option value="ALLOCATED">할당</option>
+          <option value="PICKING">피킹중</option>
           <option value="SHIPPED">출고완료</option>
           <option value="CANCELED">취소</option>
         </select>
@@ -77,6 +99,7 @@ export default function OutboundPage(props) {
             <th>상태</th>
             <th>출고지시번호</th>
             <th>등록일시</th>
+            <th>관리</th>
           </tr>
         </thead>
         <tbody>
@@ -96,10 +119,18 @@ export default function OutboundPage(props) {
               <td></td>
               <td></td>
               {/* 품목수, 총수량: 응답에 없어서 빈 칸 */}
-              <td>{outbound.status}</td>
+              <td>{상태표시(outbound.status)}</td>
               <td></td>
               <td></td>
               {/* 출고지시번호, 등록일시: 응답에 없어서 빈 칸 */}
+              <td>
+                {/* 접수·할당 상태에서만 취소 버튼, 나머지는 "-" */}
+                {outbound.status === "WAITING" || outbound.status === "ALLOCATED" ? (
+                  <button className="btn danger" onClick={() => 주문취소(outbound)}>취소</button>
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

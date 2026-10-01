@@ -3,69 +3,79 @@ package com.wms.controller.outbound;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.outbound.AllocationDto;
+import com.wms.model.dto.outbound.AllocationPreviewDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.dto.outbound.PickingListDto;
-import com.wms.model.dto.outbound.ConfirmShipmentDto;
+import com.wms.service.AllocationPlanService;
 import com.wms.service.OutboundService;
-import org.springframework.web.bind.annotation.RequestBody;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import com.wms.service.PickingListService;
 
 @CrossOrigin (origins = "http://localhost:5173" , allowCredentials = "true")
 @RestController
 public class OutboundController {
-    @Autowired private OutboundService outboundService;
+    @Autowired private OutboundService outboundService;               // 조회 · 출고확정
+    @Autowired private AllocationPlanService allocationPlanService;   // 할당 미리보기
+    @Autowired private PickingListService pickingListService;         // 피킹리스트 생성 · 조회
 
     // ED-12 출고 문서 목록 조회
     @GetMapping ("/wms/outbounds")
-    public List<OutboundListDto> getOutboundList() {
-        return outboundService.getOutboundList();
+    public ResponseEntity<List<OutboundListDto>> getOutboundList() {
+        return ResponseEntity.ok(outboundService.getOutboundList());
     }
 
     // ED-17 출고 문서 상세 조회
     @GetMapping ("/wms/outbounds/{documentId}")
-    public OutboundDetailDto getOutboundDetail(@PathVariable (name = "documentId") Integer documentId){
-        return outboundService.getOutboundDetail(documentId);
+    public ResponseEntity<OutboundDetailDto> getOutboundDetail(@PathVariable (name = "documentId") Integer documentId){
+        return ResponseEntity.ok(outboundService.getOutboundDetail(documentId));
     }
 
-    // ED-18 할당 1건 (피킹리스트 생성)
-    @PostMapping ("/wms/allocations")
-    public Integer allocate(@RequestBody AllocationDto allocationDto) {
-    return outboundService.allocate(allocationDto);
+    // ED-18 할당 미리보기 (추천만, 저장 안 함) → 200
+    // 예 : GET /wms/allocations/10/preview?documentItemIds=21,22   (documentItemIds 생략하면 전체 품목)
+    @GetMapping ("/wms/allocations/{documentId}/preview")
+    public ResponseEntity<List<AllocationPreviewDto>> previewAllocate(
+            @PathVariable (name = "documentId") Integer documentId,
+            @RequestParam (name = "documentItemIds", required = false) List<Integer> documentItemIds) {
+        return ResponseEntity.ok(allocationPlanService.previewAllocate(documentId, documentItemIds));
     }
-    
-    // ED-18 확장 : 출고 문서 자동 할당 (할당 규칙 v3)
-    // 성공 → 201 + 피킹리스트 / 실패 → GlobalExceptionHandler 가 400·404·409 + 메시지로 응답
-    // 기존 GET /wms/allocations/{documentId}(피킹 조회)와 주소는 같지만 POST 라서 충돌하지 않음
-    @PostMapping("/wms/allocations/{documentId}")
-    public ResponseEntity<List<PickingListDto>> autoAllocate(@PathVariable(name = "documentId") Integer documentId) {
-        // 주소의 {documentId} 값을 받아 서비스의 자동 할당 실행 → 결과 피킹리스트
-        List<PickingListDto> pickingList = outboundService.autoAllocate(documentId);
-        // 새 할당(detail)이 만들어졌으니 201 Created, 본문에는 피킹리스트
+
+    // ED-18 피킹리스트 생성 (할당 확정) → 201 + 피킹리스트
+    // 본문 : [ {"documentItemId":21, "stockId":10, "qty":50}, ... ]  (미리보기 결과를 사용자가 수정한 값)
+    @PostMapping ("/wms/allocations/{documentId}/pickinglist")
+    public ResponseEntity<List<PickingListDto>> createPickingList(
+            @PathVariable (name = "documentId") Integer documentId,
+            @RequestBody List<AllocationDto> rows) {
+        List<PickingListDto> pickingList = pickingListService.createPickingList(documentId, rows);
         return ResponseEntity.status(HttpStatus.CREATED).body(pickingList);
     }
 
-
     // ED-19 피킹 리스트 조회
     @GetMapping ("/wms/allocations/{documentId}")
-    public List<PickingListDto> getPickingList(@PathVariable (name = "documentId") Integer documentId){
-        return  outboundService.getPickingList(documentId);
+    public ResponseEntity<List<PickingListDto>> getPickingList(@PathVariable (name = "documentId") Integer documentId){
+        return ResponseEntity.ok(pickingListService.getPickingList(documentId));
     }
 
-    // ED-20 출고확정
-    @PutMapping ("/wms/allocations")
-    public Boolean confirmShipment(@RequestBody ConfirmShipmentDto confirmShipmentDto) {
-        return outboundService.confirmShipment(confirmShipmentDto);
+    // ED-20 출고확정 (문서 단위) → 200 + 바뀐 상태 "SHIPPED" / 이미 출고됨 → 409
+    @PutMapping ("/wms/outbounds/{documentId}/ship")
+    public ResponseEntity<String> confirmShipment(@PathVariable (name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(outboundService.confirmShipment(documentId));
     }
-    
+
+    // 주문 취소 → 200 + "CANCELED" / 피킹중·출고완료·이미 취소 → 409
+    @PutMapping ("/wms/outbounds/{documentId}/cancel")
+    public ResponseEntity<String> cancelOutbound(@PathVariable (name = "documentId") Integer documentId) {
+        return ResponseEntity.ok(outboundService.cancelOutbound(documentId));
+    }
 }
