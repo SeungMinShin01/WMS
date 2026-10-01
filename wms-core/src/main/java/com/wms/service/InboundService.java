@@ -1,6 +1,8 @@
 package com.wms.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -115,6 +117,16 @@ public class InboundService {
         // 검수는 대기(waiting) 문서만 - 전 품목 검수 끝나면 검수 완료(inspected)로 넘어감
         if (documentEntity.getStatus() != DocumentStatus.WAITING)
             throw new IllegalStateException("대기 상태 문서만 검수할 수 있습니다. (현재: " + documentEntity.getStatus() + ")");
+
+        // 유통기한 입고 검사: 남은일수가 출고 허용 잔여일보다 적으면 출고불가하니 -> 입고 거부
+        LocalDate expiryDate = documentItemEntity.getLotEntity().getExpiryDate();
+        int minShipDays = documentItemEntity.getProductEntity().getMinShipDays();
+        if(expiryDate != null){
+            long remainingDays = ChronoUnit.DAYS.between(LocalDate.now(), expiryDate);
+            if(remainingDays < minShipDays) 
+                throw new IllegalStateException("소비기한 부족으로 입고할 수 없습니다.");
+        }
+
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
 
