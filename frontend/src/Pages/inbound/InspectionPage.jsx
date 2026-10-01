@@ -1,34 +1,38 @@
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import InboundHeader from "./InboundHeader";
 import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
-const 상태명 = { WAITING: "입고예정", INSPECTED: "검수완료", COMPLETED: "입고완료", CANCELED: "취소" };
+const 상태명 = {
+  WAITING: "입고예정",
+  INSPECTED: "검수완료",
+  COMPLETED: "입고완료",
+  CANCELED: "취소",
+};
 
 // 04 입고검수 — 담당: 조현우
 export default function InspectionPage(props) {
-  const [inbounds, setInbounds] = useState([]);                // ED-10 입고 문서 전체
-  const [조건, set조건] = useState({ from: "", to: "", partnerName: "", status: "WAITING,INSPECTED" }); // 조회 조건
-  const [selected, setSelected] = useState(null);              // ED-13 선택한 문서 (items 포함)
-  const [results, setResults] = useState([]);                  // ED-15 검수 결과
-  const [qtys, setQtys] = useState({});                        // { documentItemId: 실제 입고수량 입력 }
-  const [memos, setMemos] = useState({});                      // { documentItemId: 비고 입력 }
-  const [locations, setLocations] = useState({});              // { detailId: 적치할 locationId }
-  const [로케이션목록, set로케이션목록] = useState([]);          // 선택 가능한 로케이션 (사용 중인 칸)
-  const [focusDetailId, setFocusDetailId] = useState(null);    // 추천을 적용할 적치 줄
-  const [recommend, setRecommend] = useState([]);              // 추천 적치칸
-  const [mixLot, setMixLot] = useState(false);                 // 혼용적재 (같은 품목 · 다른 LOT 허용)
+  const { documentId } = useParams(); // 입고문서 상세에서 [검수하기]로 왔으면 문서 번호가 있음
+  const navigate = useNavigate();
+
+  const [inbounds, setInbounds] = useState([]); // ED-10 입고 문서 전체
+  const [조건, set조건] = useState({
+    from: "",
+    to: "",
+    partnerName: "",
+    status: "WAITING,INSPECTED",
+  }); // 조회 조건
+  const [selected, setSelected] = useState(null); // ED-13 선택한 문서 (items 포함)
+  const [results, setResults] = useState([]); // ED-15 검수 결과
+  const [qtys, setQtys] = useState({}); // { documentItemId: 실제 입고수량 입력 }
+  const [memos, setMemos] = useState({}); // { documentItemId: 비고 입력 }
 
   // ED-10 목록
   const 목록조회 = async () => {
     const response = await axios.get("/wms/inbounds");
     setInbounds(response.data);
-  };
-
-  // 적치 로케이션 선택 목록
-  const 로케이션조회 = async () => {
-    const response = await axios.get("/wms/inspections/locations");
-    set로케이션목록(response.data);
   };
 
   // ED-15 검수 결과
@@ -44,9 +48,6 @@ export default function InspectionPage(props) {
     결과조회(documentId);
     setQtys({});
     setMemos({});
-    setLocations({});
-    setRecommend([]);
-    setFocusDetailId(null);
   };
 
   // 저장 후 선택 문서 상태 다시 받기
@@ -72,15 +73,27 @@ export default function InspectionPage(props) {
 
   useEffect(() => {
     목록조회();
-    로케이션조회();
+    if (documentId) 문서선택(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
   }, []);
 
+  // 상세 → 목록으로 (주소도 목록 주소로)
+  const 뒤로가기 = () => {
+    setSelected(null);
+    navigate("/inbounds/inspection");
+  };
+
+  // 검수 끝난 문서 → 물품적재 화면의 같은 문서로
+  const 적재하기 = () => {
+    navigate(`/inbounds/putaway/${selected.documentId}`);
+  };
+
   // 조회 조건에 맞는 문서만
-  const 보여줄목록 = inbounds.filter((d) =>
-    조건.status.split(",").includes(d.status) &&
-    (조건.from === "" || d.expectedAt >= 조건.from) &&
-    (조건.to === "" || d.expectedAt <= 조건.to) &&
-    (조건.partnerName === "" || d.partnerName.includes(조건.partnerName))
+  const 보여줄목록 = inbounds.filter(
+    (d) =>
+      조건.status.split(",").includes(d.status) &&
+      (조건.from === "" || d.expectedAt >= 조건.from) &&
+      (조건.to === "" || d.expectedAt <= 조건.to) &&
+      (조건.partnerName === "" || d.partnerName.includes(조건.partnerName)),
   );
 
   // 이미 검수된 품목 { documentItemId: 검수 결과 } — 있으면 입력칸 대신 값으로 보여줌
@@ -89,16 +102,21 @@ export default function InspectionPage(props) {
     검수된[r.documentItemId] = r;
   });
 
-  const 실제수량 = (item) => 검수된[item.documentItemId]?.qty ?? Number(qtys[item.documentItemId] || 0);
-  const 예정합계 = selected ? selected.items.reduce((sum, item) => sum + item.expectedQty, 0) : 0;
-  const 실제합계 = selected ? selected.items.reduce((sum, item) => sum + 실제수량(item), 0) : 0;
-  const 적재수 = results.filter((r) => r.locationCode !== null).length;
+  const 실제수량 = (item) =>
+    검수된[item.documentItemId]?.qty ?? Number(qtys[item.documentItemId] || 0);
+  const 예정합계 = selected
+    ? selected.items.reduce((sum, item) => sum + item.expectedQty, 0)
+    : 0;
+  const 실제합계 = selected
+    ? selected.items.reduce((sum, item) => sum + 실제수량(item), 0)
+    : 0;
 
   // [예정수량 일괄 적용] — 아직 검수 안 한 품목만
   const 일괄적용 = () => {
     const next = {};
     selected.items.forEach((item) => {
-      if (검수된[item.documentItemId] === undefined) next[item.documentItemId] = item.expectedQty;
+      if (검수된[item.documentItemId] === undefined)
+        next[item.documentItemId] = item.expectedQty;
     });
     setQtys(next);
   };
@@ -106,7 +124,9 @@ export default function InspectionPage(props) {
   // ED-14 검수 저장 — 수량을 입력한 품목만 1건씩 POST (비고 포함)
   const 검수저장 = async () => {
     const 대상 = selected.items.filter(
-      (item) => 검수된[item.documentItemId] === undefined && Number(qtys[item.documentItemId]) > 0
+      (item) =>
+        검수된[item.documentItemId] === undefined &&
+        Number(qtys[item.documentItemId]) > 0,
     );
     if (대상.length === 0) {
       alert("저장할 검수 수량이 없습니다.");
@@ -121,287 +141,186 @@ export default function InspectionPage(props) {
           remark: memos[item.documentItemId] ?? null,
         });
       } catch (error) {
-        실패메시지.push(`${item.productName}: ${error.response?.data ?? "오류"}`);
+        실패메시지.push(
+          `${item.productName}: ${error.response?.data ?? "오류"}`,
+        );
       }
     }
-    alert(`검수 저장 ${대상.length - 실패메시지.length}건` + (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""));
+    alert(
+      `검수 저장 ${대상.length - 실패메시지.length}건` +
+        (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""),
+    );
     setQtys({});
     setMemos({});
     문서새로고침();
   };
 
-  // ED-16 적치 저장 — 로케이션을 고른 줄만 1건씩 PUT. 마지막 줄까지 적재되면 서버가 자동 입고완료 처리
-  const 적치저장 = async () => {
-    const 대상 = results.filter((r) => r.locationCode === null && locations[r.detailId]);
-    if (대상.length === 0) {
-      alert("적치 로케이션을 선택한 줄이 없습니다.");
-      return;
-    }
-    const 실패메시지 = [];
-    for (const r of 대상) {
-      try {
-        await axios.put("/wms/inspections", {
-          detailId: r.detailId,
-          locationId: Number(locations[r.detailId]),
-        });
-      } catch (error) {
-        실패메시지.push(`${r.productName}: ${error.response?.data ?? "오류"}`);
-      }
-    }
-    alert(`적치 저장 ${대상.length - 실패메시지.length}건` + (실패메시지.length > 0 ? `\n실패\n${실패메시지.join("\n")}` : ""));
-    setLocations({});
-    setRecommend([]);
-    setFocusDetailId(null);
-    문서새로고침();
-  };
-
-  // 적치 추천 조회 — mixLot 값을 같이 보냄
-  const 추천조회 = async (detailId, mix) => {
-    setFocusDetailId(detailId);
-    try {
-      const response = await axios.get(`/wms/inspections/recommend/${detailId}`, { params: { mixLot: mix } });
-      setRecommend(response.data);
-    } catch (error) {
-      setRecommend([]);   // 추천 실패해도 드롭다운으로 적치 가능
-    }
-  };
-
-  const focusResult = results.find((r) => r.detailId === focusDetailId);
-
-  // 추천칸 [적용] → 선택한 적치 줄의 로케이션을 그 칸으로 바꿈 (저장은 [적치 저장])
-  const 추천적용 = (locationId) => {
-    if (focusResult === undefined) {
-      alert("적치 지정에서 줄을 먼저 선택하세요.");
-      return;
-    }
-    if (focusResult.locationCode !== null) {
-      alert("이미 적재된 줄입니다.");
-      return;
-    }
-    setLocations({ ...locations, [focusDetailId]: locationId });
-  };
-
   return (
     <>
-      <PageTitle title="입고 검수" path="홈 > 입고관리 > 입고검수" />
-
-      <form className="search" onSubmit={조회}>
-        <label>입고예정일</label>
-        <input type="date" name="from" /> ~ <input type="date" name="to" />
-        <label>화주명</label>
-        <input type="text" name="partnerName" />
-        <label>상태</label>
-        <select name="status" defaultValue="WAITING,INSPECTED">
-          <option value="WAITING,INSPECTED">검수 대상 (입고예정·검수완료)</option>
-          <option value="WAITING">입고예정</option>
-          <option value="INSPECTED">검수완료</option>
-          <option value="COMPLETED">입고완료</option>
-        </select>
-        <input type="submit" className="btn primary" value="조회" />
-      </form>
-
-      {/* ── 검수 대상 목록 (ED-10) ── */}
-      <GridTitle title="검수 대상 입고예정" desc={`총 ${보여줄목록.length}건`} />
-      <table className="grid">
-        <thead>
-          <tr>
-            <th>No</th>
-            <th>입고예정번호</th>
-            <th>화주명</th>
-            <th>입고예정일</th>
-            <th>품목수</th>
-            <th>예정수량</th>
-            <th>상태</th>
-          </tr>
-        </thead>
-        <tbody>
-          {보여줄목록.map((inbound, index) => (
-            <tr
-              key={inbound.documentId}
-              onClick={() => 문서선택(inbound.documentId)}
-              className={selected && selected.documentId === inbound.documentId ? "on" : ""}
-            >
-              <td>{index + 1}</td>
-              <td>{inbound.documentNo}</td>
-              <td className="left">{inbound.partnerName}</td>
-              <td>{inbound.expectedAt}</td>
-              <td className="num">{inbound.itemCount}</td>
-              <td className="num">{inbound.totalExpectedQty.toLocaleString()}</td>
-              <td>{상태명[inbound.status]}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <PageTitle title="입고검수" path="홈 > 입고관리 > 입고검수" />
 
       {selected === null ? (
-        <p className="hint">목록에서 입고예정을 클릭하면 검수 입력이 나옵니다.</p>
+        <>
+          {/* ── 목록: 입고예정·검수완료 ── */}
+          <form className="search" onSubmit={조회}>
+            <label>입고예정일</label>
+            <input type="date" name="from" /> ~ <input type="date" name="to" />
+            <label>화주명</label>
+            <input type="text" name="partnerName" />
+            <label>상태</label>
+            <select name="status" defaultValue="WAITING,INSPECTED">
+              <option value="WAITING,INSPECTED">
+                전체 (입고예정·검수완료)
+              </option>
+              <option value="WAITING">입고예정</option>
+              <option value="INSPECTED">검수완료</option>
+            </select>
+            <input type="submit" className="btn primary" value="조회" />
+          </form>
+
+          <GridTitle
+            title="검수 대상 입고문서"
+            desc={`총 ${보여줄목록.length}건`}
+          />
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>입고번호</th>
+                <th>화주명</th>
+                <th>입고예정일</th>
+                <th>품목수</th>
+                <th>예정수량</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {보여줄목록.map((inbound, index) => (
+                <tr
+                  key={inbound.documentId}
+                  onClick={() => 문서선택(inbound.documentId)}
+                >
+                  <td>{index + 1}</td>
+                  <td>{inbound.documentNo}</td>
+                  <td className="left">{inbound.partnerName}</td>
+                  <td>{inbound.expectedAt}</td>
+                  <td className="num">{inbound.itemCount}</td>
+                  <td className="num">
+                    {inbound.totalExpectedQty.toLocaleString()}
+                  </td>
+                  <td>{상태명[inbound.status]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       ) : (
-        <div className="two-col">
-          {/* ── 왼쪽: 검수 입력 (ED-13 + ED-14) ── */}
-          <div className="col-left">
-            <GridTitle title="검수 입력" desc={`${selected.documentNo} · ${selected.partnerName} · ${상태명[selected.status]}`}>
-              <button className="btn" onClick={일괄적용}>예정수량 일괄 적용</button>
-              <button className="btn primary" onClick={검수저장}>검수 저장</button>
-            </GridTitle>
-            <table className="grid">
-              <thead>
-                <tr>
-                  <th>품목코드</th>
-                  <th>품목명</th>
-                  <th>소비기한</th>
-                  <th>남은일수</th>
-                  <th>예정수량</th>
-                  <th>실제 입고수량</th>
-                  <th>비고</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selected.items.map((item) => {
-                  const done = 검수된[item.documentItemId];   // undefined면 아직 검수 전
-                  return (
-                    <tr key={item.documentItemId}>
-                      <td>{item.productCode}</td>
-                      <td className="left">{item.productName}</td>
-                      <td>{item.expiryDate}</td>
-                      <td className="num">{item.remainingDays}일</td>
-                      <td className="num">{item.expectedQty.toLocaleString()}</td>
-                      <td className="num">
-                        {done !== undefined ? (
-                          done.qty.toLocaleString()
-                        ) : (
-                          <input
-                            type="number"
-                            min="1"
-                            style={{ width: "80px" }}
-                            value={qtys[item.documentItemId] ?? ""}
-                            onChange={(e) => setQtys({ ...qtys, [item.documentItemId]: e.target.value })}
-                          />
-                        )}
-                      </td>
-                      <td className="left">
-                        {done !== undefined ? (
-                          done.remark ?? ""
-                        ) : (
-                          <input
-                            type="text"
-                            style={{ width: "120px" }}
-                            value={memos[item.documentItemId] ?? ""}
-                            onChange={(e) => setMemos({ ...memos, [item.documentItemId]: e.target.value })}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="sum">
-                  <td colSpan={4}>합계</td>
-                  <td className="num">{예정합계.toLocaleString()}</td>
-                  <td className="num">{실제합계.toLocaleString()}</td>
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
+        <>
+          {/* ── 상세: 헤더 + 검수 입력 ── */}
+          <div className="detail-bar">
+            <button className="btn" onClick={뒤로가기}>
+              ← 목록
+            </button>
+            <span className="right">
+              {selected.status === "INSPECTED" && (
+                <button className="btn primary" onClick={적재하기}>
+                  적재하기
+                </button>
+              )}
+            </span>
           </div>
 
-          {/* ── 오른쪽: 적치 지정 (ED-15 + ED-16) + 추천 적치칸 ── */}
-          <div className="col-right">
-            <GridTitle title="적치 지정" desc={`적재 ${적재수} / 검수 ${results.length}건`}>
-              <button className="btn primary" onClick={적치저장}>적치 저장</button>
-            </GridTitle>
-            <table className="grid">
-              <thead>
-                <tr>
-                  <th>품목명</th>
-                  <th>LOT</th>
-                  <th>수량</th>
-                  <th>적치 로케이션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.length === 0 ? (
-                  <tr><td colSpan={4}>검수 결과가 없습니다.</td></tr>
-                ) : (
-                  results.map((r) => (
-                    <tr
-                      key={r.detailId}
-                      onClick={() => 추천조회(r.detailId, mixLot)}
-                      className={focusDetailId === r.detailId ? "on" : ""}
-                    >
-                      <td className="left">{r.productName}</td>
-                      <td>{r.lotCode}</td>
-                      <td className="num">{r.qty.toLocaleString()}</td>
-                      <td>
-                        {r.locationCode !== null ? (
-                          r.locationCode   // 이미 적재됨
-                        ) : (
-                          <select
-                            value={locations[r.detailId] ?? ""}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setLocations({ ...locations, [r.detailId]: e.target.value })}
-                          >
-                            <option value="">선택</option>
-                            {로케이션목록.map((loc) => (
-                              <option key={loc.locationId} value={loc.locationId}>{loc.locationCode}</option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <GridTitle title="입고 정보" desc={selected.documentNo} />
+          <InboundHeader doc={selected} statusName={상태명[selected.status]} />
 
-            <GridTitle
-              title="추천 적치칸"
-              desc={focusResult ? `${focusResult.productName} · ${focusResult.qty.toLocaleString()} BOX` : "적치 줄을 선택하세요"}
-            >
-              <label>
-                <input
-                  type="checkbox"
-                  checked={mixLot}
-                  onChange={(e) => {
-                    setMixLot(e.target.checked);
-                    if (focusDetailId !== null) 추천조회(focusDetailId, e.target.checked);
-                  }}
-                />
-                혼용적재 (같은 품목 · 다른 LOT 허용)
-              </label>
-            </GridTitle>
-            <table className="grid">
-              <thead>
-                <tr>
-                  <th>순위</th>
-                  <th>로케이션</th>
-                  <th>추천 사유</th>
-                  <th>현재 수량</th>
-                  <th>여유</th>
-                  <th>전량 적재</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recommend.map((rec, index) => (
-                  <tr key={rec.locationId}>
-                    <td>{index + 1}</td>
-                    <td>{rec.locationCode}</td>
-                    <td className="left">{rec.reason}</td>
-                    <td className="num">{rec.currentQty.toLocaleString()}</td>
-                    <td className="num">{rec.freeQty === null ? "제한 없음" : rec.freeQty.toLocaleString()}</td>
-                    <td>{rec.fits ? "가능" : "부족"}</td>
-                    <td>
-                      <button className="btn" onClick={() => 추천적용(rec.locationId)}>적용</button>
+          <GridTitle
+            title="검수 입력"
+            desc={`예정 ${예정합계.toLocaleString()} · 실제 ${실제합계.toLocaleString()}`}
+          >
+            {selected.status === "WAITING" && (
+              <>
+                <button className="btn" onClick={일괄적용}>
+                  예정수량 일괄 적용
+                </button>
+                <button className="btn primary" onClick={검수저장}>
+                  검수 저장
+                </button>
+              </>
+            )}
+          </GridTitle>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>품목코드</th>
+                <th>품목명</th>
+                <th>소비기한</th>
+                <th>남은일수</th>
+                <th>예정수량</th>
+                <th>실제 입고수량</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selected.items.map((item) => {
+                const done = 검수된[item.documentItemId]; // undefined면 아직 검수 전
+                return (
+                  <tr key={item.documentItemId}>
+                    <td>{item.productCode}</td>
+                    <td className="left">{item.productName}</td>
+                    <td>{item.expiryDate}</td>
+                    <td className="num">{item.remainingDays}일</td>
+                    <td className="num">{item.expectedQty.toLocaleString()}</td>
+                    <td className="num">
+                      {done !== undefined ? (
+                        done.qty.toLocaleString()
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          style={{ width: "80px" }}
+                          value={qtys[item.documentItemId] ?? ""}
+                          onChange={(e) =>
+                            setQtys({
+                              ...qtys,
+                              [item.documentItemId]: e.target.value,
+                            })
+                          }
+                        />
+                      )}
+                    </td>
+                    <td className="left">
+                      {done !== undefined ? (
+                        (done.remark ?? "")
+                      ) : (
+                        <input
+                          type="text"
+                          style={{ width: "160px" }}
+                          value={memos[item.documentItemId] ?? ""}
+                          onChange={(e) =>
+                            setMemos({
+                              ...memos,
+                              [item.documentItemId]: e.target.value,
+                            })
+                          }
+                        />
+                      )}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="hint">
-              ※ 같은 LOT 칸 → (혼용적재 시) 같은 품목 다른 LOT 칸 → 다른 품목 잔량 칸 → 빈 칸 순으로 추천합니다.
-              적치는 전 품목 검수 후 가능하며, 모든 줄이 적재되면 자동으로 입고완료 처리됩니다.
-            </p>
-          </div>
-        </div>
+                );
+              })}
+              <tr className="sum">
+                <td colSpan={4}>합계</td>
+                <td className="num">{예정합계.toLocaleString()}</td>
+                <td className="num">{실제합계.toLocaleString()}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="hint">
+            ※ 전 품목 검수가 끝나면 문서가 검수완료로 바뀌고, [적재하기]로
+            물품적재 화면에 넘어갑니다.
+          </p>
+        </>
       )}
     </>
   );
