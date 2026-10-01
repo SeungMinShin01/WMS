@@ -64,16 +64,16 @@ public class OutboundService {
         List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체 (품목마다 재사용)
 
         List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
-        documentItemEntities.forEach((documentItemEntity) -> {
+        for (DocumentItemEntity documentItemEntity : documentItemEntities) {   // 품목 줄 하나씩 꺼내서
 
-            if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {
+            if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {   // 이 문서의 줄만
                 OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
                 // 할당 수량 · 출고 가능 재고 채우기 (추천 받기 전에 화면에서 재고 부족을 미리 보게)
                 outboundItemDto.setAllocatedQty(allocationPlanService.allocatedSum(documentItemEntity.getDocumentItemId()));
                 outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, allStocks));
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
-        });
+        }
         return outboundDetailDto;
     }
 

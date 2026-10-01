@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +40,6 @@ public class AllocationPlanService {
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
     @Autowired private StockRepository stockRepository;
 
-    // 계산 결과 1줄 : 어느 품목 줄(item)을 어느 재고 행(stock)에서 몇 개(qty) 꺼낼지
-    private record PlanRow(DocumentItemEntity item, StockEntity stock, int qty) {}
-
     // ─────────────────────────────────────────────
     // 1. 미리보기 (컨트롤러가 부르는 메서드)
     // ─────────────────────────────────────────────
@@ -55,13 +51,11 @@ public class AllocationPlanService {
     public List<AllocationPreviewDto> previewAllocate(Integer documentId, List<Integer> documentItemIds) {
         DocumentEntity documentEntity = checkAllocatable(documentId);               // 문서 검사 (404/400/409)
         List<DocumentItemEntity> items = selectItems(documentId, documentItemIds);  // 선택 품목 검사 (400/409)
-        List<PlanRow> plan = buildPlan(documentEntity, items);                      // 추천 계산 (재고 부족이면 409)
+        
+        List<AllocationPreviewDto> result = buildPlan(documentEntity, items);       // 추천 계산 (재고 부족이면 409)
 
-        List<AllocationPreviewDto> result = new ArrayList<>();
-        for (PlanRow row : plan) {
-            result.add(AllocationPreviewDto.from(row.item(), row.stock(), row.qty()));
-        }
-        result.sort(Comparator.comparing(AllocationPreviewDto::getLocationCode));   // 피킹 동선 순서(로케이션 코드순)
+        // 로케이션 코드 순으로 정렬 (피킹 동선 순서) : a 와 b 의 로케이션 코드를 글자 순으로 비교
+        result.sort((a, b) -> a.getLocationCode().compareTo(b.getLocationCode()));
         return result;
     }
 
@@ -158,6 +152,7 @@ public class AllocationPlanService {
     // 사용자가 체크한 품목 줄만 골라냄
     // 선택 없음 → 전체 / 이 문서에 없는 id 400 / 이미 할당된 줄 409
     private List<DocumentItemEntity> selectItems(Integer documentId, List<Integer> documentItemIds) {
+        
         List<DocumentItemEntity> all = itemsOf(documentId);
         if (all.isEmpty()) {
             throw new IllegalStateException("품목이 없는 문서입니다: " + documentId);
@@ -167,7 +162,11 @@ public class AllocationPlanService {
         if (documentItemIds == null || documentItemIds.isEmpty()) {
             selected.addAll(all);                                   // 선택 안 했으면 전체
         } else {
-            for (Integer id : documentItemIds.stream().distinct().toList()) {   // 같은 id 두 번 보내도 한 번만
+            List<Integer> doneIds = new ArrayList<>();               // 이미 처리한 id (같은 id 두 번 보내도 한 번만)
+            for (Integer id : documentItemIds) {
+                if (doneIds.contains(id)) continue;                  // 이미 처리한 id 면 건너뜀
+                doneIds.add(id);
+
                 DocumentItemEntity found = null;
                 for (DocumentItemEntity item : all) {
                     if (item.getDocumentItemId().equals(id)) {
@@ -192,18 +191,22 @@ public class AllocationPlanService {
 
     // 재고 행의 "계획 반영 가용수량" = 실물 − 선점 − 이번 계획에서 이미 쓴 수량
     private int availableOf(StockEntity s, Map<Integer, Integer> planned) {
-        return s.getQty() - s.getAllocatedQty() - planned.getOrDefault(s.getStockId(), 0);
+        int used = 0;                                         // 이번 계획에서 이 재고를 이미 쓴 수량 (없으면 0)
+        if (planned.containsKey(s.getStockId())) {
+            used = planned.get(s.getStockId());
+        }
+        return s.getQty() - s.getAllocatedQty() - used;
     }
 
     // 추천 계산 (DB 저장 X) : 품목 줄마다 재고 행과 수량을 정해 목록으로 돌려줌
     // [LOT 정하기] 1 소비기한 빠른 순 → 2-1 LOT 가용 합계 많은 순 → 2-2 LOT 첫 적재일 빠른 순 → 2-3 lotId
     // [칸 정하기]  3-1 칸 가용수량 많은 순 → 3-2 칸 적재일 빠른 순 → 3-3 stockId
-    private List<PlanRow> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
+    private List<AllocationPreviewDto> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();   // 잔여일 계산 기준일 (출고 예정일)
 
         List<StockEntity> allStocks = stockRepository.findAll();   // 재고 전체 (품목마다 재사용)
         Map<Integer, Integer> planned = new HashMap<>();           // stockId → 이번 계획에서 이미 쓴 수량
-        List<PlanRow> plan = new ArrayList<>();                    // 결과
+        List<AllocationPreviewDto> plan = new ArrayList<>();       // 결과 (추천 1줄 = DTO 1개)
 
         for (DocumentItemEntity item : items) {
             int need = item.getExpectedQty();                             // 채워야 할 수량
@@ -231,7 +234,11 @@ public class AllocationPlanService {
             Map<Integer, LocalDateTime> lotFirstIn = new HashMap<>();
             for (StockEntity s : candidates) {
                 Integer lotId = s.getLotEntity().getLotId();
-                lotTotal.put(lotId, lotTotal.getOrDefault(lotId, 0) + availableOf(s, planned));
+                int before = 0;                                       // 지금까지 모인 이 LOT 의 가용 합계 (처음이면 0)
+                if (lotTotal.containsKey(lotId)) {
+                    before = lotTotal.get(lotId);
+                }
+                lotTotal.put(lotId, before + availableOf(s, planned));
                 LocalDateTime in = s.getCreatedAt();
                 if (!lotFirstIn.containsKey(lotId) || in.isBefore(lotFirstIn.get(lotId))) {
                     lotFirstIn.put(lotId, in);
@@ -239,21 +246,52 @@ public class AllocationPlanService {
             }
 
             // (4) 정렬 (LOT 기준 전부 → 칸 기준 전부)
-            candidates.sort(Comparator
-                    .comparing((StockEntity s) -> s.getLotEntity().getExpiryDate())                            // 1   소비기한 빠른 순
-                    .thenComparing(s -> lotTotal.get(s.getLotEntity().getLotId()), Comparator.reverseOrder())  // 2-1 LOT 가용 합계 많은 순
-                    .thenComparing(s -> lotFirstIn.get(s.getLotEntity().getLotId()))                           // 2-2 LOT 첫 적재일 빠른 순
-                    .thenComparing(s -> s.getLotEntity().getLotId())                                           // 2-3 lotId 작은 순
-                    .thenComparing(s -> availableOf(s, planned), Comparator.reverseOrder())                    // 3-1 칸 가용 많은 순
-                    .thenComparing(s -> s.getCreatedAt())                                                      // 3-2 칸 적재일 빠른 순
-                    .thenComparing(s -> s.getStockId()));                                                      // 3-3 stockId 작은 순
+            //     a 가 앞이면 음수, b 가 앞이면 양수, 같으면 0 을 돌려줌 → 0 이면 다음 기준으로 비교
+            //     "많은 순" 은 a 와 b 를 바꿔서 비교 (큰 값이 앞으로)
+            candidates.sort((a, b) -> {
+                Integer lotA = a.getLotEntity().getLotId();
+                Integer lotB = b.getLotEntity().getLotId();
+
+                // 1 소비기한 빠른 순
+                int result = a.getLotEntity().getExpiryDate().compareTo(b.getLotEntity().getExpiryDate());
+                if (result != 0) return result;
+
+                // 2-1 LOT 가용 합계 많은 순 (b 와 a 를 바꿔서 비교)
+                result = lotTotal.get(lotB).compareTo(lotTotal.get(lotA));
+                if (result != 0) return result;
+
+                // 2-2 LOT 첫 적재일 빠른 순
+                result = lotFirstIn.get(lotA).compareTo(lotFirstIn.get(lotB));
+                if (result != 0) return result;
+
+                // 2-3 lotId 작은 순
+                result = lotA.compareTo(lotB);
+                if (result != 0) return result;
+
+                // 3-1 칸 가용수량 많은 순 (b 와 a 를 바꿔서 비교)
+                result = Integer.compare(availableOf(b, planned), availableOf(a, planned));
+                if (result != 0) return result;
+
+                // 3-2 칸 적재일 빠른 순
+                result = a.getCreatedAt().compareTo(b.getCreatedAt());
+                if (result != 0) return result;
+
+                // 3-3 stockId 작은 순
+                return a.getStockId().compareTo(b.getStockId());
+            });
 
             // (5) 정렬 순서대로 필요한 만큼 담기 (저장 X, planned 에만 기록)
             for (StockEntity s : candidates) {
                 if (need == 0) break;                                   // 다 채웠으면 종료
                 int take = Math.min(need, availableOf(s, planned));     // 꺼낼 수량
-                plan.add(new PlanRow(item, s, take));                   // 계획에 추가
-                planned.merge(s.getStockId(), take, Integer::sum);      // 다음 품목이 같은 재고를 쓸 때 반영
+                plan.add(AllocationPreviewDto.from(item, s, take));     // 추천 1줄 추가 : 이 품목을 이 재고에서 take 개
+
+                // 이 재고를 이번 계획에서 쓴 수량 누적 → 다음 품목이 같은 재고를 쓸 때 가용에서 빠짐
+                int used = 0;
+                if (planned.containsKey(s.getStockId())) {
+                    used = planned.get(s.getStockId());
+                }
+                planned.put(s.getStockId(), used + take);
                 need -= take;                                           // 남은 필요량 감소
             }
         }

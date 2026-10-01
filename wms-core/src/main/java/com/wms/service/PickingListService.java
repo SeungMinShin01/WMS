@@ -83,8 +83,20 @@ public class PickingListService {
             // 3-5. 합계 모으기
             itemMap.put(item.getDocumentItemId(), item);
             stockMap.put(stock.getStockId(), stock);
-            itemSum.merge(item.getDocumentItemId(), row.getQty(), Integer::sum);
-            stockSum.merge(stock.getStockId(), row.getQty(), Integer::sum);
+
+            // 품목 줄별 보낸 수량 합계 : 이미 있으면 기존 값에 더하고, 처음이면 0 에서 시작
+            int itemBefore = 0;
+            if (itemSum.containsKey(item.getDocumentItemId())) {
+                itemBefore = itemSum.get(item.getDocumentItemId());
+            }
+            itemSum.put(item.getDocumentItemId(), itemBefore + row.getQty());
+
+            // 재고 행별 보낸 수량 합계 : 위와 같은 방식
+            int stockBefore = 0;
+            if (stockSum.containsKey(stock.getStockId())) {
+                stockBefore = stockSum.get(stock.getStockId());
+            }
+            stockSum.put(stock.getStockId(), stockBefore + row.getQty());
         }
 
         // 4. 품목 줄별 검사
