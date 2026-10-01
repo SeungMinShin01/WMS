@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.wms.model.dto.inbound.CarryingDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.LocationOptionDto;
 import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.service.InboundService;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -50,5 +51,11 @@ public class InspectionController {
     public ResponseEntity<List<LocationRecommendDto>> recommend(@PathVariable(name = "detailId") Integer detailId,
                                                 @RequestParam(name = "mixLot", defaultValue = "false") boolean mixLot) {
         return ResponseEntity.ok(inboundService.recommend(detailId, mixLot));
+    }
+
+    // 적치 로케이션 선택 목록
+    @GetMapping("/locations")
+    public ResponseEntity<List<LocationOptionDto>> locationFindAll(){
+        return ResponseEntity.ok(inboundService.locationFindAll());
     }
 }

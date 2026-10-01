@@ -2,6 +2,7 @@ package com.wms.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,8 @@ import com.wms.model.dto.inbound.InboundItemDto;
 import com.wms.model.dto.inbound.InboundListDto;
 import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
+import com.wms.model.dto.inbound.LocationOptionDto;
+import com.wms.model.dto.inbound.LocationOptionDto;
 import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
@@ -202,4 +205,14 @@ public class InboundService {
         return stockService.recommend(detail.getLotEntity(), detail.getQty(), mixLot);
     }
     
+
+    // 적치 로케이션 선택 목록 - 사용 중인 칸만, 코드 순
+    public List<LocationOptionDto> locationFindAll(){
+        List<LocationOptionDto> list = new ArrayList<>();
+        locationRepository.findAll().forEach((loc)->{
+            if(loc.getIsActive()) list.add(LocationOptionDto.from(loc));
+        });
+        list.sort(Comparator.comparing(LocationOptionDto::getLocationCode));
+        return list;
+    }
 }

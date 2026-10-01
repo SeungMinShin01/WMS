@@ -15,12 +15,14 @@ import lombok.NoArgsConstructor;
 public class InspectionDto {
     private Integer documentItemId;
     private Integer qty;
+    private String remark;  // 작업자 비고
 
     public DocumentItemDetailEntity toEntity(DocumentItemEntity documentItemEntity) {
         return DocumentItemDetailEntity.builder()
                 .documentItemEntity(documentItemEntity)
                 .lotEntity(documentItemEntity.getLotEntity())
                 .qty(this.qty)
+                .remark(this.remark)
                 .build();
     }
 

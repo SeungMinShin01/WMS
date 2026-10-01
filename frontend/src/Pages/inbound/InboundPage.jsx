@@ -11,6 +11,8 @@ const 상태명= {WAITING: "입고예정", INSPECTED: "검수완료", COMPLETED:
 export default function InboundPage(props) {
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록
   const [detail, setDetail] = useState(null);   // ED-13 클릭한 문서 상세
+  const [조건, set조건] = useState({from: "", to: "", partnerName: "", documentNo: "", status: ""});  // 조회 조건
+
 
   // ED-10 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const 목록조회 = async () => {
@@ -27,6 +29,14 @@ export default function InboundPage(props) {
   // 조회 버튼 - 새로고침 막고 목록 다시 불러오기
   const 조회 = (event) => {
     event.preventDefault();   // 새로고침 막기
+    const form = new FormData(event.target);
+    set조건({
+      from:form.get("from"),
+      to:form.get("to"),
+      partnerName: form.get("partnerName").trim(),
+      documentNo: form.get("documentNo").trim(),
+      status: form.get("status"),
+    });
     목록조회();
   };
   
@@ -36,6 +46,15 @@ export default function InboundPage(props) {
     목록조회();
   },[]);
 
+  // 조회 조건에 맞는 문서만 (빈 조건은 통과)
+  const 보여줄목록 = inbounds.filter((d) =>
+    (조건.from === "" || d.expectedAt >= 조건.from) &&
+    (조건.to === "" || d.expectedAt <= 조건.to) &&
+    (조건.partnerName === "" || d.partnerName.includes(조건.partnerName)) &&
+    (조건.documentNo === "" || d.documentNo.includes(조건.documentNo)) &&
+    (조건.status === "" || d.status === 조건.status)
+  );
+
   // 상세 품목의 예정수량 합계
   const 예정합계 = detail ? detail.items.reduce((sum, item) => sum + item.expectedQty, 0) : 0;
 
@@ -43,7 +62,6 @@ export default function InboundPage(props) {
     <>
       <PageTitle title="입고예정" path="홈 > 입고관리 > 입고예정" />
 
-      {/* 조회조건: form 안에 label + input 나열. 조회 버튼은 submit */}
       <form className="search" onSubmit={조회}>
         <label>입고예정일</label>
         <input type="date" name="from" /> ~ <input type="date" name="to" />
@@ -52,7 +70,7 @@ export default function InboundPage(props) {
         <label>입고예정번호</label>
         <input type="text" name="documentNo" defaultValue="IN-2026" />
         <label>상태</label>
-        <select name="status">
+        <select name="status" defaultValue="">
           <option value="">전체</option>
           <option value="WAITING">입고예정</option>
           <option value="INSPECTED">검수완료</option>
@@ -62,8 +80,7 @@ export default function InboundPage(props) {
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
-      {/* 그리드 제목줄 + 표. 줄(tr)은 나중에 useState 배열을 .map 으로 */}
-      <GridTitle title="입고예정 목록" desc={`총 ${inbounds.length}건`}>
+      <GridTitle title="입고예정 목록" desc={`총 ${보여줄목록.length}건`}>
         <button className="btn">신규</button>
       </GridTitle>
       <table className="grid">
@@ -82,32 +99,31 @@ export default function InboundPage(props) {
           </tr>
         </thead>
         <tbody>
-          {inbounds.map((inbound, index)=> (
+          {보여줄목록.map((inbound, index) => (
             <tr
-            key={inbound.documentId}
-            onClick={()=>상세조회(inbound.documentId)}
-            className={detail && detail.documentId === inbound.documentId ? "on" : ""}
+              key={inbound.documentId}
+              onClick={() => 상세조회(inbound.documentId)}
+              className={detail && detail.documentId === inbound.documentId ? "on" : ""}
             >
-              <td>{index+1}</td>
+              <td>{index + 1}</td>
               <td>{inbound.documentNo}</td>
               <td className="left">{inbound.partnerName}</td>
               <td>{inbound.expectedAt}</td>
               <td className="num">{inbound.itemCount}</td>
               <td className="num">{inbound.totalExpectedQty.toLocaleString()}</td>
               <td>{상태명[inbound.status]}</td>
-              <td className="left"></td>{/* 비고: DB에 컬럼이 아직 없음 */}
+              <td className="left"></td>
               <td>{inbound.createdAt}</td>
               <td>{inbound.completedAt}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {/* ── 아래: 클릭한 문서의 상세 (선택 전에는 안내 문구) ── */}
+
       {detail === null ? (
         <p className="hint">목록에서 입고예정을 클릭하면 상세가 나옵니다.</p>
       ) : (
         <div className="two-col">
-          {/* 왼쪽: 입고 정보 */}
           <div className="col-left">
             <GridTitle title="입고 정보" desc={detail.documentNo} />
             <table className="form">
@@ -121,7 +137,6 @@ export default function InboundPage(props) {
             </table>
           </div>
 
-          {/* 오른쪽: 입고 품목 */}
           <div className="col-right">
             <GridTitle title="입고 품목" desc={`${detail.items.length}품목 · 예정수량 ${예정합계.toLocaleString()}`} />
             <table className="grid">
@@ -157,7 +172,6 @@ export default function InboundPage(props) {
           </div>
         </div>
       )}
-
     </>
   );
 }
