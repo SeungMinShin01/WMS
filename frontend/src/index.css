@@ -239,21 +239,6 @@ table.form input[readonly] {
   margin-left: 6px;
 }
 
-/* ===== 두 칸 나누기 (왼쪽 상세 / 오른쪽 품목처럼) ===== */
-.two-col {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.col-left {
-  flex: 1;
-  min-width: 0;
-}
-.col-right {
-  flex: 1.3;
-  min-width: 0;
-}
-
 /* ===== 버튼 ===== */
 .btn {
   height: 24px;
@@ -275,6 +260,14 @@ table.form input[readonly] {
   border-color: #c0392b;
 }
 
+.btn.plain {
+  border: none;
+  background: none;
+  padding: 0 4px;
+}
+.btn.plain:hover {
+  text-decoration: underline;
+}
 /* ===== 기타 ===== */
 .note {
   color: #555;
@@ -283,4 +276,40 @@ table.form input[readonly] {
 .red {
   color: #c0392b;
   font-weight: bold;
+}
+
+/* ===== 상세 화면 상단 버튼 줄 =====
+   헤더 바로 아래. [목록] → 이동 버튼 순서로, 오른쪽 끝에 붙는다 */
+.detail-bar {
+  display: flex; /* 자식을 가로로 나란히 */
+  justify-content: flex-end; /* 오른쪽 끝으로 */
+  align-items: center;
+  gap: 4px; /* 버튼 사이 간격 */
+  margin: 4px 0 8px;
+}
+
+/* 헤더(수정 불가) — 한 줄에 항목 3개 */
+table.form.head th {
+  width: 100px;
+}
+table.form.head td {
+  min-width: 140px;
+}
+
+/* 좌우 나누기: 적치 지정 5 : 추천 적치칸 7 */
+.two-col {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+.two-col .col-left {
+  flex: 5;
+  min-width: 0;
+  overflow-x: auto;
+}
+.two-col .col-right {
+  flex: 7;
+  min-width: 0;
+  overflow-x: auto;
 }

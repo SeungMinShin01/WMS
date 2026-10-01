@@ -1,266 +1,518 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
-import { useSearchParams } from "react-router-dom"; // 주소창 ?documentId=3 값을 읽고 바꾸는 훅 (day04)
+import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import DocumentHeader from "../../Layout/DocumentHeader";
 
-// 06 출고지시 — 담당: 김지환
+// 문서 상태 영어 값 → 화면에 보여줄 한글
+const STATUS_NAME = {
+  WAITING: "접수",
+  ALLOCATED: "할당",
+  PICKING: "피킹중",
+  SHIPPED: "출고완료",
+  CANCELED: "취소",
+};
+
+// 07 출고지시 — 담당: 김지환
+// 흐름 : 목록 → 주문 클릭(상세) → 품목 체크 → 추천 받기(미리보기) → 추천 수정 → 피킹리스트 생성
 export default function AllocationPage(props) {
-  // ─────────────── 1. 주소창의 documentId 읽기 ───────────────
-  // searchParams : 주소창 ? 뒤의 값들을 담은 객체
-  // setSearchParams : 주소창 ? 뒤의 값을 바꾸는 함수 (바뀌면 화면이 다시 그려짐)
-  const [searchParams, setSearchParams] = useSearchParams();
-  // "/outbounds/allocation?documentId=3" 이면 "3" (문자열), 없으면 null
-  const documentId = searchParams.get("documentId");
+  // ─────────────── 1. 주소의 documentId (/outbounds/allocation/3) ───────────────
+  const { documentId } = useParams(); // 목록 주소면 undefined
+  const navigate = useNavigate();
 
   // ─────────────── 2. 상태변수 ───────────────
-  const [orders, setOrders] = useState([]);     // 접수(WAITING) 상태 주문 목록
-  const [detail, setDetail] = useState(null);   // 선택한 주문 상세 (null = 아직 선택 안 함)
-  const [stocks, setStocks] = useState([]);     // 전체 재고 목록
-  const [pickings, setPickings] = useState([]); // 선택한 주문의 피킹리스트
-  const [confirmed, setConfirmed] = useState([]); // 출고확정 누른 detailId 목록 (중복 클릭 방지용)
+  const [outbounds, setOutbounds] = useState([]);
+  const [filter, setFilter] = useState({
+    from: "",
+    to: "",
+    partnerName: "",
+    status: "WAITING,ALLOCATED",
+  });
+  const [detail, setDetail] = useState(null); // 선택한 주문 상세 (null = 목록 화면)
+  const [stocks, setStocks] = useState([]); // 전체 재고 (추천 수정 select 에 씀)
+  const [checked, setChecked] = useState([]); // 체크한 품목 줄 id 목록
+  const [previews, setPreviews] = useState([]); // 추천 결과 (사용자가 수정하는 값)
+  const [loading, setLoading] = useState(false); // 요청 중이면 버튼 잠금
 
-  // ─────────────── 3. 다시 불러올 일이 있는 조회 함수 ───────────────
-  // 할당·확정 후에 "다시" 불러야 해서 useEffect 밖에 함수로 만든다 (수업은 useEffect 안에서만 만들었음)
+  // ─────────────── 3. 조회 함수 ───────────────
+  const getList = async () => {
+    const response = await axios.get("/wms/outbounds");
+    setOutbounds(response.data);
+  };
 
-  // 전체 재고 조회 (조현우 담당 API)
+  // 검색 조건으로 거른 목록 (status 는 "WAITING,ALLOCATED" 처럼 여러 개)
+  const visibleList = outbounds.filter((outbound) => {
+    if (!filter.status.split(",").includes(outbound.status)) return false;
+    const day = outbound.expectedAt.substring(0, 10);
+    if (filter.from !== "" && day < filter.from) return false;
+    if (filter.to !== "" && day > filter.to) return false;
+    if (
+      filter.partnerName !== "" &&
+      !outbound.partnerName.includes(filter.partnerName)
+    )
+      return false;
+    return true;
+  });
+
+  const handleSearch = (event) => {
+    event.preventDefault();
+    setFilter({
+      from: event.target.from.value,
+      to: event.target.to.value,
+      partnerName: event.target.partnerName.value.trim(),
+      status: event.target.status.value,
+    });
+  };
+
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      from: "",
+      to: "",
+      partnerName: "",
+      status: "WAITING,ALLOCATED",
+    });
+  };
+
   const getStocks = async () => {
     const response = await axios.get("/wms/stocks");
-    setStocks(response.data); // [{stockId, productCode, lotCode, locationCode, expiryDate, availableQty ...}]
+    setStocks(response.data);
   };
 
-  // ED-19 피킹리스트 조회
-  const getPickings = async () => {
-    if (documentId === null) return; // 선택한 주문이 없으면 부르지 않고 함수 종료
-    const response = await axios.get("http://localhost:8080/wms/allocations/" + documentId);
-    setPickings(response.data); // [{detailId, locationCode, productCode, productName, lotCode, qty}]
-  };
-
-  // ─────────────── 4. 최초 1번: 주문목록 + 재고 ───────────────
-  useEffect(() => {
-    async function getOrders() {
-      // ED-12 출고 목록 조회
-      const response = await axios.get("http://localhost:8080/wms/outbounds");
-      let result = []; // 접수 상태만 담을 새 배열
-      for (let i = 0; i < response.data.length; i++) {
-        if (response.data[i].status === "WAITING") { // 상태가 접수인 주문만
-          result.push(response.data[i]);
-        }
-      }
-      setOrders(result);
+  // ED-17 주문 상세 : 주소에 번호가 없으면 목록 화면
+  const getDetail = async () => {
+    if (!documentId) {
+      setDetail(null);
+      return;
     }
-    getOrders();
+    const response = await axios.get("/wms/outbounds/" + documentId);
+    setDetail(response.data);
+  };
+
+  // ─────────────── 4. 최초 1번 : 주문목록 + 재고 ───────────────
+  useEffect(() => {
+    getList();
     getStocks();
-  }, []); // [] : 최초 1번만 실행
+  }, []);
 
-  // ─────────────── 5. documentId가 바뀔 때마다: 상세 + 피킹리스트 ───────────────
+  // ─────────────── 5. 주소의 번호가 바뀔 때마다 : 상세 다시, 체크·추천 초기화 ───────────────
   useEffect(() => {
-    async function getDetail() {
-      if (documentId === null) return; // 선택 안 했으면 종료
-      // ED-17 출고 상세 조회
-      const response = await axios.get("http://localhost:8080/wms/outbounds/" + documentId);
-      setDetail(response.data); // {documentNo, partnerName, items:[{documentItemId, productCode, productName, expectedQty}]}
-    }
     getDetail();
-    getPickings();
-  }, [documentId]); // 의존성 배열에 documentId → 최초 1번 + documentId 바뀔 때마다 실행 (day05 Lifecycle [3])
+    setChecked([]);
+    setPreviews([]);
+  }, [documentId]);
 
-  // ─────────────── 6. 할당 (ED-18) ───────────────
-  // event : form 제출 이벤트, documentItemId : 어느 품목 줄에서 눌렀는지
-  const 할당 = async (event, documentItemId) => {
-    event.preventDefault(); // form 새로고침 막기
+  // 목록 줄 클릭 / 뒤로가기 / 피킹리스트로 : 주소만 바꾸면 위 useEffect 가 상세를 다시 부름
+  const selectDocument = (id) => navigate(`/outbounds/allocation/${id}`);
+  const goBack = () => navigate("/outbounds/allocation");
+  const goPicking = () => navigate(`/outbounds/picking/${documentId}`);
 
-    // 같은 품목 재고가 하나도 없으면 select가 비어서 값이 ""
-    if (event.target.stockId.value === "") {
-      alert("할당할 재고가 없습니다");
+  // ─────────────── 6. 상태 판단 도우미 ───────────────
+  const isAllocatable = () =>
+    detail !== null &&
+    (detail.status === "WAITING" || detail.status === "ALLOCATED");
+  const isShipped = () => detail !== null && detail.status === "SHIPPED";
+  const isAllocated = (item) => item.allocatedQty > 0;
+  const getCheckableItems = () =>
+    detail === null
+      ? []
+      : detail.items.filter((item) => isAllocatable() && !isAllocated(item));
+
+  // ─────────────── 7. 체크박스 ───────────────
+  const toggleCheck = (documentItemId) => {
+    if (checked.includes(documentItemId)) {
+      setChecked(checked.filter((id) => id !== documentItemId));
+    } else {
+      setChecked([...checked, documentItemId]);
+    }
+  };
+
+  const toggleCheckAll = () => {
+    const ids = getCheckableItems().map((item) => item.documentItemId);
+    setChecked(ids.length > 0 && checked.length === ids.length ? [] : ids);
+  };
+
+  // ─────────────── 8. 추천 받기 (미리보기, 저장 안 함) ───────────────
+  const getPreview = async () => {
+    if (checked.length === 0) {
+      alert("품목을 하나 이상 체크하세요");
       return;
     }
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        "/wms/allocations/" + documentId + "/preview",
+        {
+          params: { documentItemIds: checked.join(",") },
+        },
+      );
+      setPreviews(response.data);
+    } catch (error) {
+      alert(error.response.data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // 서버로 보낼 객체 (AllocationDto 필드명과 똑같이)
-    const obj = {
-      documentItemId: documentItemId,
-      stockId: parseInt(event.target.stockId.value), // select 값은 문자열 → 정수 변환
-      qty: parseInt(event.target.qty.value),         // 입력 수량 → 정수 변환
-    };
+  // ─────────────── 9. 추천 수정 ───────────────
+  const updatePreview = (index, key, value) => {
+    const copy = [...previews];
+    copy[index] = { ...copy[index], [key]: parseInt(value) || 0 }; // 빈 칸이면 0
+    if (key === "stockId") {
+      const s = stocks.find((x) => x.stockId === parseInt(value));
+      if (s)
+        copy[index] = {
+          ...copy[index],
+          locationCode: s.locationCode,
+          lotCode: s.lotCode,
+          expiryDate: s.expiryDate,
+        };
+    }
+    // 가용 초과 막기 : 수량을 바꿨든 재고를 바꿨든 최대값으로 깎음
+    const max = getMaxQty(copy, index);
+    if (copy[index].qty > max) {
+      copy[index] = { ...copy[index], qty: max };
+    }
+    setPreviews(copy);
+  };
 
-    // 수량 검사 : 백엔드가 가용수량 검사를 안 하므로 프론트에서 막는다
-    if (isNaN(obj.qty) || obj.qty <= 0) {
-      alert("수량을 1 이상 입력하세요");
+  const addPreviewRow = (index) => {
+    const copy = [...previews];
+    copy.splice(index + 1, 0, { ...previews[index], qty: 0 });
+    setPreviews(copy);
+  };
+
+  const removePreviewRow = (index) => {
+    setPreviews(previews.filter((p, i) => i !== index));
+  };
+
+  const sumPreviewQty = (documentItemId) => {
+    let sum = 0;
+    for (let i = 0; i < previews.length; i++) {
+      if (previews[i].documentItemId === documentItemId)
+        sum += previews[i].qty || 0;
+    }
+    return sum;
+  };
+
+  // index 번째 줄에 넣을 수 있는 최대 수량
+  // = 고른 재고의 가용 - 같은 재고를 쓰는 다른 줄들의 수량
+  const getMaxQty = (list, index) => {
+    const row = list[index];
+    const stock = stocks.find((s) => s.stockId === row.stockId);
+    if (!stock) return 0;
+    let used = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (i !== index && list[i].stockId === row.stockId)
+        used += list[i].qty || 0;
+    }
+    return Math.max(stock.availableQty - used, 0);
+  };
+
+  // ─────────────── 10. 피킹리스트 생성 (실제 할당) ───────────────
+  const createPickingList = async () => {
+    if (previews.length === 0) {
+      alert("먼저 추천을 받으세요");
       return;
     }
-    for (let i = 0; i < stocks.length; i++) {
-      if (stocks[i].stockId === obj.stockId && obj.qty > stocks[i].availableQty) {
-        alert("가용수량(" + stocks[i].availableQty + ")보다 많이 할당할 수 없습니다");
+    // 생성 직전 확인 : 0 이하 줄, 가용 초과 줄
+    for (let i = 0; i < previews.length; i++) {
+      if (previews[i].qty <= 0) {
+        alert(`${i + 1}번째 줄 수량이 0입니다. 수량을 넣거나 줄을 삭제하세요`);
+        return;
+      }
+      if (previews[i].qty > getMaxQty(previews, i)) {
+        alert(`${i + 1}번째 줄이 가용재고를 넘습니다`);
         return;
       }
     }
-
-    // POST 요청. 응답 = 새로 만들어진 detailId (숫자)
-    const response = await axios.post("http://localhost:8080/wms/allocations", obj);
-    if (response.data) {   // detailId가 오면 성공
-      alert("할당 완료");
-      getPickings();        // 피킹리스트에 방금 할당한 줄이 추가됨
-      getStocks();          // 선점수량이 늘었으니 가용수량 새로고침
+    const rows = previews.map((p) => ({
+      documentItemId: p.documentItemId,
+      stockId: p.stockId,
+      qty: p.qty,
+    }));
+    try {
+      setLoading(true);
+      await axios.post("/wms/allocations/" + documentId + "/pickinglist", rows);
+      alert("피킹리스트가 생성되었습니다");
+      setChecked([]);
+      setPreviews([]);
+      getStocks(); // 선점수량 반영
+      getDetail(); // 문서 상태·할당수량 새로고침
+      getList(); // 목록 상태 새로고침
+    } catch (error) {
+      alert(error.response.data);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  // ─────────────── 7. 출고확정 (ED-20) ───────────────
-  const 출고확정 = async (detailId) => {
-    // PUT 요청. 사용법은 post와 같다 (주소, 보낼 객체)
-    const response = await axios.put("http://localhost:8080/wms/allocations", { detailId: detailId });
-    if (response.data === true) {
-      setConfirmed([...confirmed, detailId]); // 기존 배열 복사 + 새 값 추가 (day03 Component3 방식)
-      getStocks();                            // 실재고가 줄었으니 새로고침
-    } else {
-      alert("출고확정 실패");
-    }
-  };
-
-  // 조회 버튼 — 이번 단계에서는 새로고침만 막는다
-  const 조회 = (event) => {
-    event.preventDefault();
   };
 
   return (
     <>
       <PageTitle title="출고지시" path="홈 > 출고관리 > 출고지시" />
 
-      <form className="search" onSubmit={조회}>
-        <label>출고요청일</label>
-        <input type="date" name="from" /> ~ <input type="date" name="to" />
-        <label>배송지명</label>
-        <input type="text" name="partnerName" />
-        <label>주문상태</label>
-        <select name="status">
-          <option value="WAITING">접수</option>
-        </select>
-        <input type="submit" className="btn primary" value="조회" />
-      </form>
+      {detail === null ? (
+        <>
+          {/* ━━━━━━━━━━ 목록 ━━━━━━━━━━ */}
+          <form className="search" onSubmit={handleSearch}>
+            <label>출고요청일</label>
+            <input type="date" name="from" /> ~ <input type="date" name="to" />
+            <label>배송지명</label>
+            <input type="text" name="partnerName" />
+            <label>주문상태</label>
+            <select name="status" defaultValue="WAITING,ALLOCATED">
+              <option value="WAITING,ALLOCATED">
+                지시 대상 전체 (접수·할당)
+              </option>
+              <option value="WAITING">접수</option>
+              <option value="ALLOCATED">할당</option>
+            </select>
+            <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
+          </form>
 
-      {/* ━━━━━━━━━━ 표1. 출고 대상 주문 ━━━━━━━━━━ */}
-      <GridTitle title="출고 대상 주문 (접수)" desc={`총 ${orders.length}건`} />
-      <table className="grid">
-        <thead>
-          <tr>
-            <th>NO</th>
-            <th>주문번호</th>
-            <th>배송지명</th>
-            <th>출고요청일</th>
-            <th>상태</th>
-            <th>선택</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((row, index) => (
-            <tr key={row.documentId}>
-              <td>{index + 1}</td>
-              <td>{row.documentNo}</td>
-              <td>{row.partnerName}</td>
-              <td>{row.expectedAt.replace("T", " ")}</td>
-              <td>{row.status}</td>
-              <td>
-                {/* 누르면 주소창이 ?documentId=번호 로 바뀜 → 5번 useEffect가 다시 실행됨 */}
-                <button className="btn" onClick={() => setSearchParams({ documentId: row.documentId })}>
-                  선택
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          <GridTitle
+            title="출고 대상 주문"
+            desc={`총 ${visibleList.length}건`}
+          />
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>주문번호</th>
+                <th>배송지명</th>
+                <th>출고요청일</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleList.map((outbound, index) => (
+                <tr
+                  key={outbound.documentId}
+                  onClick={() => selectDocument(outbound.documentId)}
+                >
+                  <td>{index + 1}</td>
+                  <td>{outbound.documentNo}</td>
+                  <td>{outbound.partnerName}</td>
+                  <td>{outbound.expectedAt.replace("T", " ")}</td>
+                  <td>{STATUS_NAME[outbound.status]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <>
+          {/* ━━━━━━━━━━ 상세: 헤더 + 위 주문품목 / 아래 할당추천 ━━━━━━━━━━ */}
+          <GridTitle title="출고 정보" desc={detail.documentNo} />
+          <DocumentHeader
+            type="OUTBOUND"
+            doc={detail}
+            statusName={STATUS_NAME[detail.status]}
+          />
+          <div className="detail-bar">
+            <button className="btn" onClick={goBack}>
+              목록
+            </button>
+            {detail.status !== "WAITING" && (
+              <button className="btn" onClick={goPicking}>
+                피킹리스트 보기
+              </button>
+            )}
+          </div>
 
-      {/* ━━━━━━━━━━ 표2. 선택한 주문의 품목 + 할당 ━━━━━━━━━━ */}
-      {/* 삼항연산자 : detail이 null이면 앞, 아니면 뒤 (day10 방식) */}
-      <GridTitle
-        title="주문 품목 / 재고 할당"
-        desc={detail === null ? "주문을 선택하세요" : detail.documentNo + " · " + detail.partnerName}
-      />
-      <table className="grid">
-        <thead>
-          <tr>
-            <th>품목코드</th>
-            <th>품목명</th>
-            <th>주문수량</th>
-            <th>재고 선택 (로케이션 / LOT / 소비기한 / 가용)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail === null ? (
-            <tr>
-              <td colSpan="4">위에서 주문을 선택하세요</td>
-            </tr>
-          ) : (
-            detail.items.map((item) => {
-              // 이 품목과 같은 productCode + 가용수량이 남은 재고만 골라 담기
-              let 같은품목재고 = [];
-              for (let i = 0; i < stocks.length; i++) {
-                if (stocks[i].productCode === item.productCode && stocks[i].availableQty > 0) {
-                  같은품목재고.push(stocks[i]);
-                }
-              }
-              return (
+          {/* ── 위: 주문 품목 (체크) ── */}
+          <GridTitle title="주문 품목" desc={`체크 ${checked.length}건`}>
+            {isAllocatable() && (
+              <button
+                className="btn primary"
+                onClick={getPreview}
+                disabled={loading}
+              >
+                {loading ? "처리 중..." : "추천 받기"}
+              </button>
+            )}
+          </GridTitle>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    disabled={getCheckableItems().length === 0}
+                    checked={
+                      getCheckableItems().length > 0 &&
+                      checked.length === getCheckableItems().length
+                    }
+                    onChange={toggleCheckAll}
+                  />
+                </th>
+                <th>품목코드</th>
+                <th>품목명</th>
+                <th>주문수량</th>
+                <th>할당수량</th>
+                <th>출고가능재고</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.items.map((item) => (
                 <tr key={item.documentItemId}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={checked.includes(item.documentItemId)}
+                      disabled={isAllocated(item) || !isAllocatable()}
+                      onChange={() => toggleCheck(item.documentItemId)}
+                    />
+                  </td>
                   <td>{item.productCode}</td>
                   <td>{item.productName}</td>
                   <td>{item.expectedQty}</td>
+                  <td>{item.allocatedQty}</td>
+                  <td
+                    style={{
+                      color:
+                        !isShipped() &&
+                        !isAllocated(item) &&
+                        item.availableQty < item.expectedQty
+                          ? "red"
+                          : "",
+                    }}
+                  >
+                    {isShipped() ? "-" : item.availableQty}
+                  </td>
                   <td>
-                    {/* 제출하면 할당 함수에 event와 이 줄의 documentItemId를 같이 넘김 */}
-                    <form onSubmit={(event) => 할당(event, item.documentItemId)}>
-                      <select name="stockId">
-                        {같은품목재고.map((s) => (
-                          <option key={s.stockId} value={s.stockId}>
-                            {s.locationCode} / {s.lotCode} / {s.expiryDate} / 가용 {s.availableQty}
-                          </option>
-                        ))}
-                      </select>
-                      <input type="number" name="qty" defaultValue={item.expectedQty} style={{ width: "70px" }} />
-                      <input type="submit" className="btn" value="할당" />
-                    </form>
+                    {isShipped()
+                      ? "출고완료"
+                      : isAllocated(item)
+                        ? "할당됨"
+                        : item.availableQty < item.expectedQty
+                          ? "재고 부족"
+                          : "-"}
                   </td>
                 </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+              ))}
+            </tbody>
+          </table>
 
-      {/* ━━━━━━━━━━ 표3. 피킹리스트 + 출고확정 ━━━━━━━━━━ */}
-      <GridTitle title="피킹리스트 (로케이션순)" desc={`총 ${pickings.length}건`} />
-      <table className="grid">
-        <thead>
-          <tr>
-            <th>피킹번호</th>
-            <th>로케이션</th>
-            <th>품목코드</th>
-            <th>품목명</th>
-            <th>LOT</th>
-            <th>수량</th>
-            <th>출고확정</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pickings.map((p) => (
-            <tr key={p.detailId}>
-              <td>{p.detailId}</td>
-              <td>{p.locationCode}</td>
-              <td>{p.productCode}</td>
-              <td>{p.productName}</td>
-              <td>{p.lotCode}</td>
-              <td>{p.qty}</td>
-              <td>
-                {/* includes : 배열 안에 이 detailId가 있으면 true → 이미 확정한 줄 */}
-                {confirmed.includes(p.detailId) ? (
-                  "완료"
-                ) : (
-                  <button className="btn primary" onClick={() => 출고확정(p.detailId)}>
-                    확정
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          {/* ── 아래: 할당 추천 (수정 가능) ── */}
+          <GridTitle
+            title="할당 추천 (수정 가능)"
+            desc={`총 ${previews.length}건`}
+          >
+            {previews.length > 0 && (
+              <button
+                className="btn primary"
+                onClick={createPickingList}
+                disabled={loading}
+              >
+                {loading ? "처리 중..." : "피킹리스트 생성"}
+              </button>
+            )}
+          </GridTitle>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>품목명</th>
+                <th>로케이션</th>
+                <th>LOT</th>
+                <th>소비기한</th>
+                <th>가용</th>
+                <th>수량</th>
+                <th>품목 합계 / 주문</th>
+                <th>줄</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previews.length === 0 ? (
+                <tr>
+                  <td colSpan="8">
+                    위에서 품목을 체크하고 [추천 받기]를 누르세요
+                  </td>
+                </tr>
+              ) : (
+                previews.map((p, index) => {
+                  const sameProductStocks = stocks.filter(
+                    (s) =>
+                      s.productCode === p.productCode &&
+                      (s.availableQty > 0 || s.stockId === p.stockId),
+                  );
+                  // 지금 고른 재고 (LOT · 소비기한 · 가용 칸에 표시)
+                  const stock = stocks.find((s) => s.stockId === p.stockId);
+                  const item = detail.items.find(
+                    (it) => it.documentItemId === p.documentItemId,
+                  );
+                  const total = sumPreviewQty(p.documentItemId);
+                  const maxQty = getMaxQty(previews, index);
+                  return (
+                    <tr key={index}>
+                      <td>{p.productName}</td>
+                      <td>
+                        <select
+                          value={p.stockId}
+                          onChange={(e) =>
+                            updatePreview(index, "stockId", e.target.value)
+                          }
+                        >
+                          {sameProductStocks.map((s) => (
+                            <option key={s.stockId} value={s.stockId}>
+                              {s.locationCode}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>{stock ? stock.lotCode : "-"}</td>
+                      <td>{stock ? stock.expiryDate : "-"}</td>
+                      <td className="num">
+                        {stock ? stock.availableQty : "-"}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={p.qty}
+                          min="1"
+                          max={maxQty}
+                          title={`최대 ${maxQty}`}
+                          style={{ width: "70px" }}
+                          onChange={(e) =>
+                            updatePreview(index, "qty", e.target.value)
+                          }
+                        />
+                      </td>
+                      <td
+                        style={{
+                          color:
+                            item && total !== item.expectedQty ? "red" : "",
+                        }}
+                      >
+                        {total} / {item ? item.expectedQty : "-"}
+                      </td>
+                      <td>
+                        <button
+                          className="btn"
+                          onClick={() => addPreviewRow(index)}
+                        >
+                          +
+                        </button>{" "}
+                        <button
+                          className="btn danger"
+                          onClick={() => removePreviewRow(index)}
+                        >
+                          -
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </>
+      )}
     </>
   );
 }
