@@ -1,9 +1,12 @@
 package com.wms.service;
 
+import com.wms.model.repository.DocumentItemRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,17 +15,25 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.dto.stock.StockDto;
+import com.wms.model.dto.stock.StockHistoryDto;
+import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.LocationEntity;
 import com.wms.model.entity.LotEntity;
 import com.wms.model.entity.StockEntity;
+import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.LocationRepository;
 import com.wms.model.repository.StockRepository;
 
 @Service 
 @Transactional 
 public class StockService {
+    private final DocumentItemRepository documentItemRepository;
     @Autowired private StockRepository stockRepository;
     @Autowired private LocationRepository locationRepository;
+    @Autowired private DocumentItemDetailRepository detailRepository;
+    StockService(DocumentItemRepository documentItemRepository) {
+        this.documentItemRepository = documentItemRepository;
+    }
     // ED-21 재고 조회
      public List<StockDto> stockFindAll() {
         List<StockEntity> stockEntities = stockRepository.findAll();
@@ -130,5 +141,35 @@ public class StockService {
             .thenComparing(LocationRecommendDto::getLocationCode)   // 같으면 칸 코드 순
         );
         return candidates.size() > 5 ? candidates.subList(0, 5) : candidates; 
+    }
+
+    // 입출고 이력 - 재고를 바꾼 detail만, 최신순 + 변경 후 수량 계산
+    public List<StockHistoryDto> historyFindAll(){
+        // 1. 이력 줄 만들기 (위치 없음 = 검수만 하고 적재 전 -> 재고 변화 없으니 제외 시킴)
+        List<StockHistoryDto> historyDtos = new ArrayList<>();
+        for(DocumentItemDetailEntity detail : detailRepository.findAll()){
+            if(detail.getLocationEntity() == null || detail.getStockEntity() == null) continue;
+            historyDtos.addAll(StockHistoryDto.from(detail));
+        }
+
+        // 2. 최신순 정렬(발생일시 늦은 순 -> 같으면 detailId 큰 순)
+        historyDtos.sort(Comparator
+            .comparing(StockHistoryDto::getOccurredAt, Comparator.nullsLast(Comparator.reverseOrder()))
+            .thenComparing(StockHistoryDto::getDetailId, Comparator.reverseOrder())
+        );
+
+        // 3. 변경 후 수량: 재고 줄마다 현재 수량에서 시작해 최신 -> 과거로 증감을 빼며 되돌리기
+        Map<Integer, int[]> running = new HashMap<>();  // stockId -> {실물, 선점}
+        for(StockEntity s : stockRepository.findAll())
+            running.put(s.getStockId(), new int[]{s.getQty(), s.getAllocatedQty()});
+
+        for(StockHistoryDto h : historyDtos){
+            int[] now = running.get(h.getStockId());
+            h.setAfterQty(now[0]);              // 변동 직후 값
+            h.setAfterAllocated(now[1]);
+            now[0] -= h.getQtyChange();         // 한 단계 과거로
+            now[1] -= h.getAllocatedChange();
+        }
+        return historyDtos;
     }
 }
