@@ -154,7 +154,7 @@ public class InboundService {
         // 적재할 칸 조회
         LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId()).orElseThrow(()->new EntityNotFoundException("로케이션이 없습니다."));
         if (!locationEntity.getIsActive())
-            throw new IllegalArgumentException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
+            throw new IllegalStateException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
 
         // 재고 증가는 StockService에 맡긴다
         StockEntity stockEntity = stockService.increase(detailEntity.getLotEntity(), locationEntity,
@@ -215,4 +215,5 @@ public class InboundService {
         list.sort(Comparator.comparing(LocationOptionDto::getLocationCode));
         return list;
     }
+    
 }
