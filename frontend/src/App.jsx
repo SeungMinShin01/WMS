@@ -7,11 +7,8 @@ import AllocationPage from "./Pages/outbound/AllocationPage";
 import StockPage from "./Pages/stock/StockPage";
 import HistoryPage from "./Pages/stock/HistoryPage";
 import PutawayPage from "./Pages/inbound/PutawayPage";
+import PickingPage from "./Pages/outbound/PickingPage";
 
-// 01 /master/products  01-2 /master/partners  02 /master/locations
-// 03 /inbounds  04 /inbounds/inspection
-// 05 /outbounds 06 /outbounds/allocation
-// 07 /stocks    08 /stocks/history
 export default function App(props) {
   return (
     <Routes>
@@ -28,6 +25,12 @@ export default function App(props) {
         <Route path="inbounds/putaway/:documentId" element={<PutawayPage />} />
         <Route path="outbounds" element={<OutboundPage />} />
         <Route path="outbounds/allocation" element={<AllocationPage />} />
+        <Route
+          path="outbounds/allocation/:documentId"
+          element={<AllocationPage />}
+        />
+        <Route path="outbounds/picking" element={<PickingPage />} />
+        <Route path="outbounds/picking/:documentId" element={<PickingPage />} />
         <Route path="stocks" element={<StockPage />} />
         <Route path="stocks/history" element={<HistoryPage />} />
       </Route>
