@@ -7,9 +7,9 @@ import DocumentHeader from "../../Layout/DocumentHeader";
 
 // 문서 상태 영어 값 → 화면에 보여줄 한글
 const STATUS_NAME = {
-  WAITING: "접수",
-  ALLOCATED: "할당",
-  PICKING: "피킹중",
+  WAITING: "출고예정",
+  ALLOCATED: "출고할당",
+  PICKING: "재고피킹",
   SHIPPED: "출고완료",
   CANCELED: "취소",
 };
@@ -263,10 +263,10 @@ export default function AllocationPage(props) {
             <label>주문상태</label>
             <select name="status" defaultValue="WAITING,ALLOCATED">
               <option value="WAITING,ALLOCATED">
-                지시 대상 전체 (접수·할당)
+                지시 대상 전체 (출고예정·출고할당)
               </option>
-              <option value="WAITING">접수</option>
-              <option value="ALLOCATED">할당</option>
+              <option value="WAITING">출고예정</option>
+              <option value="ALLOCATED">출고할당</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
             <button type="button" className="btn" onClick={handleReset}>
