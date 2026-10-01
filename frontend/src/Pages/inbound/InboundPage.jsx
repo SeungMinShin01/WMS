@@ -3,7 +3,7 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import InboundHeader from "./InboundHeader";
+import DocumentHeader from "../../Layout/DocumentHeader";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -151,7 +151,11 @@ export default function InboundPage(props) {
       ) : (
         <>
           <GridTitle title="입고 정보" desc={detail.documentNo} />
-          <InboundHeader doc={detail} statusName={상태명[detail.status]} />
+          <DocumentHeader
+            type="INBOUND"
+            doc={detail}
+            statusName={상태명[detail.status]}
+          />
 
           <GridTitle
             title="입고 품목"

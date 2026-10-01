@@ -1,6 +1,6 @@
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
-import InboundHeader from "./InboundHeader";
+import DocumentHeader from "../../Layout/DocumentHeader";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
@@ -219,7 +219,7 @@ export default function InspectionPage(props) {
           {/* ── 상세: 헤더 + 검수 입력 ── */}
           <div className="detail-bar">
             <button className="btn" onClick={뒤로가기}>
-              ← 목록
+              목록
             </button>
             <span className="right">
               {selected.status === "INSPECTED" && (
@@ -231,8 +231,11 @@ export default function InspectionPage(props) {
           </div>
 
           <GridTitle title="입고 정보" desc={selected.documentNo} />
-          <InboundHeader doc={selected} statusName={상태명[selected.status]} />
-
+          <DocumentHeader
+            type="INBOUND"
+            doc={selected}
+            statusName={상태명[selected.status]}
+          />
           <GridTitle
             title="검수 입력"
             desc={`예정 ${예정합계.toLocaleString()} · 실제 ${실제합계.toLocaleString()}`}
