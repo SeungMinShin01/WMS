@@ -35,9 +35,10 @@ export default function Layout(props) {
 
           <div className="menu-group">출고관리</div>
           <NavLink to="/outbounds" end>
-            출고예정
+            출고문서
           </NavLink>
           <NavLink to="/outbounds/allocation">출고지시</NavLink>
+          <NavLink to="/outbounds/picking">피킹리스트</NavLink>
 
           <div className="menu-group">재고관리</div>
           <NavLink to="/stocks" end>
