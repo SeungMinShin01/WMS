@@ -26,12 +26,11 @@ import com.wms.model.repository.StockRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 
-// ═══════════════════════════════════════════════════════════
+
 // ED-18 할당 계획 (검증 + 추천 계산 + 미리보기)
 //   DB 에 아무것도 저장하지 않는다. "어느 재고에서 몇 개 꺼내면 좋을지" 계산만 한다.
 //   PickingListService 가 검증 메서드(checkAllocatable, checkShippable 등)를 가져다 쓴다.
 // 예외는 GlobalExceptionHandler 가 응답으로 바꿈 : 404 없음 / 400 잘못된 요청 / 409 상태·재고 충돌
-// ═══════════════════════════════════════════════════════════
 @Service
 public class AllocationPlanService {
 
@@ -40,9 +39,7 @@ public class AllocationPlanService {
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
     @Autowired private StockRepository stockRepository;
 
-    // ─────────────────────────────────────────────
     // 1. 미리보기 (컨트롤러가 부르는 메서드)
-    // ─────────────────────────────────────────────
 
     // 선택한 품목 줄들에 대해 추천 결과를 돌려줌 (저장 안 함)
     // documentItemIds 가 비어 있으면 문서의 전체 품목 줄을 대상으로 함
@@ -59,9 +56,7 @@ public class AllocationPlanService {
         return result;
     }
 
-    // ─────────────────────────────────────────────
     // 2. 검증 메서드 (PickingListService 도 같이 씀)
-    // ─────────────────────────────────────────────
 
     // 문서 검사 : 없는 문서 404 / 출고 문서 아님 400 / 대기·할당 상태 아님 409
     // WAITING(아직 하나도 할당 안 함), ALLOCATED(일부만 할당함) 에서만 할당 가능
@@ -69,13 +64,13 @@ public class AllocationPlanService {
     public DocumentEntity checkAllocatable(Integer documentId) {
         DocumentEntity documentEntity = documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
-        if (documentEntity.getType() != DocumentType.OUTBOUND) {
+        if (documentEntity.getType() != DocumentType.OUTBOUND) { // enum(클래스값.값이름) 문서 상태로 사용가능
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
         DocumentStatus status = documentEntity.getStatus();
-        if (status != DocumentStatus.WAITING && status != DocumentStatus.ALLOCATED) {
+        if (status != DocumentStatus.WAITING && status != DocumentStatus.ALLOCATED) { // 문서 상태로 사용가능
             throw new IllegalStateException("대기·할당 상태에서만 할당할 수 있습니다. 현재 상태: " + status);
-        }
+        }   
         return documentEntity;
     }
 
@@ -145,9 +140,7 @@ public class AllocationPlanService {
         }
     }
 
-    // ─────────────────────────────────────────────
     // 3. 내부 계산
-    // ─────────────────────────────────────────────
 
     // 사용자가 체크한 품목 줄만 골라냄
     // 선택 없음 → 전체 / 이 문서에 없는 id 400 / 이미 할당된 줄 409

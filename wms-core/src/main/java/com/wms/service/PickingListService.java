@@ -22,12 +22,10 @@ import com.wms.model.repository.StockRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 
-// ═══════════════════════════════════════════════════════════
 // ED-18 피킹리스트 생성 (실제 할당) + ED-19 피킹리스트 조회
 //   사용자가 미리보기를 보고 수정한 값을 받아서 → 다시 검증 → 저장 → 상태 전이
 //   미리보기와 확정 사이에 재고가 바뀌었을 수 있으므로 여기서 한 번 더 검사하는 게 진짜 방어선
 // 클래스 전체 @Transactional : 중간에 예외가 나면 저장한 것 전부 롤백
-// ═══════════════════════════════════════════════════════════
 @Service
 @Transactional
 public class PickingListService {
