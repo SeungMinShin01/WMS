@@ -2,7 +2,6 @@ package com.wms.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -85,28 +84,32 @@ public class AllocationPlanService {
         }
         return items; // 문서 번호에 해당하는 문서 품목만 담아서 리턴  
     }
-    // 이미 할당된 품목 중복 방지 검사
-    // 같은 문서 안에서 품목을 나눠서 할당할 때 , 아직 할당 안 한 게 맞는지 할당 기록과 대조해서 확인
-    // (예: 내 화면은 할당 전인데 다른 사람이 먼저 할당한 경우, 새로고침 안 한 화면에서 다시 누른 경우)
-    // 중복 방지가 없을 경우 품목이 두 번 할당돼서 주문 수량보다 많이 잡히고 재고 선점도 두 번 늘어남
+    // 이미 할당된 품목 중복 방지 검사 (예: 내 화면은 할당 전인데 다른 사람이 먼저 할당한 경우, 새로고침 안 한 화면에서 다시 누른 경우)
+    // 품목 줄 1개에 지금까지 할당된 수량 합계를 계산 (document_item_detail 의 qty 합)
+    // 추천 받기 / 피킹리스트 생성 : 0 보다 크면 이미 할당된 품목이라 409 (중복 할당 방지)
+    // 문서 상태 정리 : 요청 수량보다 작으면 아직 덜 할당된 품목
+    // 출고 문서 상세 조회 : 화면의 "할당 수량" 으로 보여줌
     public int allocatedSum(Integer documentItemId) { // 사용자가 체크한 품목의 품목 id를 파라미터로 받아옴
         int sum = 0; // 합계를 담을 변수. 0에서 시작
         for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) { // 할당 줄 전체를 하나씩 꺼내서
             if (d.getDocumentItemEntity().getDocumentItemId().equals(documentItemId)) { // 체크한 품목의 품목 id
                 sum += d.getQty(); // 할당된 수량을 더함 (출고쪽이니까 할당 , 입고쪽이면 검수)
-                // 0보다 큰경우(비정상) 중복할당
+                // 추천 받기 / 피킹리스트 생성 : 0보다 큰경우(비정상) 중복할당
+                
             }
         }
         return sum; // 합계 리턴
     }
-    // outboundservice에서도 호출
+    // outboundservice ED-17 출고 문서 상세 조회에서 호출
     // 이 품목 줄의 "출고 가능 재고" 합계 (주문 품목 화면에 보여줄 값)
     // 추천 계산(buildPlan)과 같은 조건 : 같은 상품 · 운영 중인 칸 · 소비기한 있음 · 잔여일 충분 · 가용 > 0
-    public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> allStocks) {
+    public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> allStocks) { 
+        // 품목한개 , 출고 예정일, 재고 전체를 파라미터로 받아옴
         int sum = 0;
         for (StockEntity s : allStocks) {
-            if (!isShippable(item, s, shipDate)) continue;          // 조건 불통과 재고는 제외
-            int available = s.getQty() - s.getAllocatedQty();       // 가용 = 실물 − 선점
+            // 밑에 isShippable로 가서 재고가 이 품목 줄에 출고 가능한지 검사
+            if (!isShippable(item, s, shipDate)) continue; 
+            int available = s.getQty() - s.getAllocatedQty(); // 출고 가능시 가용재고 개수 저장 가용 = 실물 − 선점
             if (available > 0) sum += available;
         }
         return sum;

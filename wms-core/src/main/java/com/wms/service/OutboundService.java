@@ -67,23 +67,27 @@ public class OutboundService {
     // ED-17 출고 문서 상세 조회
     public OutboundDetailDto getOutboundDetail(Integer documentId) {
         DocumentEntity documentEntity = documentRepository.findById(documentId).orElseThrow(() -> 
-            new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
-                if (documentEntity.getType() != DocumentType.OUTBOUND) {
-                    throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
+            new EntityNotFoundException("출고 문서가 없습니다: " + documentId)); // 문서가 없을시 예외
+                if (documentEntity.getType() != DocumentType.OUTBOUND) { 
+                    throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId); // 출고 문서가 아닐시 예외
                 }
-        OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
+        OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity); // entity -> dto 변환
 
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();   // 출고 가능 판단 기준일 (출고 예정일)
-        List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체 (품목마다 재사용)
+        List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체
 
-        List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
+        List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll(); // 모든 문서의 품목줄을 가져옴
         for (DocumentItemEntity documentItemEntity : documentItemEntities) {   // 품목 줄 하나씩 꺼내서
 
-            if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {   // 이 문서의 줄만
-                OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
+            if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) { // 품목줄에 속한 문서 id와 파라미터로 받은 문서id를 비교 
+                OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity); // 맞으면 품목을 entity -> dto로 변환
                 // 할당 수량 · 출고 가능 재고 채우기 (추천 받기 전에 화면에서 재고 부족을 미리 보게)
+                // AllocationPlanService가서 현재 할당 수량을 받아옴
+                // 추천만 받고 피킹리스트를 만들기 전이면 0
                 outboundItemDto.setAllocatedQty(allocationPlanService.allocatedSum(documentItemEntity.getDocumentItemId()));
+                // 이 품목 줄에 쓸 수 있는 재고(같은 상품·쓰는 칸·소비기한 충분)의 가용수량 합계를 계산해서 Dto에 넣음
                 outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, allStocks));
+                // 문서 상세 객체에 완성된 품목추가
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
         }
@@ -96,40 +100,51 @@ public class OutboundService {
 
         // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
         DocumentEntity documentEntity = documentRepository.findById(documentId)
-                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
+                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId)); // 문서가 없을시 예외
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
-            throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
+            throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId); // 출고 문서가 아닐시
         }
 
         // 2. 상태 검사 : 이미 출고됨 409 / 피킹 중이 아님 409
         if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
-            throw new IllegalStateException("이미 출고된 문서입니다");
+            throw new IllegalStateException("이미 출고된 문서입니다");  // 출고된 문서일시
         }
-        if (documentEntity.getStatus() != DocumentStatus.PICKING) {
+        if (documentEntity.getStatus() != DocumentStatus.PICKING) { // 피킹 중이 아닐시
             throw new IllegalStateException("피킹 중인 문서만 출고확정할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
         }
 
         // 3. 이 문서의 할당 내역(detail)마다 재고 차감 : 실물 qty 와 선점 allocatedQty 를 같이 줄임
         for (DocumentItemDetailEntity detail : documentItemDetailRepository.findAll()) {
-            if (!detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) continue; // 다른 문서 건너뜀
+            // 할당 기록(detail) → 품목 줄 → 문서 순으로 올라가 파라미터로 받은 문서id랑 비교해서 해당 문서의 할당 기록을 가져옴
+            if (!detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) continue; // 다른 문서는 건너뜀
+            // 재고 행을 entity객체로 꺼냄 안에는 실물, 선점 , lot , 로케이션 , 칸 등
+            // 할당기록에는 그 재고의 현재 수량을 볼 수 없기 때문에 재고 행을 꺼내와야함
             StockEntity stockEntity = detail.getStockEntity();
             // 재고 숫자가 이상하면 DB 제약(CHECK) 오류(500) 대신 409 로 원인을 알려줌
             if (stockEntity.getAllocatedQty() < detail.getQty() || stockEntity.getQty() < detail.getQty()) {
+                // 선점 수량이 출고 수량보다 적거나 재고 수량이 출고수량보다 적거나
                 throw new IllegalStateException("재고 수량이 맞지 않습니다: " + detail.getLocationEntity().getLocationCode()
                         + " · 출고 " + detail.getQty() + " · 실물 " + stockEntity.getQty() + " · 선점 " + stockEntity.getAllocatedQty());
             }
+            // 실물 수량 = 지금 실물 수량 − 이번에 출고한 수량
             stockEntity.setQty(stockEntity.getQty() - detail.getQty());
+            // 선점 수량 = 지금 선점 수량 − 이번에 출고한 수량
             stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());
+            // DB에 반영
             stockRepository.save(stockEntity);
         }
 
         
 
         // 4. 문서 상태 PICKING → SHIPPED + 완료 시각 기록
-        documentEntity.moveTo(DocumentStatus.SHIPPED);
-        documentEntity.setCompletedAt(LocalDateTime.now());
-        documentRepository.save(documentEntity);
 
+        // 문서 상태를 출고 완료로 바꿈
+        // DocumentStatus.canGoTo 이동 규칙
+        documentEntity.moveTo(DocumentStatus.SHIPPED); 
+        documentEntity.setCompletedAt(LocalDateTime.now()); // 완료시작에 지금 시각을 넣음
+        documentRepository.save(documentEntity); // 바뀐 상태랑 완료 시각을 DB에 반영
+
+        // 문서의 상태(SHIPPED).name() enum값을 글자로 변경 "SHIPPED"
         return documentEntity.getStatus().name();
     }
 
