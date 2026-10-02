@@ -29,6 +29,18 @@ public class PartnerService {
             return false;
         }
     }
+
+    // http://localhost:8080/wms/partner?partner_id
+    public PartnerDto 거래처개별조회( int partnerid ){
+        Optional<PartnerEntity> optional = partnerRepository.findById( partnerid ); // 1. findById 엔티티 개별조회
+        if( optional.isPresent() ) { // 2. 조회 결과 존재하면
+            PartnerEntity entity = optional.get(); // 3. 엔티티 꺼내기
+            return PartnerDto.from(entity);
+    }
+    return  null;
+    }
+    
+
         public List<PartnerDto> 거래처전체조회(){
             List<PartnerEntity> entities = partnerRepository.findAll(); // 1. findAll 엔티티 전체조회
             List<PartnerDto> list = new ArrayList<>(); // 2. 엔티티 -> dto 변환

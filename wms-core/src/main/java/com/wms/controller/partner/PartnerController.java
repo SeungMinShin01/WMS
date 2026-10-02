@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.partner.PartnerDto;
@@ -30,6 +31,12 @@ public class PartnerController {
     public List<PartnerDto> 거래처전체조회(){
         return partnerService.거래처전체조회();
     }
+    
+    @GetMapping("/wms/partner/detail")
+    public PartnerDto 거래처개별조회(
+        @RequestParam( name="partnerid" ) int partnerid ){{
+        return partnerService.거래처개별조회( partnerid );
+        }}
 
     @PutMapping("/wms/partner")
     public boolean 거래처수정( @RequestBody PartnerDto partnerDto ){
