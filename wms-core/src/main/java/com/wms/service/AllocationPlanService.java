@@ -99,7 +99,7 @@ public class AllocationPlanService {
         }
         return sum; // 합계 리턴
     }
-
+    // outboundservice에서도 호출
     // 이 품목 줄의 "출고 가능 재고" 합계 (주문 품목 화면에 보여줄 값)
     // 추천 계산(buildPlan)과 같은 조건 : 같은 상품 · 운영 중인 칸 · 소비기한 있음 · 잔여일 충분 · 가용 > 0
     public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> allStocks) {
@@ -111,7 +111,7 @@ public class AllocationPlanService {
         }
         return sum;
     }
-
+    
     // 재고 1행이 이 품목 줄에 출고 가능한지 true/false 로만 판단 (예외 안 던짐)
     private boolean isShippable(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
         // // item : 해당 문서의 문서 품목중하나 , s : 모든 재고 중 for문을 통해 랜덤으로 꺼내온 재고 , shipDate : 문서의 출고 예정일 
@@ -139,6 +139,7 @@ public class AllocationPlanService {
         return true; 
     }
 
+    // pickingListService에서 호출
     // 재고 1행이 이 품목 줄에 출고 가능한지 검사
     // 다른 상품 400 / 사용 안 하는 칸 409 / 소비기한 없음 409 / 잔여일 부족 409
     // FEFO 순서(더 빠른 소비기한이 있는데 늦은 걸 골랐는지)는 검사하지 않음 → 사용자 수정 허용

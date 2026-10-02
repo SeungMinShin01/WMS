@@ -2,6 +2,7 @@ package com.wms.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,8 @@ import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.StockRepository;
 import jakarta.persistence.EntityNotFoundException;
 import com.wms.model.entity.DocumentType;
+
+
 @Service
 @Transactional
 public class OutboundService {
@@ -43,12 +46,22 @@ public class OutboundService {
 
     // ED-12 출고 문서 목록 조회
     public List<OutboundListDto> getOutboundList() {
-        List<DocumentEntity> documentEntities = documentRepository
-                .findByTypeOrderByExpectedAtAsc(DocumentType.OUTBOUND);
-        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {
-            return OutboundListDto.from(entity);
-        }).toList();
-        return documentDtos;
+        // 문서 전체를 가져와서 출고 문서만 골라 담는다
+        List<DocumentEntity> documentEntities = new ArrayList<>(); // 출고문서를 담을 빈배열
+        for (DocumentEntity documentEntity : documentRepository.findAll()) { // 문서를 하나씩 꺼냄
+            if (documentEntity.getType() == DocumentType.OUTBOUND) { // Type이 outbound인지 확인
+                documentEntities.add(documentEntity); // outbound면 리스트에 추가
+            }
+        }
+
+        // 출고 예정일 빠른 순으로 정렬 (a 의 예정일이 더 이르면 음수 → a 가 앞)
+        // .sort( 비교 규칙 ) : 새 리스트 생성이 아닌 리스트 안에 순서를 변경
+        documentEntities.sort((a, b) -> a.getExpectedAt().compareTo(b.getExpectedAt())); // 출고 예정일 빠른 순으로 정렬됨
+
+        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> { // 문서를 한개씩 entity에 넣어서 
+            return OutboundListDto.from(entity); // entity->dto로 변환
+        }).toList(); // 변환된 dto들을 리스트로 생성
+        return documentDtos; 
     }
 
     // ED-17 출고 문서 상세 조회
