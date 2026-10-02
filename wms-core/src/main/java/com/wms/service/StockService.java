@@ -38,6 +38,7 @@ public class StockService {
      public List<StockDto> stockFindAll() {
         List<StockEntity> stockEntities = stockRepository.findAll();
         // FEFO정렬: 유통기한 오름차순 -> 유통기한없는 lot는 맨 뒤로 -> 같으면 stockId순으로 
+        // comparing의 기본은 오름차순, 날짜가 빠르면 앞 / null값은 맨 뒤로
         stockEntities.sort(
             Comparator.comparing((StockEntity s)->s.getLotEntity().getExpiryDate(),
             Comparator.nullsLast(Comparator.naturalOrder()))
@@ -52,6 +53,7 @@ public class StockService {
     public StockEntity increase(LotEntity lotEntity, LocationEntity locationEntity, int qty) {
         List<StockEntity> stockEntities = stockRepository.findAll();
         for (StockEntity s : stockEntities) {
+            // 같은 LOT이면서 같은 칸 재고 줄 찾기
             if (s.getLotEntity().getLotId().equals(lotEntity.getLotId())
                     && s.getLocationEntity().getLocationId().equals(locationEntity.getLocationId())) {
                 s.setQty(s.getQty() + qty);   // 있으면 수량 +
@@ -67,7 +69,7 @@ public class StockService {
         return stockRepository.save(newStock);
     }
 
-    // 칸 하나의 현재 상태 (적재하려는 LOT 기준)
+    // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유:  결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
     private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount) {}
 
     // 칸 하나 조사
@@ -77,6 +79,7 @@ public class StockService {
         boolean hasSameProductOtherLot = false;
         Set<Integer> otherProducts = new HashSet<>();
         for(StockEntity s : stocks){
+            // 다른 칸 재고, 
             if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0) continue;
             total += s.getQty();
             Integer productId = s.getLotEntity().getProductEntity().getProductId();
@@ -104,14 +107,15 @@ public class StockService {
     public List<LocationRecommendDto> recommend(LotEntity lot, int qty, boolean mixLot){
         List<StockEntity> stocks = stockRepository.findAll();
         List<LocationEntity> locations = locationRepository.findAll();
+        // 추천칸 빈 리스트
         List<LocationRecommendDto> candidates = new ArrayList<>();
 
         for(LocationEntity loc : locations){
-            if(!loc.getIsActive()) continue;    // 미사용 칸
+            if(!loc.getIsActive()) continue;    // 미사용 칸 -> 탈락
             LocationCheck c = check(loc, lot, stocks);
             int free = freeQty(loc, c.total());
-            if(free <= 0) continue;             // 꽉 찬 칸
-            if(policyViolation(c, mixLot) != null) continue;    // 정책 위반 칸
+            if(free <= 0) continue;             // 꽉 찬 칸 -> 탈락
+            if(policyViolation(c, mixLot) != null) continue;    // 정책 위반 칸 -> 탈락
 
             int priority;
             String reason;
@@ -120,6 +124,7 @@ public class StockService {
             else if(c.total() > 0)              {priority = 3; reason = "다른 품목 잔량 칸";}
             else                                {priority = 4; reason = "빈 칸";}
 
+            // 추천칸 담기
             candidates.add(LocationRecommendDto.builder()
                         .locationId(loc.getLocationId())
                         .locationCode(loc.getLocationCode())
@@ -131,16 +136,23 @@ public class StockService {
                         .build());
         }
 
+        // 추천칸 정렬
         candidates.sort(Comparator
-            .comparing(LocationRecommendDto::getPriority)                               // 1->2->3
-            .thenComparing(LocationRecommendDto::getFits, Comparator.reverseOrder())    // 전량 들어가는 칸 먼저
+            .comparing(LocationRecommendDto::getPriority)                               // 1->2->3 , 순위 숫자 작은 게 앞
+            .thenComparing(LocationRecommendDto::getFits, Comparator.reverseOrder())    // 같은 순위에서도 A-01-01 A-01-02 A-01-03
             .thenComparingInt(d -> {
-                int f = d.getFreeQty() == null ? Integer.MAX_VALUE : d.getFreeQty();
-                return d.getFits() ? f : -f;    // 전량 칸: 여유 작은 순(Best Fit) / 부족 칸: 여유 큰 순
+                int f = d.getFreeQty() == null ? Integer.MAX_VALUE : d.getFreeQty();    // 길이 제한이 없는 칸은 여유 NULL로 판단 , 들어가는 칸 중 제일 마지막
+                return d.getFits() ? f : -f;    
+                /*
+                    EX) 20개 적재 할래  -> A:22개 적재 가능 B: 40개 적재 가능 C: 100개 적재 가능 D: 15개 적재 가능 E: 5개 적재 가능
+                    이라고 했을때 가장 딱 맞게들어가는 순으로 A -> B -> C -> D -> E 순으로 추천 정렬
+                    왜? 자바 정렬은 숫자가 작은게 무조건 앞 그래서
+                    2 -> 20 -> 80 -> -15 -> -5
+                */
             })
             .thenComparing(LocationRecommendDto::getLocationCode)   // 같으면 칸 코드 순
         );
-        return candidates.size() > 5 ? candidates.subList(0, 5) : candidates; 
+        return candidates.size() > 5 ? candidates.subList(0, 5) : candidates;   // 후보 5개만 자르기
     }
 
     // 입출고 이력 - 재고를 바꾼 detail만, 최신순 + 변경 후 수량 계산

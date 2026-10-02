@@ -73,11 +73,13 @@ public class InboundService {
             int itemCount = 0;
             int totalQty = 0;
             for (DocumentItemEntity item : allItems) {
+                // 품목이 문서에 포함되어있는지 확인, 포함되어있으면  품목수+1 , 예정수량 더하기
                 if (item.getDocumentEntity().getDocumentId().equals(documentEntity.getDocumentId())) {
                     itemCount++;
                     totalQty += item.getExpectedQty();
                 }
             }
+            // 
             inboundListDtos.add(InboundListDto.from(documentEntity, itemCount, totalQty));
         });
         return inboundListDtos;
@@ -85,7 +87,7 @@ public class InboundService {
 
     // ED-13 입고 문서 상세 조회
     public InboundDetailDto detailFind(Integer documentId) {
-        // 문서 하나 조회
+        // id로 문서 하나 조회, 없으면 예외처리
         DocumentEntity documentEntity = documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("입고 문서가 없습니다."));
         InboundDetailDto inboundDetailDto = InboundDetailDto.from(documentEntity);
@@ -101,15 +103,38 @@ public class InboundService {
         return inboundDetailDto;
     }
 
+    // 문서의 모든 품목 줄에 검수 기록이 있는가 why? 문서 하나에 모든 품목이 검수가 다 완료되어야 상태를 검수 완료로 넘겨야하기때문
+    private boolean allItemsInspected(Integer documentId) {
+        // 검수 기록 가져오기
+        List<DocumentItemDetailEntity> details = documentItemDetailRepository.findAll();
+        // 품목 하나씩 보기
+        for (DocumentItemEntity item : documentItemRepository.findAll()) {
+            if (!item.getDocumentEntity().getDocumentId().equals(documentId))
+                continue;
+            boolean inspected = false;
+            for (DocumentItemDetailEntity d : details) {
+                if (d.getDocumentItemEntity().getDocumentItemId().equals(item.getDocumentItemId())) {
+                    inspected = true;
+                    break;
+                }
+            }
+            if (!inspected)
+                return false;
+        }
+        return true;
+    }
+
     // ED-14 검수 결과 1건 등록
     public Integer inspectionSave(InspectionDto inspectionDto) {
         // 수량 검사, 0-음수-빈값 보냄x
         if (inspectionDto.getQty() == null || inspectionDto.getQty() <= 0)
             throw new IllegalArgumentException("검수 수량은 1 이상이어야 합니다.");
+
+        // 품목id로 품목가져오기, 없으면 예외처리
         DocumentItemEntity documentItemEntity = documentItemRepository.findById(inspectionDto.getDocumentItemId())
                 .orElseThrow(() -> new EntityNotFoundException("문서 품목이 없습니다."));
 
-        // 품목이 속한 문서가 입고인지 확인
+        // 품목이 속한 문서가 입고인지 확인, 아니면 예외처리
         if (documentItemEntity.getDocumentEntity().getType() != DocumentType.INBOUND)
             throw new IllegalArgumentException("입고 문서의 품목이 아닙니다.");
 
@@ -126,7 +151,8 @@ public class InboundService {
             if(remainingDays < minShipDays) 
                 throw new IllegalStateException("소비기한 부족으로 입고할 수 없습니다.");
         }
-
+        
+        // DTO를 ENTITY
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
 
@@ -138,7 +164,9 @@ public class InboundService {
 
     // ED-15 검수 결과 조회
     public List<InspectionResultDto> inspectionFindAll(Integer documentId) {
+        // 검수 기록 모두 조회
         List<DocumentItemDetailEntity> detailEntities = documentItemDetailRepository.findAll();
+        // 검수 기록 -> 문서 품목 -> 문서까지 가서 ID 비교
         List<InspectionResultDto> inspectionResultDtos = new ArrayList<>();
         detailEntities.forEach((detailEntity) -> {
             if (detailEntity.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
@@ -146,6 +174,16 @@ public class InboundService {
             }
         });
         return inspectionResultDtos;
+    }
+
+    // 문서의 모든 검수 기록이 적재됐는가 why? 문서 하나의 모든 품목이 검수 완료 기록이 있어야 적치로 넘어가게해놨기때문
+    private boolean allDetailsCarried(Integer documentId) {
+        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) {
+            if (d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)
+                    && d.getLocationEntity() == null)
+                return false;
+        }
+        return true;
     }
 
     // ED-16 적재 1건
@@ -184,40 +222,11 @@ public class InboundService {
         return true;
     }
 
-    // 문서의 모든 품목 줄에 검수 기록이 있는가
-    private boolean allItemsInspected(Integer documentId) {
-        List<DocumentItemDetailEntity> details = documentItemDetailRepository.findAll();
-        for (DocumentItemEntity item : documentItemRepository.findAll()) {
-            if (!item.getDocumentEntity().getDocumentId().equals(documentId))
-                continue;
-            boolean inspected = false;
-            for (DocumentItemDetailEntity d : details) {
-                if (d.getDocumentItemEntity().getDocumentItemId().equals(item.getDocumentItemId())) {
-                    inspected = true;
-                    break;
-                }
-            }
-            if (!inspected)
-                return false;
-        }
-        return true;
-    }
-
-    // 문서의 모든 검수 기록이 적재됐는가
-    private boolean allDetailsCarried(Integer documentId) {
-        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) {
-            if (d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)
-                    && d.getLocationEntity() == null)
-                return false;
-        }
-        return true;
-    }
-
     // 적치 추천 (검수 기록 1건 기준) — 없는 검수 기록이면 404
     public List<LocationRecommendDto> recommend(Integer detailId, boolean mixLot) {
         DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
                 .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
-        // LOT , 수량꺼내서 재고 쪽으로 넘기기
+        // LOT , 수량꺼내서 재고 쪽으로 넘기기, 코드분리 이유: 재고를 보고 판단하는 일이기때문
         return stockService.recommend(detail.getLotEntity(), detail.getQty(), mixLot);
     }
 
@@ -228,6 +237,7 @@ public class InboundService {
             if (loc.getIsActive())
                 list.add(LocationOptionDto.from(loc));
         });
+        // list.sort(규칙) -> Comparator.comparing(기준) -> 위치 목록을 코드 가나다 순으로 정렬 / 사전 순 비교
         list.sort(Comparator.comparing(LocationOptionDto::getLocationCode));
         return list;
     }

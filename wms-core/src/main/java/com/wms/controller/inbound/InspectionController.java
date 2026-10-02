@@ -42,8 +42,8 @@ public class InspectionController {
 
     // 적재 1건 ED - 16
     @PutMapping("")
-    public boolean carry(@RequestBody CarryingDto carryingDto) {
-        return inboundService.carry(carryingDto);
+    public ResponseEntity<Boolean> carry(@RequestBody CarryingDto carryingDto) {
+        return ResponseEntity.ok(inboundService.carry(carryingDto));
     }
 
     // 적치 추천 (검수 기록 1건 기준) — mixLot=true면 혼용적재 모드
