@@ -28,6 +28,7 @@ public class PartnerDto {
 // 1. DTO -> ENTITY
     public PartnerEntity toEntity(){
         return PartnerEntity.builder()
+                                .partnerId(this.partnerId)
                                 .partnerCode( this.partnerCode )
                                 .partnerName( this.partnerName )
                                 .partnerType( this.partnerType )
