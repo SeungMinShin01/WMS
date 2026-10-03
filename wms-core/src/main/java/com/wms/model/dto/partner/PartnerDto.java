@@ -14,7 +14,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-@Getter @Setter @ToString @Builder @NoArgsConstructor @AllArgsConstructor 
+@Getter
+@Setter
+@ToString
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PartnerDto {
     private Integer partnerId;
     private String partnerCode;
@@ -25,32 +30,29 @@ public class PartnerDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-// 1. DTO -> ENTITY
-    public PartnerEntity toEntity(){
+    // 1. DTO -> ENTITY
+    public PartnerEntity toEntity() {
         return PartnerEntity.builder()
-                                .partnerId(this.partnerId)
-                                .partnerCode( this.partnerCode )
-                                .partnerName( this.partnerName )
-                                .partnerType( this.partnerType )
-                                .contact( this.contact )
-                                .address( this.address )
-                                .build();
+                .partnerCode(this.partnerCode)
+                .partnerName(this.partnerName)
+                .partnerType(this.partnerType)
+                .contact(this.contact)
+                .address(this.address)
+                .build();
     }
-    
 
-// 2. ENTITY -> DTO
-    public static PartnerDto from( PartnerEntity entity ){
+    // 2. ENTITY -> DTO
+    public static PartnerDto from(PartnerEntity entity) {
         return PartnerDto.builder()
-                                    .partnerId( entity.getPartnerId() )
-                                    .partnerCode( entity.getPartnerCode() )
-                                    .partnerName( entity.getPartnerName() )
-                                    .partnerType( entity.getPartnerType() )
-                                    .contact( entity.getContact() )
-                                    .address( entity.getAddress() )
-                                    .createdAt( entity.getCreatedAt() )
-                                    .updatedAt( entity.getUpdatedAt() )
-                                    .build();
+                .partnerId(entity.getPartnerId())
+                .partnerCode(entity.getPartnerCode())
+                .partnerName(entity.getPartnerName())
+                .partnerType(entity.getPartnerType())
+                .contact(entity.getContact())
+                .address(entity.getAddress())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
     }
-    
-}
 
+}
