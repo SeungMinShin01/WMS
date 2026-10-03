@@ -215,7 +215,6 @@ INSERT INTO document_item_detail (detail_id, document_item_id, lot_id, location_
 -- 문서9 할당 완료 ★
 (19, 19, 3,  3,    3,    40, NULL),
 (20, 20, 5,  4,    6,    20, NULL),
-
 -- 8. 처리 결과 맨 아래에 추가 — 문서7(취소) 센트룸 검수만 됨, 적치 전  ★적재 409 테스트
 (21, 16, 6,  NULL, NULL, 10, NULL);
  

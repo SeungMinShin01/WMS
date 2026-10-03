@@ -46,4 +46,6 @@ public class DocumentItemDetailEntity extends BaseTime {
     private StockEntity stockEntity;
 
     private Integer qty;
+
+    private String remark;  // 작업자 비고
 }

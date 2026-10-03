@@ -26,4 +26,5 @@ public class PartnerEntity extends BaseTime {
     private String partnerName;
     private String partnerType; // SUPPLIER / CUSTOMER
     private String contact;
+    private String address; // 추가
 }
