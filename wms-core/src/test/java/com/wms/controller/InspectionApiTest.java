@@ -141,7 +141,7 @@ public class InspectionApiTest {
                         mockMvc.perform(put("/wms/inspections")
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("{\"detailId\": 15, \"locationId\": 10}"))
-                                        .andExpect(status().isBadRequest());
+                                        .andExpect(status().isConflict());
                 }
 
                 @Test
