@@ -16,16 +16,16 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- 아래부터 INSERT ...
 
 -- 1. 품목
-INSERT INTO product (product_code, product_name, spec, unit, min_ship_days) VALUES
-('SKU-1001', '매운맛 봉지라면', '120g*40', 'BOX', 30),   -- 1
-('SKU-1002', '해물맛 컵라면',   '65g*24',  'BOX', 30),   -- 2
-('SKU-1003', '통밀 크래커',     '200g*12', 'BOX', 30);   -- 3
+INSERT INTO product (tenant_id, product_code, product_name, spec, unit, min_ship_days) VALUES
+(1, 'SKU-1001', '매운맛 봉지라면', '120g*40', 'BOX', 30),   -- 1
+(1, 'SKU-1002', '해물맛 컵라면',   '65g*24',  'BOX', 30),   -- 2
+(1, 'SKU-1003', '통밀 크래커',     '200g*12', 'BOX', 30);   -- 3
 
 -- 2. 거래처
-INSERT INTO partner (partner_code, partner_name, partner_type, contact) VALUES
-('PT-001', '한빛식품',        'SUPPLIER', '031-456-1001'),   -- 1
-('PT-002', '다온제과',        'SUPPLIER', '031-456-1002'),   -- 2
-('PT-006', '중앙마트 강남점', 'CUSTOMER', '02-555-6006');    -- 3
+INSERT INTO partner (tenant_id, partner_code, partner_name, partner_type, contact) VALUES
+(1, 'PT-001', '한빛식품',        'SUPPLIER', '031-456-1001'),   -- 1
+(1, 'PT-002', '다온제과',        'SUPPLIER', '031-456-1002'),   -- 2
+(1, 'PT-006', '중앙마트 강남점', 'CUSTOMER', '02-555-6006');    -- 3
 
 -- 3. 공급사가 알려 준 LOT
 INSERT INTO lot (product_id, lot_code, expiry_date) VALUES
@@ -36,12 +36,11 @@ INSERT INTO lot (product_id, lot_code, expiry_date) VALUES
 
 -- 4. 문서 3건 (입고 2, 출고 1)
 --    오후 문서를 먼저 넣음 → 목록이 예정일 순으로 나오는지 확인용
-INSERT INTO document (document_no, type, partner_id, expected_at) VALUES
-('IN-20261001-002',  'INBOUND',  2, '2026-10-01 14:00:00'),   -- 1: 다온제과 (오후)
-('IN-20261001-001',  'INBOUND',  1, '2026-10-01 09:00:00'),   -- 2: 한빛식품 (오전)
-('OUT-20261008-001', 'OUTBOUND', 3, '2026-10-08 10:00:00'),   -- 3: 중앙마트 (출고)
-('OUT-20261007-001', 'OUTBOUND', 3, '2026-10-07 15:00');
-
+INSERT INTO document (tenant_id, document_no, type, partner_id, expected_at) VALUES
+(1, 'IN-20261001-002',  'INBOUND',  2, '2026-10-01 14:00:00'),   -- 1: 다온제과 (오후)
+(1, 'IN-20261001-001',  'INBOUND',  1, '2026-10-01 09:00:00'),   -- 2: 한빛식품 (오전)
+(1, 'OUT-20261008-001', 'OUTBOUND', 3, '2026-10-08 10:00:00'),   -- 3: 중앙마트 (출고)
+(1, 'OUT-20261007-001', 'OUTBOUND', 3, '2026-10-07 15:00');
 -- 5. 요청 줄 (입고는 LOT 있음, 출고는 NULL)
 INSERT INTO document_item (document_id, product_id, lot_id, expected_qty) VALUES
 (1, 3, 4,    60),   -- 1: 문서1 크래커 60
@@ -63,8 +62,8 @@ INSERT INTO location (location_code, capacity, is_active) VALUES
 -- 7. 문서1(크래커 60)은 검수·적재까지 끝난 상태로 둔다
 --    → 입고-6 재고 조회, 출고-3 할당을 입고 흐름 없이도 테스트할 수 있게
 --    재고: 크래커 LOT(4)이 A-01-01(1번 칸)에 60개
-INSERT INTO stock (lot_id, location_id, qty, allocated_qty) VALUES
-(4, 1, 60, 0);   -- 1
+INSERT INTO stock (tenant_id, lot_id, location_id, qty, allocated_qty) VALUES
+(1, 4, 1, 60, 0);   -- 1
 
 --    검수·적재 결과: 문서1 요청 줄(1) → LOT 4, 칸 1, 재고 1, 60개
 INSERT INTO document_item_detail (document_item_id, lot_id, location_id, stock_id, qty, status) VALUES
