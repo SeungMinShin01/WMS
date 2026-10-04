@@ -29,9 +29,20 @@ public class DocumentEntity extends BaseTime {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer documentId;
 
+    // 화주 (V4)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private TenantEntity tenantEntity;
+
     private String documentNo; // IN-20261001-001
     @Enumerated(EnumType.STRING)
     private DocumentType type;
+
+    // 들어온 경로 (V4). 기본 WMS, Portal 연동 시 PORTAL
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private DocumentSource source = DocumentSource.WMS;
 
     @JoinColumn(name = "partner_id")
     @ManyToOne(fetch = FetchType.LAZY)
