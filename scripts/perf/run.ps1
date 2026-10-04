@@ -1,8 +1,12 @@
-# Consistency test, one run: reset -> (ship prep) -> k6 -> DB check
+# Consistency test, one run: reset -> (ship prep) -> pre snapshot -> k6 -> post snapshot
 # Usage (from WMS folder):
 #   powershell -ExecutionPolicy Bypass -File scripts/perf/run.ps1 -S alloc -Run 1
 # Other DB / sample:
 #   ... -S alloc -Run 1 -Database wms_db -Sample wms-core/src/main/resources/db/sample/sample2.sql
+# Output (scripts/perf/result):
+#   {S}-{Run}.json        k6 response summary
+#   {S}-{Run}-pre-db.txt  DB state before k6
+#   {S}-{Run}-db.txt      DB state after k6
 param(
   [Parameter(Mandatory = $true)][ValidateSet('alloc', 'carry', 'ship')][string]$S,
   [Parameter(Mandatory = $true)][int]$Run,
@@ -17,6 +21,7 @@ if (-not (Test-Path $out)) { New-Item -ItemType Directory -Path $out | Out-Null 
 if ($Sample -eq '') {
   $Sample = Join-Path $perf '..\..\..\WMS-before\wms-core\src\main\resources\db\sample\sample2.sql'
 }
+$checkSql = Join-Path $perf "check_$S.sql"
 
 Write-Host "== [$S #$Run] DB=$Database VUS=$Vus"
 
@@ -29,10 +34,17 @@ if ($S -eq 'ship') {
   docker exec -e MYSQL_PWD=1234 wms-db-1 mysql -uroot $Database -e "UPDATE document SET status='PICKING' WHERE document_id=9"
 }
 
-# 3. k6 concurrent requests
+# 3. pre snapshot (DB state right before k6)
+$pre = Get-Content $checkSql -Raw | docker exec -i -e MYSQL_PWD=1234 wms-db-1 mysql -uroot -t $Database
+$pre | Out-File -Encoding utf8 (Join-Path $out "$S-$Run-pre-db.txt")
+Write-Host "-- before"
+$pre
+
+# 4. k6 concurrent requests
 docker run --rm -i -v "${perf}:/scripts" -e S=$S -e RUN=$Run -e VUS=$Vus -e BASE=http://host.docker.internal:8080 -e OUT=/scripts/result grafana/k6 run --quiet /scripts/consistency.js
 
-# 4. DB check -> screen + file
-$result = Get-Content (Join-Path $perf "check_$S.sql") -Raw | docker exec -i -e MYSQL_PWD=1234 wms-db-1 mysql -uroot -t $Database
-$result | Out-File -Encoding utf8 (Join-Path $out "$S-$Run-db.txt")
-$result
+# 5. post snapshot (DB state after k6)
+$post = Get-Content $checkSql -Raw | docker exec -i -e MYSQL_PWD=1234 wms-db-1 mysql -uroot -t $Database
+$post | Out-File -Encoding utf8 (Join-Path $out "$S-$Run-db.txt")
+Write-Host "-- after"
+$post

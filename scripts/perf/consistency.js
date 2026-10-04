@@ -6,7 +6,8 @@
 //   ok       : 2xx  성공
 //   rejected : 409  서버 규칙이 막음 (정상이면 VUS-1 건)
 //   bad      : 409 외 4xx  요청 자체가 틀림 → 0 이 아니면 스크립트부터 고칠 것
-//   failed   : 5xx  서버 에러 (DB CHECK 위반 등)
+//   failed   : 5xx  서버 에러 (DB CHECK 위반, 데드락 등)
+//   neterr   : status 0  연결 실패·타임아웃 → 0 이 아니면 그 회차는 다시 측정
 import http from "k6/http";
 import { Counter } from "k6/metrics";
 
@@ -22,6 +23,7 @@ const ok = new Counter("ok_2xx");
 const rejected = new Counter("rejected_409");
 const bad = new Counter("bad_4xx");
 const failed = new Counter("failed_5xx");
+const neterr = new Counter("neterr_0");
 
 // ---------- 실행 방식: VU 마다 딱 1번, 거의 동시에 ----------
 export const options = {
@@ -69,7 +71,9 @@ function call() {
 // ---------- VU 한 명이 하는 일: 요청 1번 → 응답 코드 분류 ----------
 export default function () {
   const res = call();
-  if (res.status < 300) ok.add(1);
+  if (res.status === 0)
+    neterr.add(1); // 연결 실패 (응답 없음)
+  else if (res.status < 300) ok.add(1);
   else if (res.status === 409) rejected.add(1);
   else if (res.status < 500) bad.add(1);
   else failed.add(1);
@@ -86,6 +90,7 @@ export function handleSummary(data) {
     rejected: count("rejected_409"),
     bad: count("bad_4xx"),
     failed: count("failed_5xx"),
+    neterr: count("neterr_0"),
     p95_ms: Math.round(data.metrics.http_req_duration.values["p(95)"]),
     at: new Date().toISOString(),
   };
