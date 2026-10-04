@@ -186,37 +186,37 @@ INSERT INTO stock (stock_id, lot_id, location_id, qty, allocated_qty, created_at
 -- 8. 처리 결과 20 (검수·적치·할당·출고)
 --    입고: location/stock NULL = 검수만 됨(적치 전)
 -- ------------------------------------------------------------
-INSERT INTO document_item_detail (detail_id, document_item_id, lot_id, location_id, stock_id, qty, remark) VALUES
+INSERT INTO document_item_detail (detail_id, document_item_id, lot_id, location_id, stock_id, qty, status, remark) VALUES
 -- 문서1 입고 완료 (신라면 두 칸, 참치 두 칸)
-(1,  1,  1,  1,    1,    60, NULL),
-(2,  1,  1,  2,    2,    40, NULL),
-(3,  2,  3,  3,    3,    60, NULL),
-(4,  3,  10, 8,    4,    20, NULL),
-(5,  3,  10, 11,   13,   20, 'B-01-01 자리 부족으로 분할'),
+(1,  1,  1,  1,    1,    60, 'STORED', NULL),
+(2,  1,  1,  2,    2,    40, 'STORED', NULL),
+(3,  2,  3,  3,    3,    60, 'STORED', NULL),
+(4,  3,  10, 8,    4,    20, 'STORED', NULL),
+(5,  3,  10, 11,   13,   20, 'STORED', 'B-01-01 자리 부족으로 분할'),
 -- 문서2 입고 완료 (초코파이 두 칸)
-(6,  4,  4,  4,    5,    50, NULL),
-(7,  4,  4,  11,   11,   30, NULL),
-(8,  5,  5,  4,    6,    50, NULL),
-(9,  6,  8,  5,    7,    30, NULL),
+(6,  4,  4,  4,    5,    50, 'STORED', NULL),
+(7,  4,  4,  11,   11,   30, 'STORED', NULL),
+(8,  5,  5,  4,    6,    50, 'STORED', NULL),
+(9,  6,  8,  5,    7,    30, 'STORED', NULL),
 -- 문서3 입고 완료
-(10, 7,  6,  9,    8,    20, NULL),
-(11, 8,  7,  9,    9,    20, NULL),
+(10, 7,  6,  9,    8,    20, 'STORED', NULL),
+(11, 8,  7,  9,    9,    20, 'STORED', NULL),
 -- 문서13 입고 완료
-(12, 26, 11, 7,    10,   70, NULL),
-(13, 27, 12, 7,    12,   50, NULL),
+(12, 26, 11, 7,    10,   70, 'STORED', NULL),
+(13, 27, 12, 7,    12,   50, 'STORED', NULL),
 -- 문서4 검수 완료, 적치 전 ★
-(14, 9,  2,  NULL, NULL, 80, NULL),
-(15, 10, 9,  NULL, NULL, 60, NULL),
+(14, 9,  2,  NULL, NULL, 80, 'INSPECTED', NULL),
+(15, 10, 9,  NULL, NULL, 60, 'INSPECTED', NULL),
 -- 문서5 부분 검수 (11번 품목만) ★
-(16, 11, 4,  NULL, NULL, 40, '박스 1개 찍힘, 수량 이상 없음'),
+(16, 11, 4,  NULL, NULL, 40, 'INSPECTED', '박스 1개 찍힘, 수량 이상 없음'),
 -- 문서8 출고 완료
-(17, 17, 1,  1,    1,    30, NULL),
-(18, 18, 4,  4,    5,    20, NULL),
+(17, 17, 1,  1,    1,    30, 'SHIPPED', NULL),
+(18, 18, 4,  4,    5,    20, 'SHIPPED', NULL),
 -- 문서9 할당 완료 ★
-(19, 19, 3,  3,    3,    40, NULL),
-(20, 20, 5,  4,    6,    20, NULL),
+(19, 19, 3,  3,    3,    40, 'ALLOCATED', NULL),
+(20, 20, 5,  4,    6,    20, 'ALLOCATED', NULL),
 -- 8. 처리 결과 맨 아래에 추가 — 문서7(취소) 센트룸 검수만 됨, 적치 전  ★적재 409 테스트
-(21, 16, 6,  NULL, NULL, 10, NULL);
+(21, 16, 6,  NULL, NULL, 10, 'INSPECTED', NULL);
  
 -- ============================================================
 -- 검증 시나리오 (API 호출 → 기대 결과)

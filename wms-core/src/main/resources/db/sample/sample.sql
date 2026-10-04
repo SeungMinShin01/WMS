@@ -67,6 +67,6 @@ INSERT INTO stock (lot_id, location_id, qty, allocated_qty) VALUES
 (4, 1, 60, 0);   -- 1
 
 --    검수·적재 결과: 문서1 요청 줄(1) → LOT 4, 칸 1, 재고 1, 60개
-INSERT INTO document_item_detail (document_item_id, lot_id, location_id, stock_id, qty) VALUES
-(1, 4, 1, 1, 60);   -- 1
+INSERT INTO document_item_detail (document_item_id, lot_id, location_id, stock_id, qty, status) VALUES
+(1, 4, 1, 1, 60, 'STORED');   -- 1 
 
