@@ -1,26 +1,27 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 
 // 피킹리스트 — 담당: 김지환
-// 흐름 : 줄마다 [집음] → 전 줄 집음 → 출고확정
+// 흐름 : 문서 선택 → 줄마다 [집음] → 전 줄 집음 → 출고확정
+// 전 품목이 할당된 문서만 집을 수 있다 (ED-52 결정)
 export default function PickingPage(props) {
-  // 주소창 ?documentId=66 값 읽기
-  const [searchParams] = useSearchParams();
-  const documentId = searchParams.get("documentId");
+  // 주소의 documentId (/outbounds/picking/66) — 목록 주소(/outbounds/picking)면 undefined
+  const { documentId } = useParams();
   const navigate = useNavigate();
 
-  const [detail, setDetail] = useState(null);     // 출고 문서 정보
+  const [orders, setOrders] = useState([]);       // 피킹할 수 있는 문서 목록 (할당 · 피킹중)
+  const [detail, setDetail] = useState(null);     // 선택한 출고 문서 정보
   const [pickings, setPickings] = useState([]);   // 피킹 줄 목록
   const [loading, setLoading] = useState(false);  // 요청 중이면 true → 버튼 잠금
 
-  // 문서 상태 한글
+  // 문서 상태 한글 (AllocationPage 와 같은 이름)
   const 문서상태 = (status) => {
-    if (status === "WAITING") return "접수";
-    if (status === "ALLOCATED") return "할당";
-    if (status === "PICKING") return "피킹중";
+    if (status === "WAITING") return "출고예정";
+    if (status === "ALLOCATED") return "출고할당";
+    if (status === "PICKING") return "재고피킹";
     if (status === "SHIPPED") return "출고완료";
     if (status === "CANCELED") return "취소";
     return status;
@@ -43,9 +44,26 @@ export default function PickingPage(props) {
     }
   };
 
-  // ED-17 문서 정보
+  // ED-12 출고 목록 중 할당 · 피킹중 문서만
+  const getOrders = async () => {
+    try {
+      const response = await axios.get("/wms/outbounds");
+      let result = [];
+      for (let i = 0; i < response.data.length; i++) {
+        const status = response.data[i].status;
+        if (status === "ALLOCATED" || status === "PICKING") {
+          result.push(response.data[i]);
+        }
+      }
+      setOrders(result);
+    } catch (error) {
+      에러알림(error);
+    }
+  };
+
+  // ED-17 문서 정보 (품목마다 주문수량 expectedQty · 할당수량 allocatedQty 포함)
   const getDetail = async () => {
-    if (documentId === null) return;
+    if (!documentId) return;
     try {
       const response = await axios.get("/wms/outbounds/" + documentId);
       setDetail(response.data);
@@ -56,7 +74,7 @@ export default function PickingPage(props) {
 
   // ED-19 피킹리스트
   const getPickings = async () => {
-    if (documentId === null) return;
+    if (!documentId) return;
     try {
       const response = await axios.get("/wms/allocations/" + documentId);
       setPickings(response.data); // [{detailId, locationCode, productCode, productName, lotCode, qty, status}]
@@ -65,11 +83,42 @@ export default function PickingPage(props) {
     }
   };
 
-  // 주소의 documentId 가 바뀔 때마다 다시 조회
+  // 주소의 documentId 가 바뀔 때마다 : 없으면 문서 목록, 있으면 그 문서의 정보 + 피킹리스트
   useEffect(() => {
-    getDetail();
-    getPickings();
+    if (!documentId) {
+      setDetail(null);
+      setPickings([]);
+      getOrders();
+    } else {
+      getDetail();
+      getPickings();
+    }
   }, [documentId]);
+
+  // [추가] 전 품목 할당 여부 : 품목마다 할당수량이 주문수량보다 적으면 아직 덜 할당된 것
+  let 덜할당품목 = [];
+  if (detail !== null) {
+    for (let i = 0; i < detail.items.length; i++) {
+      if (detail.items[i].allocatedQty < detail.items[i].expectedQty) {
+        덜할당품목.push(detail.items[i].productName);
+      }
+    }
+  }
+  const 전품목할당 = detail !== null && 덜할당품목.length === 0;
+
+  // 안 집은 줄 개수 (출고확정 안내에 씀)
+  let 남은줄 = 0;
+  for (let i = 0; i < pickings.length; i++) {
+    if (pickings[i].status !== "PICKED") {
+      남은줄++;
+    }
+  }
+
+  // 집을 수 있는 문서인지 : 출고할당 또는 재고피킹 + [추가] 전 품목 할당 완료
+  const 집기가능 =
+    detail !== null &&
+    (detail.status === "ALLOCATED" || detail.status === "PICKING") &&
+    전품목할당;
 
   // 줄 1개 집음 (ED-52 피킹 확인)
   const 집음 = async (detailId) => {
@@ -77,7 +126,7 @@ export default function PickingPage(props) {
       setLoading(true);
       await axios.put("/wms/pickings/" + detailId);
       getPickings();  // 줄 상태 새로고침
-      getDetail();    // 처음 집으면 문서가 피킹중으로 바뀌니까 문서도 새로고침
+      getDetail();    // 처음 집으면 문서가 재고피킹으로 바뀌니까 문서도 새로고침
     } catch (error) {
       에러알림(error);
     } finally {
@@ -104,7 +153,21 @@ export default function PickingPage(props) {
   };
 
   // 출고확정 (ED-20)
+  // [추가] 버튼은 항상 누를 수 있고, 아직 안 되는 상태면 이유를 알려줌
   const 출고확정 = async () => {
+    if (detail === null) return;
+    if (detail.status === "SHIPPED") {
+      alert("이미 출고완료된 문서입니다");
+      return;
+    }
+    if (!전품목할당) {
+      alert("할당이 끝나지 않은 품목이 있어 출고확정할 수 없습니다: " + 덜할당품목.join(", "));
+      return;
+    }
+    if (pickings.length === 0 || 남은줄 > 0) {
+      alert("모든 줄을 집어야 출고확정할 수 있습니다 (남은 줄 " + 남은줄 + "개)");
+      return;
+    }
     if (!confirm("출고확정 하시겠습니까?")) return;
     try {
       setLoading(true);
@@ -119,27 +182,46 @@ export default function PickingPage(props) {
     }
   };
 
-  // 출고확정 가능 여부 : 문서가 피킹중 + 줄이 1개 이상 + 모든 줄이 집음
-  let 전부집음 = pickings.length > 0;
-  for (let i = 0; i < pickings.length; i++) {
-    if (pickings[i].status !== "PICKED") {
-      전부집음 = false;
-    }
-  }
-  const 출고확정가능 = detail !== null && detail.status === "PICKING" && 전부집음;
-
-  // 집을 수 있는 문서인지 : 할당 또는 피킹중
-  const 집기가능 = detail !== null && (detail.status === "ALLOCATED" || detail.status === "PICKING");
-
-  if (documentId === null) {
+  // ─────────────── 문서를 아직 안 골랐을 때 : 피킹할 문서 목록 ───────────────
+  if (!documentId) {
     return (
       <>
         <PageTitle title="피킹리스트" path="홈 > 출고관리 > 피킹리스트" />
-        <p>출고 문서를 먼저 선택하세요.</p>
+        <GridTitle title="피킹할 출고 문서" desc={"총 " + orders.length + "건"} />
+        <table className="grid">
+          <thead>
+            <tr>
+              <th>주문번호</th>
+              <th>배송지명</th>
+              <th>출고요청일</th>
+              <th>상태</th>
+              <th>선택</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 && (
+              <tr>
+                <td colSpan="5">피킹할 문서가 없습니다 (출고지시에서 피킹리스트를 먼저 생성하세요)</td>
+              </tr>
+            )}
+            {orders.map((row) => (
+              <tr key={row.documentId}>
+                <td>{row.documentNo}</td>
+                <td>{row.partnerName}</td>
+                <td>{row.expectedAt ? row.expectedAt.replace("T", " ") : "-"}</td>
+                <td>{문서상태(row.status)}</td>
+                <td>
+                  <button className="btn" onClick={() => navigate(`/outbounds/picking/${row.documentId}`)}>선택</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </>
     );
   }
 
+  // ─────────────── 문서를 골랐을 때 : 출고 정보 + 피킹리스트 ───────────────
   return (
     <>
       <PageTitle title="피킹리스트" path="홈 > 출고관리 > 피킹리스트" />
@@ -170,13 +252,22 @@ export default function PickingPage(props) {
       )}
 
       <div style={{ textAlign: "right", margin: "8px 0" }}>
-        <button className="btn" onClick={() => navigate("/outbounds")}>목록</button>
+        {/* 번호 없는 주소로 가서 문서 선택 목록으로 돌아감 */}
+        <button className="btn" onClick={() => navigate("/outbounds/picking")}>목록</button>
       </div>
+
+      {/* [추가] 덜 할당된 문서 안내 */}
+      {detail && detail.status !== "SHIPPED" && !전품목할당 && (
+        <p style={{ color: "red", margin: "8px 0" }}>
+          할당이 끝나지 않은 품목이 있어 피킹을 시작할 수 없습니다 ({덜할당품목.join(", ")}).
+          출고지시에서 나머지 품목을 먼저 할당하세요.
+        </p>
+      )}
 
       {/* 피킹리스트 */}
       <GridTitle title="피킹리스트 (로케이션순)" desc={"총 " + pickings.length + "건"}>
         <button className="btn" onClick={전체집음} disabled={loading || !집기가능}>전체 집음</button>{" "}
-        <button className="btn primary" onClick={출고확정} disabled={loading || !출고확정가능}>출고확정</button>
+        <button className="btn primary" onClick={출고확정} disabled={loading}>출고확정</button>
       </GridTitle>
       <table className="grid">
         <thead>
