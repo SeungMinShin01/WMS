@@ -10,7 +10,7 @@ import AllocationPage from "./Pages/outbound/AllocationPage";
 import StockPage from "./Pages/stock/StockPage";
 import HistoryPage from "./Pages/stock/HistoryPage";
 
-// 01 /master/products  01-2 /master/partners  02 /master/locations
+
 // 03 /inbounds  04 /inbounds/inspection
 // 05 /outbounds 06 /outbounds/allocation
 // 07 /stocks    08 /stocks/history
@@ -27,6 +27,9 @@ export default function App(props) {
         <Route path="outbounds/allocation" element={<AllocationPage />} />
         <Route path="stocks" element={<StockPage />} />
         <Route path="stocks/history" element={<HistoryPage />} />
+        <Route path="master/products" element={<ProductPage />} />
+        <Route path="master/partners" element={<PartnerPage />} />
+        <Route path="master/locations" element={<LocationPage />} />
       </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
