@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wms.model.dto.outbound.OutboundCreateDto;
+import com.wms.model.dto.outbound.OutboundCreateItemDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundItemDto;
 import com.wms.model.dto.outbound.OutboundListDto;
@@ -16,13 +18,21 @@ import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
+import com.wms.model.entity.DocumentSource;
 import com.wms.model.entity.DocumentStatus;
 import com.wms.model.entity.DocumentType;
+import com.wms.model.entity.PartnerEntity;
+import com.wms.model.entity.ProductEntity;
 import com.wms.model.entity.StockEntity;
+import com.wms.model.entity.TenantEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
+import com.wms.model.repository.PartnerRepository;
+import com.wms.model.repository.ProductRepository;
 import com.wms.model.repository.StockRepository;
+import com.wms.model.repository.TenantRepository;
+
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -44,6 +54,15 @@ public class OutboundService {
 
     @Autowired
     private AllocationPlanService allocationPlanService;
+
+    @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
+    private PartnerRepository partnerRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
 
     // ED-12 출고 문서 목록 조회
     // ED-61 tenantId 가 있으면 그 화주의 문서만, 없으면(null) 전체
@@ -181,5 +200,108 @@ public class OutboundService {
         documentRepository.save(documentEntity);
 
         return documentEntity.getStatus().name();
+    }
+
+        // ED-61 출고 문서 등록 (WMS 직접 등록)
+    // 나중에 화주 포털 요청(MQ)도 이 메서드를 그대로 부른다 → 화주 검사는 여기(서비스) 안에서 한다
+    // 화주 필수 / 배송지·품목의 화주가 문서 화주와 다르면 400 / 문서번호는 WMS 가 만든다 / 상태 WAITING
+    public OutboundDetailDto createOutbound(OutboundCreateDto dto) {
+
+        // 1. 필수 값 검사 → 400
+        if (dto.getTenantId() == null) {
+            throw new IllegalArgumentException("화주는 필수입니다");
+        }
+        if (dto.getPartnerId() == null) {
+            throw new IllegalArgumentException("배송지는 필수입니다");
+        }
+        if (dto.getExpectedAt() == null) {
+            throw new IllegalArgumentException("출고 요청일은 필수입니다");
+        }
+        if (dto.getItems() == null || dto.getItems().isEmpty()) {
+            throw new IllegalArgumentException("품목을 1개 이상 넣어야 합니다");
+        }
+
+        // 2. 화주 찾기 → 없으면 404
+        TenantEntity tenantEntity = tenantRepository.findById(dto.getTenantId())
+                .orElseThrow(() -> new EntityNotFoundException("화주가 없습니다: " + dto.getTenantId()));
+
+        // 3. 배송지(거래처) 찾기 → 없으면 404, 다른 화주의 거래처면 400
+        PartnerEntity partnerEntity = partnerRepository.findById(dto.getPartnerId())
+                .orElseThrow(() -> new EntityNotFoundException("거래처가 없습니다: " + dto.getPartnerId()));
+        if (!partnerEntity.getTenantEntity().getTenantId().equals(tenantEntity.getTenantId())) {
+            throw new IllegalArgumentException("이 화주의 거래처가 아닙니다: " + partnerEntity.getPartnerName());
+        }
+
+        // 4. 품목 줄 검사 : 저장하기 전에 전부 먼저 검사한다 (중간에 실패해서 반만 저장되지 않게)
+        //    검사를 통과한 품목은 products 에 순서대로 담아 둔다 (5번 저장 때 다시 찾지 않으려고)
+        List<ProductEntity> products = new ArrayList<>();
+        for (OutboundCreateItemDto itemDto : dto.getItems()) {
+            if (itemDto.getProductId() == null) {
+                throw new IllegalArgumentException("품목을 선택해야 합니다");
+            }
+            if (itemDto.getQty() == null || itemDto.getQty() <= 0) {
+                throw new IllegalArgumentException("수량은 1 이상이어야 합니다");
+            }
+            ProductEntity productEntity = productRepository.findById(itemDto.getProductId())
+                    .orElseThrow(() -> new EntityNotFoundException("품목이 없습니다: " + itemDto.getProductId()));
+            if (!productEntity.getTenantEntity().getTenantId().equals(tenantEntity.getTenantId())) {
+                throw new IllegalArgumentException("이 화주의 품목이 아닙니다: " + productEntity.getProductName());
+            }
+            products.add(productEntity);
+        }
+
+        // 5. 문서 저장 : 종류 출고, 출처 WMS, 상태는 엔티티 기본값 WAITING(출고예정)
+        DocumentEntity documentEntity = DocumentEntity.builder()
+                .tenantEntity(tenantEntity)
+                .documentNo(makeDocumentNo())
+                .type(DocumentType.OUTBOUND)
+                .source(DocumentSource.WMS)
+                .partnerEntity(partnerEntity)
+                .expectedAt(dto.getExpectedAt())
+                .build();
+        documentRepository.save(documentEntity);
+
+        // 6. 품목 줄 저장 : 품목 + 주문 수량만 (LOT 은 비워 둔다. 할당할 때 정함)
+        for (int i = 0; i < dto.getItems().size(); i++) {
+            DocumentItemEntity documentItemEntity = DocumentItemEntity.builder()
+                    .documentEntity(documentEntity)
+                    .productEntity(products.get(i))            // 4번에서 검사한 같은 순서의 품목
+                    .expectedQty(dto.getItems().get(i).getQty())
+                    .build();
+            documentItemRepository.save(documentItemEntity);
+        }
+
+        // 7. 만든 문서를 상세 조회 모양으로 돌려준다
+        return getOutboundDetail(documentEntity.getDocumentId());
+    }
+
+    // 출고 문서번호 만들기 : OUT-오늘날짜-순번3 (예 OUT-20261005-003)
+    // 오늘 날짜로 시작하는 문서번호 중 가장 큰 순번 + 1
+    // 동시에 두 명이 등록하면 같은 번호가 나올 수 있는데, document_no 가 UNIQUE 라 한쪽은 저장에 실패한다
+    private String makeDocumentNo() {
+        String today = LocalDate.now().toString().replace("-", "");   // "2026-10-05" → "20261005"
+        String prefix = "OUT-" + today + "-";                          // "OUT-20261005-"
+
+        int maxSeq = 0;
+        for (DocumentEntity documentEntity : documentRepository.findAll()) {
+            String documentNo = documentEntity.getDocumentNo();
+            if (documentNo != null && documentNo.startsWith(prefix)) {
+                // "OUT-20261005-002" 에서 앞부분을 잘라 "002" → 2
+                int seq = Integer.parseInt(documentNo.substring(prefix.length()));
+                if (seq > maxSeq) {
+                    maxSeq = seq;
+                }
+            }
+        }
+
+        int next = maxSeq + 1;
+        // 세 자리로 맞추기 : 1 → "001", 12 → "012", 123 → "123"
+        String seqText = "" + next;
+        if (next < 10) {
+            seqText = "00" + next;
+        } else if (next < 100) {
+            seqText = "0" + next;
+        }
+        return prefix + seqText;
     }
 }

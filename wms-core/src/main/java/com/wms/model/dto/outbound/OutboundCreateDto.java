@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class OutboundCreateDto {
     private Integer tenantId;                       // 화주
     private Integer partnerId;                      // 거래처
-    private LocalDateTime expextedad;               // 출고 요청일
+    private LocalDateTime expectedAt;               // 출고 요청일
     private List<OutboundCreateItemDto> items;      // 품목 줄 목록
 
     

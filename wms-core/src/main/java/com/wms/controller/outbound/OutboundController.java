@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.AllocationPreviewDto;
+import com.wms.model.dto.outbound.OutboundCreateDto;
 import com.wms.model.dto.outbound.OutboundDetailDto;
 import com.wms.model.dto.outbound.OutboundListDto;
 import com.wms.model.dto.outbound.PickingListDto;
@@ -89,5 +90,12 @@ public class OutboundController {
     @PutMapping("/wms/outbounds/{documentId}/cancel")
     public ResponseEntity<String> cancelOutbound(@PathVariable(name = "documentId") Integer documentId) {
         return ResponseEntity.ok(outboundService.cancelOutbound(documentId));
+    }
+
+    // ED-61 출고 문서 등록 → 201 + 만든 문서 상세
+    // 본문 : { "tenantId":1, "partnerId":5, "expectedAt":"2026-10-10T10:00:00", "items":[ {"productId":1, "qty":30} ] }
+    @PostMapping("/wms/outbounds")
+    public ResponseEntity<OutboundDetailDto> createOutbound(@RequestBody OutboundCreateDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(outboundService.createOutbound(dto));
     }
 }
