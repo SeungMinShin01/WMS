@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -237,8 +236,8 @@ public class InboundService {
             if (loc.getIsActive())
                 list.add(LocationOptionDto.from(loc));
         });
-        // list.sort(규칙) -> Comparator.comparing(기준) -> 위치 목록을 코드 가나다 순으로 정렬 / 사전 순 비교
-        list.sort(Comparator.comparing(LocationOptionDto::getLocationCode));
+        // 로케이션 코드 가나다(ABC)순
+        list.sort((a,b)->a.getLocationCode().compareTo(b.getLocationCode()));
         return list;
     }
     
