@@ -1,10 +1,10 @@
 package com.wms.service;
 
+import com.wms.model.repository.StockRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +19,7 @@ import com.wms.model.dto.inbound.InspectionDto;
 import com.wms.model.dto.inbound.InspectionResultDto;
 import com.wms.model.dto.inbound.LocationOptionDto;
 import com.wms.model.dto.inbound.LocationRecommendDto;
+import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
@@ -36,6 +37,7 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 @Transactional
 public class InboundService {
+    private final StockRepository stockRepository;
     @Autowired
     private DocumentRepository documentRepository;
     @Autowired
@@ -47,6 +49,10 @@ public class InboundService {
     // ED-16
     @Autowired
     private LocationRepository locationRepository;
+
+    InboundService(StockRepository stockRepository) {
+        this.stockRepository = stockRepository;
+    }
 
     // ED-10 입고 문서 목록 조회
     public List<InboundListDto> findAll() {
@@ -143,6 +149,12 @@ public class InboundService {
         if (documentEntity.getStatus() != DocumentStatus.WAITING)
             throw new IllegalStateException("대기 상태 문서만 검수할 수 있습니다. (현재: " + documentEntity.getStatus() + ")");
 
+        // 중복 검수 차단(ED-51): 한 품목 줄은 검수 1번만
+        for(DocumentItemDetailEntity d : documentItemDetailRepository.findAll()){
+            if(d.getDocumentItemEntity().getDocumentItemId().equals(documentItemEntity.getDocumentItemId()))
+                throw new IllegalStateException("이미 검수된 품목입니다.");
+        }
+
         // 유통기한 입고 검사: 남은일수가 출고 허용 잔여일보다 적으면 출고불가하니 -> 입고 거부
         LocalDate expiryDate = documentItemEntity.getLotEntity().getExpiryDate();
         int minShipDays = documentItemEntity.getProductEntity().getMinShipDays();
@@ -179,8 +191,8 @@ public class InboundService {
     // 문서의 모든 검수 기록이 적재됐는가 why? 문서 하나의 모든 품목이 검수 완료 기록이 있어야 적치로 넘어가게해놨기때문
     private boolean allDetailsCarried(Integer documentId) {
         for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) {
-            if (d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)
-                    && d.getLocationEntity() == null)
+            if(d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)
+                    && d.getStatus() != DetailStatus.STORED)
                 return false;
         }
         return true;
@@ -197,16 +209,26 @@ public class InboundService {
         if (documentEntity.getStatus() != DocumentStatus.INSPECTED)
             throw new IllegalStateException("전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: " + documentEntity.getStatus() + ")");
 
-        // 이미 적재됐으면 중복 적재 방지
-        if (detailEntity.getLocationEntity() != null)
-            throw new IllegalStateException(
-                    "이미 적재된 검수 기록입니다. (위치: " + detailEntity.getLocationEntity().getLocationCode() + ")");
+        // 중복 적재 방지(ED-51): 검수됨(INSPECTED) 상태만 적재 가능
+        if(detailEntity.getStatus() != DetailStatus.INSPECTED)
+            throw new IllegalStateException("이미 적재된 검수 기록입니다");
 
         // 적재할 칸 조회
         LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId())
                 .orElseThrow(() -> new EntityNotFoundException("로케이션이 없습니다."));
         if (!locationEntity.getIsActive())
             throw new IllegalStateException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
+
+        // 칸 단위 화주 검사(ED-60): 다른 화주 재고가 있는 칸에는 적재 불가
+        if(stockService.hasOtherTenant(locationEntity, detailEntity.getLotEntity()))
+            throw new IllegalStateException("다른 화주의 재고가 있는 칸입니다.");
+
+        // 적재 capacity 검사 (ED-51): 칸 현재 수량 + 넣을 수량 > 최대 -> 409(capacity null = 제한 없음)
+        if(locationEntity.getCapacity() != null){
+            int total = stockService.locationTotal(locationEntity);
+            if(total + detailEntity.getQty() > locationEntity.getCapacity())
+                throw new IllegalStateException("적재 가능 수량을 넘었습니다.");
+        }
 
         // 재고 증가는 StockService에 맡긴다
         StockEntity stockEntity = stockService.increase(detailEntity.getLotEntity(), locationEntity,
@@ -215,6 +237,7 @@ public class InboundService {
         // 검수 결과에 적재 위치와 재고 연결
         detailEntity.setLocationEntity(locationEntity);
         detailEntity.setStockEntity(stockEntity);
+        detailEntity.moveTo(DetailStatus.STORED);   // 검수됨 -> 적재됨(ED-51)
         if (allDetailsCarried(documentEntity.getDocumentId())) {
             documentEntity.moveTo(DocumentStatus.COMPLETED);
             documentEntity.setCompletedAt(LocalDateTime.now());
@@ -237,8 +260,8 @@ public class InboundService {
             if (loc.getIsActive())
                 list.add(LocationOptionDto.from(loc));
         });
-        // list.sort(규칙) -> Comparator.comparing(기준) -> 위치 목록을 코드 가나다 순으로 정렬 / 사전 순 비교
-        list.sort(Comparator.comparing(LocationOptionDto::getLocationCode));
+        // 로케이션 코드 가나다(ABC)순
+        list.sort((a,b)->a.getLocationCode().compareTo(b.getLocationCode()));
         return list;
     }
     

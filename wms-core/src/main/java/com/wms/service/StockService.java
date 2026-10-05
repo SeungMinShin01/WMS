@@ -1,8 +1,10 @@
 package com.wms.service;
 
 import com.wms.model.repository.DocumentItemRepository;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.dto.stock.StockDto;
 import com.wms.model.dto.stock.StockHistoryDto;
+import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.LocationEntity;
 import com.wms.model.entity.LotEntity;
@@ -42,12 +45,22 @@ public class StockService {
     // ED-21 재고 조회
     public List<StockDto> stockFindAll() {
         List<StockEntity> stockEntities = stockRepository.findAll();
-        // FEFO정렬: 유통기한 오름차순 -> 유통기한없는 lot는 맨 뒤로 -> 같으면 stockId순으로
-        // comparing의 기본은 오름차순, 날짜가 빠르면 앞 / null값은 맨 뒤로
-        stockEntities.sort(
-                Comparator.comparing((StockEntity s) -> s.getLotEntity().getExpiryDate(),
-                        Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(StockEntity::getStockId));
+        // FEFO정렬: 소비기한 빠른 순 -> 소비기한 없는 LOT는 맨 뒤 -> 같으면 stockId순으로 
+        stockEntities.sort((a,b) -> {
+            LocalDate expiryA = a.getLotEntity().getExpiryDate();
+            LocalDate expiryB = b.getLotEntity().getExpiryDate();
+
+            // 1. 소비기한이 없는 쪽은 맨 뒤
+            if(expiryA == null && expiryB != null) return 1;    // a 뒤로
+            if(expiryA != null && expiryB == null) return -1;    // a 앞으로
+
+            // 2. 둘 다 있고 날짜가 다르면 빠른 날짜가 앞으로
+            if(expiryA != null && expiryB != null && !expiryA.equals(expiryB))
+                return expiryA.compareTo(expiryB);
+            
+            // 3. 소비기한이 같으면 먼저 생긴 재고 (stockId 작은 것)이 앞으로
+            return a.getStockId().compareTo(b.getStockId());
+        });
         List<StockDto> stockDtos = new ArrayList<>();
         stockEntities.forEach(stockEntity -> stockDtos.add(StockDto.from(stockEntity)));
         return stockDtos;
@@ -74,8 +87,31 @@ public class StockService {
         return stockRepository.save(newStock);
     }
 
+    // 칸 하나의 현재 적재 수량 합계 (적재 capacity 검사용, ED-51)
+    public int locationTotal(LocationEntity loc) {
+        int total = 0;
+        for (StockEntity s : stockRepository.findAll()) {
+            if (s.getLocationEntity().getLocationId().equals(loc.getLocationId()))
+                total += s.getQty();
+        }
+        return total;
+    }
+
+    // 칸에 다른 화주 재고가 있는지 (칸 단위 화주 검사) - 넣으려는 LOT의 품목화주 기준
+    public boolean hasOtherTenant(LocationEntity loc, LotEntity lot){
+        Integer myTenantId = lot.getProductEntity().getTenantEntity().getTenantId();
+        for(StockEntity s : stockRepository.findAll()){
+            // 다른 칸이거나 비어 있는 재고는 건너뜀
+            if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
+                continue;
+            if(!s.getTenantEntity().getTenantId().equals(myTenantId))
+                return true;
+        }
+        return false;
+    }
+
     // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유: 결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
-    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount) {
+    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount, boolean hasOtherTenant) {
     }
 
     // 칸 하나 조사
@@ -83,12 +119,15 @@ public class StockService {
         int total = 0;
         boolean hasSameLot = false;
         boolean hasSameProductOtherLot = false;
+        boolean hasOtherTenant = false;
         Set<Integer> otherProducts = new HashSet<>();
         for (StockEntity s : stocks) {
             // 다른 칸 재고,
             if (!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
                 continue;
             total += s.getQty();
+            if(!s.getTenantEntity().getTenantId().equals(lot.getProductEntity().getTenantEntity().getTenantId()))
+                hasOtherTenant = true;  // 다른 화주 재고가 있음(ED-60)
             Integer productId = s.getLotEntity().getProductEntity().getProductId();
             if (s.getLotEntity().getLotId().equals(lot.getLotId()))
                 hasSameLot = true;
@@ -97,7 +136,7 @@ public class StockService {
             else
                 otherProducts.add(productId);
         }
-        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size());
+        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size(), hasOtherTenant);
     }
 
     // 여유 수량 - capacity가 null이면 제한 없음
@@ -130,6 +169,8 @@ public class StockService {
             int free = freeQty(loc, c.total());
             if (free <= 0)
                 continue; // 꽉 찬 칸 -> 탈락
+            if(c.hasOtherTenant())
+                continue;   // 다른 화주 재고가 있는 칸 --> 탈락 (ED-60)
             if (policyViolation(c, mixLot) != null)
                 continue; // 정책 위반 칸 -> 탈락
 
@@ -162,42 +203,62 @@ public class StockService {
                     .build());
         }
 
+
+        // 예) 20박스 적재 / A 여유 22, B 40, C 100 (전부 들어감) / D 15, E 5 (부족)
+        // → 2번에서 [A, B, C] / [D, E] 로 나뉘고
+        // → 3번에서 들어가는 칸은 여유 작은 순 A(22) → B(40) → C(100), 부족한 칸은 여유 큰 순 D(15) → E(5)
+        // → 최종 A → B → C → D → E
+                    
         // 추천칸 정렬
-        candidates.sort(Comparator
-                .comparing(LocationRecommendDto::getPriority) // 1->2->3 , 순위 숫자 작은 게 앞
-                .thenComparing(LocationRecommendDto::getFits, Comparator.reverseOrder()) // 같은 순위에서도 A-01-01 A-01-02
-                                                                                         // A-01-03
-                .thenComparingInt(d -> {
-                    int f = d.getFreeQty() == null ? Integer.MAX_VALUE : d.getFreeQty(); // 길이 제한이 없는 칸은 여유 NULL로 판단 ,
-                                                                                         // 들어가는 칸 중 제일 마지막
-                    return d.getFits() ? f : -f;
-                    /*
-                     * EX) 20개 적재 할래 -> A:22개 적재 가능 B: 40개 적재 가능 C: 100개 적재 가능 D: 15개 적재 가능 E: 5개 적재
-                     * 가능
-                     * 이라고 했을때 가장 딱 맞게들어가는 순으로 A -> B -> C -> D -> E 순으로 추천 정렬
-                     * 왜? 자바 정렬은 숫자가 작은게 무조건 앞 그래서
-                     * 2 -> 20 -> 80 -> -15 -> -5
-                     */
-                })
-                .thenComparing(LocationRecommendDto::getLocationCode) // 같으면 칸 코드 순
-        );
-        return candidates.size() > 5 ? candidates.subList(0, 5) : candidates; // 후보 5개만 자르기
+        candidates.sort((a,b)->{
+            // 1. 순위 숫자가 작은 칸이 앞(1. 같은 LOT -> 2. 같은 품목 다른 LOT -> 3. 다른 품목 잔량 -> 빈칸)
+            if(!a.getPriority().equals(b.getPriority()))
+                return a.getPriority().compareTo(b.getPriority());
+
+            // 2. 같은 순위면 전부 들어가는 칸 (fits = true)이 앞으로
+            if(a.getFits() && !b.getFits()) return -1;
+            if(!a.getFits() && b.getFits()) return 1;
+
+            // 3. 여유 비교 (제한없음 null은 가장 큰 여유칸으로 취급하기 )
+            int freeA = a.getFreeQty() == null ? Integer.MAX_VALUE : a.getFreeQty();
+            int freeB = a.getFreeQty() == null ? Integer.MAX_VALUE : b.getFreeQty();
+            if(freeA != freeB){
+                if(a.getFits()) return freeA - freeB;   // 전부 들어가는 칸끼리: 여유 작은 칸이 앞 (딱 맞는칸, Best Fit)
+                else            return freeB - freeA;   // 부족한 칸끼리: 여유 큰 칸이 앞으로 (많이 들어가는 칸)          
+            }
+            // 다 같으면 칸 코드 순으로 
+            return a.getLocationCode().compareTo(b.getLocationCode());
+        });
+        return candidates.size() > 5 ? candidates.subList(0, 5) : candidates;   // 후보 5개만 자르기
     }
 
     // 입출고 이력 - 재고를 바꾼 detail만, 최신순 + 변경 후 수량 계산
     public List<StockHistoryDto> historyFindAll() {
-        // 1. 이력 줄 만들기 (위치 없음 = 검수만 하고 적재 전 -> 재고 변화 없으니 제외 시킴)
+        // 1. 이력 줄 만들기 (검수만된 INSPCETED 줄은 재고 변화가 없으니 제외)
         List<StockHistoryDto> historyDtos = new ArrayList<>();
         for (DocumentItemDetailEntity detail : detailRepository.findAll()) {
-            if (detail.getLocationEntity() == null || detail.getStockEntity() == null)
+            if(detail.getStatus() == DetailStatus.INSPECTED || detail.getStockEntity() == null)
                 continue;
             historyDtos.addAll(StockHistoryDto.from(detail));
         }
 
-        // 2. 최신순 정렬(발생일시 늦은 순 -> 같으면 detailId 큰 순)
-        historyDtos.sort(Comparator
-                .comparing(StockHistoryDto::getOccurredAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(StockHistoryDto::getDetailId, Comparator.reverseOrder()));
+        historyDtos.sort((a,b)->{
+            LocalDateTime timeA = a.getOccurredAt();
+            LocalDateTime timeB = b.getOccurredAt();
+
+            // 1. 발생일시가 없는 쪽을 뒤로
+            if(timeA == null && timeB != null) return 1;
+            if(timeA != null && timeB == null) return -1;
+
+            // 2. 둘 다 있고 다르면 늦은 시각이 앞으로 (b와a순서를 바꿔서 내림차순으로 정리)
+            if(timeA != null && timeB != null && !timeA.equals(timeB))
+                return timeB.compareTo(timeA);
+
+            // 3. 같으면 detailId가 큰 것 (나중에 생긴 기록)이 앞으로
+            return b.getDetailId().compareTo(a.getDetailId());
+
+
+        });
 
         // 3. 변경 후 수량: 재고 줄마다 현재 수량에서 시작해 최신 -> 과거로 증감을 빼며 되돌리기
         Map<Integer, int[]> running = new HashMap<>(); // stockId -> {실물, 선점}
