@@ -48,16 +48,26 @@ public class OutboundService {
     // ED-12 출고 문서 목록 조회
     // ED-61 tenantId 가 있으면 그 화주의 문서만, 없으면(null) 전체
     public List<OutboundListDto> getOutboundList(Integer tenantId) {
-        // 출고 문서 전체를 출고 예정일 빠른 순으로 가져온다 (쿼리 메소드)
-        List<DocumentEntity> documentEntities = documentRepository
-                .findByTypeOrderByExpectedAtAsc(DocumentType.OUTBOUND);
-
-        List<OutboundListDto> documentDtos = new ArrayList<>();
-        for (DocumentEntity documentEntity : documentEntities) {
+        // 1. 문서 전체를 가져와서 출고 문서만 고른다 (화주를 골랐으면 그 화주 문서만)
+        List<DocumentEntity> documentEntities = new ArrayList<>();
+        for (DocumentEntity documentEntity : documentRepository.findAll()) {
+            // 출고 문서가 아니면 건너뜀
+            if (documentEntity.getType() != DocumentType.OUTBOUND) {
+                continue;
+            }
             // 화주를 골랐는데 이 문서의 화주와 다르면 건너뜀
             if (tenantId != null && !documentEntity.getTenantEntity().getTenantId().equals(tenantId)) {
                 continue;
             }
+            documentEntities.add(documentEntity);
+        }
+
+        // 2. 출고 예정일 빠른 순으로 정렬 (a 의 예정일이 더 이르면 음수 → a 가 앞)
+        documentEntities.sort((a, b) -> a.getExpectedAt().compareTo(b.getExpectedAt()));
+
+        // 3. 화면용 목록 객체로 바꿔서 담는다
+        List<OutboundListDto> documentDtos = new ArrayList<>();
+        for (DocumentEntity documentEntity : documentEntities) {
             documentDtos.add(OutboundListDto.from(documentEntity));
         }
         return documentDtos;
