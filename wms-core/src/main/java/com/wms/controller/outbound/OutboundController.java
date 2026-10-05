@@ -32,9 +32,11 @@ public class OutboundController {
     private PickingListService pickingListService; // 피킹리스트 생성 · 조회
 
     // ED-12 출고 문서 목록 조회
+    // ED-61 화주 필터 : GET /wms/outbounds?tenantId=2 (생략하면 전체)
     @GetMapping("/wms/outbounds")
-    public ResponseEntity<List<OutboundListDto>> getOutboundList() {
-        return ResponseEntity.ok(outboundService.getOutboundList());
+    public ResponseEntity<List<OutboundListDto>> getOutboundList(
+            @RequestParam(name = "tenantId", required = false) Integer tenantId) {
+        return ResponseEntity.ok(outboundService.getOutboundList(tenantId));
     }
 
     // ED-17 출고 문서 상세 조회

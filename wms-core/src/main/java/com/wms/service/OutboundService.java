@@ -46,12 +46,20 @@ public class OutboundService {
     private AllocationPlanService allocationPlanService;
 
     // ED-12 출고 문서 목록 조회
-    public List<OutboundListDto> getOutboundList() {
+    // ED-61 tenantId 가 있으면 그 화주의 문서만, 없으면(null) 전체
+    public List<OutboundListDto> getOutboundList(Integer tenantId) {
+        // 출고 문서 전체를 출고 예정일 빠른 순으로 가져온다 (쿼리 메소드)
         List<DocumentEntity> documentEntities = documentRepository
                 .findByTypeOrderByExpectedAtAsc(DocumentType.OUTBOUND);
-        List<OutboundListDto> documentDtos = documentEntities.stream().map((entity) -> {
-            return OutboundListDto.from(entity);
-        }).toList();
+
+        List<OutboundListDto> documentDtos = new ArrayList<>();
+        for (DocumentEntity documentEntity : documentEntities) {
+            // 화주를 골랐는데 이 문서의 화주와 다르면 건너뜀
+            if (tenantId != null && !documentEntity.getTenantEntity().getTenantId().equals(tenantId)) {
+                continue;
+            }
+            documentDtos.add(OutboundListDto.from(documentEntity));
+        }
         return documentDtos;
     }
 
