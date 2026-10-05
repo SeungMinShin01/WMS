@@ -137,11 +137,11 @@ public class InspectionApiTest {
                 }
 
                 @Test
-                void 적재_비활성로케이션_400() throws Exception {
+                void 적재_비활성로케이션_409() throws Exception {
                         mockMvc.perform(put("/wms/inspections")
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("{\"detailId\": 15, \"locationId\": 10}"))
-                                        .andExpect(status().isBadRequest());
+                                        .andExpect(status().isConflict());
                 }
 
                 @Test

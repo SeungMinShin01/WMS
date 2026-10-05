@@ -46,3 +46,5 @@ replay_pid*
 .env
 claude_output/node_modules/
 frontend/dist/
+
+scripts/perf/result/
