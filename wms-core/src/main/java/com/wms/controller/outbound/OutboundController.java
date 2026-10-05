@@ -64,6 +64,13 @@ public class OutboundController {
         return ResponseEntity.status(HttpStatus.CREATED).body(pickingList);
     }
 
+    // ED-52 피킹 확인 (줄 1개 집음) → 200 + 그 줄
+    // 예 : PUT /wms/pickings/128
+    @PutMapping("/wms/pickings/{detailId}")
+    public ResponseEntity<PickingListDto> pickDetail(@PathVariable(name = "detailId") Integer detailId) {
+        return ResponseEntity.ok(pickingListService.pickDetail(detailId));
+    }
+
     // ED-19 피킹 리스트 조회
     @GetMapping("/wms/allocations/{documentId}")
     public ResponseEntity<List<PickingListDto>> getPickingList(@PathVariable(name = "documentId") Integer documentId) {
