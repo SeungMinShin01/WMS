@@ -1,198 +1,222 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
-import DocumentHeader from "../../Layout/DocumentHeader";
 
-const STATUS_NAME = {
-  WAITING: "접수",
-  ALLOCATED: "할당",
-  PICKING: "피킹중",
-  SHIPPED: "출고완료",
-  CANCELED: "취소",
-};
-
-// 08 피킹리스트 — 담당: 김지환
-// 목록(피킹 줄이 있는 문서) → 상세(헤더 + 피킹리스트) → 출고확정
+// 피킹리스트 — 담당: 김지환
+// 흐름 : 줄마다 [집음] → 전 줄 집음 → 출고확정
 export default function PickingPage(props) {
-  const { documentId } = useParams();
+  // 주소창 ?documentId=66 값 읽기
+  const [searchParams] = useSearchParams();
+  const documentId = searchParams.get("documentId");
   const navigate = useNavigate();
 
-  const [outbounds, setOutbounds] = useState([]);
-  const [filter, setFilter] = useState({
-    status: "ALLOCATED,PICKING,SHIPPED",
-  }); // 조회 조건
-  const [detail, setDetail] = useState(null); // null = 목록 화면
-  const [pickings, setPickings] = useState([]); // 선택 문서의 피킹 줄
-  const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState(null);     // 출고 문서 정보
+  const [pickings, setPickings] = useState([]);   // 피킹 줄 목록
+  const [loading, setLoading] = useState(false);  // 요청 중이면 true → 버튼 잠금
 
-  const getList = async () => {
-    const response = await axios.get("/wms/outbounds");
-    setOutbounds(response.data);
+  // 문서 상태 한글
+  const 문서상태 = (status) => {
+    if (status === "WAITING") return "접수";
+    if (status === "ALLOCATED") return "할당";
+    if (status === "PICKING") return "피킹중";
+    if (status === "SHIPPED") return "출고완료";
+    if (status === "CANCELED") return "취소";
+    return status;
   };
 
-  const getDetail = async () => {
-    if (!documentId) {
-      setDetail(null);
-      setPickings([]);
-      return;
+  // 줄 상태 한글
+  const 줄상태 = (status) => {
+    if (status === "ALLOCATED") return "할당됨";
+    if (status === "PICKED") return "집음";
+    if (status === "SHIPPED") return "출고됨";
+    return status;
+  };
+
+  // 에러 메시지 보여주기 (서버가 꺼져 있으면 error.response 가 없음)
+  const 에러알림 = (error) => {
+    if (error.response) {
+      alert(error.response.data);
+    } else {
+      alert("서버에 연결할 수 없습니다");
     }
-    const response = await axios.get("/wms/outbounds/" + documentId);
-    setDetail(response.data);
+  };
+
+  // ED-17 문서 정보
+  const getDetail = async () => {
+    if (documentId === null) return;
+    try {
+      const response = await axios.get("/wms/outbounds/" + documentId);
+      setDetail(response.data);
+    } catch (error) {
+      에러알림(error);
+    }
   };
 
   // ED-19 피킹리스트
   const getPickings = async () => {
-    if (!documentId) return;
-    const response = await axios.get("/wms/allocations/" + documentId);
-    setPickings(response.data); // [{detailId, locationCode, productCode, productName, lotCode, qty}]
+    if (documentId === null) return;
+    try {
+      const response = await axios.get("/wms/allocations/" + documentId);
+      setPickings(response.data); // [{detailId, locationCode, productCode, productName, lotCode, qty, status}]
+    } catch (error) {
+      에러알림(error);
+    }
   };
 
-  useEffect(() => {
-    getList();
-  }, []);
-
+  // 주소의 documentId 가 바뀔 때마다 다시 조회
   useEffect(() => {
     getDetail();
     getPickings();
   }, [documentId]);
 
-  const visibleList = outbounds.filter((outbound) =>
-    filter.status.split(",").includes(outbound.status),
-  );
-
-  const handleSearch = (event) => {
-    event.preventDefault();
-    setFilter({ status: event.target.status.value });
-  };
-
-  const selectDocument = (id) => navigate(`/outbounds/picking/${id}`);
-  const goBack = () => navigate("/outbounds/picking");
-
-  // ED-20 출고확정 (문서 단위) : PICKING → SHIPPED
-  const confirmShipment = async () => {
-    if (!confirm("피킹리스트 전체를 출고확정할까요?")) return;
+  // 줄 1개 집음 (ED-52 피킹 확인)
+  const 집음 = async (detailId) => {
     try {
       setLoading(true);
-      await axios.put("/wms/outbounds/" + documentId + "/ship");
-      alert("출고확정되었습니다");
-      getDetail();
-      getList();
+      await axios.put("/wms/pickings/" + detailId);
+      getPickings();  // 줄 상태 새로고침
+      getDetail();    // 처음 집으면 문서가 피킹중으로 바뀌니까 문서도 새로고침
     } catch (error) {
-      alert(error.response.data);
+      에러알림(error);
     } finally {
       setLoading(false);
     }
   };
 
+  // 전체 집음 : 할당됨 줄을 하나씩 차례로 집음 (서버에는 줄 단위 API 만 있음)
+  const 전체집음 = async () => {
+    try {
+      setLoading(true);
+      for (let i = 0; i < pickings.length; i++) {
+        if (pickings[i].status === "ALLOCATED") {
+          await axios.put("/wms/pickings/" + pickings[i].detailId);
+        }
+      }
+    } catch (error) {
+      에러알림(error);
+    } finally {
+      setLoading(false);
+      getPickings();
+      getDetail();
+    }
+  };
+
+  // 출고확정 (ED-20)
+  const 출고확정 = async () => {
+    if (!confirm("출고확정 하시겠습니까?")) return;
+    try {
+      setLoading(true);
+      await axios.put("/wms/outbounds/" + documentId + "/ship");
+      alert("출고확정 되었습니다");
+      getPickings();
+      getDetail();
+    } catch (error) {
+      에러알림(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 출고확정 가능 여부 : 문서가 피킹중 + 줄이 1개 이상 + 모든 줄이 집음
+  let 전부집음 = pickings.length > 0;
+  for (let i = 0; i < pickings.length; i++) {
+    if (pickings[i].status !== "PICKED") {
+      전부집음 = false;
+    }
+  }
+  const 출고확정가능 = detail !== null && detail.status === "PICKING" && 전부집음;
+
+  // 집을 수 있는 문서인지 : 할당 또는 피킹중
+  const 집기가능 = detail !== null && (detail.status === "ALLOCATED" || detail.status === "PICKING");
+
+  if (documentId === null) {
+    return (
+      <>
+        <PageTitle title="피킹리스트" path="홈 > 출고관리 > 피킹리스트" />
+        <p>출고 문서를 먼저 선택하세요.</p>
+      </>
+    );
+  }
+
   return (
     <>
       <PageTitle title="피킹리스트" path="홈 > 출고관리 > 피킹리스트" />
 
-      {detail === null ? (
-        <>
-          {/* ── 목록 ── */}
-          <form className="search" onSubmit={handleSearch}>
-            <label>상태</label>
-            <select name="status" defaultValue="ALLOCATED,PICKING,SHIPPED">
-              <option value="ALLOCATED,PICKING,SHIPPED">
-                전체 (할당·피킹중·출고완료)
-              </option>
-              <option value="PICKING">피킹중 (출고확정 대기)</option>
-              <option value="ALLOCATED">할당</option>
-              <option value="SHIPPED">출고완료</option>
-            </select>
-            <input type="submit" className="btn primary" value="조회" />
-          </form>
-
-          <GridTitle
-            title="피킹 대상 주문"
-            desc={`총 ${visibleList.length}건`}
-          />
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>주문번호</th>
-                <th>배송지명</th>
-                <th>출고요청일</th>
-                <th>상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleList.map((outbound, index) => (
-                <tr
-                  key={outbound.documentId}
-                  onClick={() => selectDocument(outbound.documentId)}
-                >
-                  <td>{index + 1}</td>
-                  <td>{outbound.documentNo}</td>
-                  <td>{outbound.partnerName}</td>
-                  <td>{outbound.expectedAt.replace("T", " ")}</td>
-                  <td>{STATUS_NAME[outbound.status]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      ) : (
-        <>
-          {/* ── 상세: 헤더 + 피킹리스트 + 출고확정 ── */}
-          <GridTitle title="출고 정보" desc={detail.documentNo} />
-          <DocumentHeader
-            type="OUTBOUND"
-            doc={detail}
-            statusName={STATUS_NAME[detail.status]}
-          />
-
-          <div className="detail-bar">
-            <button className="btn" onClick={goBack}>
-              목록
-            </button>
-          </div>
-
-          <GridTitle
-            title="피킹리스트 (로케이션순)"
-            desc={`총 ${pickings.length}건`}
-          >
-            {detail.status === "PICKING" && (
-              <button
-                className="btn primary"
-                onClick={confirmShipment}
-                disabled={loading}
-              >
-                {loading ? "처리 중..." : "출고확정"}
-              </button>
-            )}
-            {detail.status === "SHIPPED" && <b>출고 완료</b>}
-          </GridTitle>
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>피킹번호</th>
-                <th>로케이션</th>
-                <th>품목코드</th>
-                <th>품목명</th>
-                <th>LOT</th>
-                <th>수량</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pickings.map((p) => (
-                <tr key={p.detailId}>
-                  <td>{p.detailId}</td>
-                  <td>{p.locationCode}</td>
-                  <td>{p.productCode}</td>
-                  <td>{p.productName}</td>
-                  <td>{p.lotCode}</td>
-                  <td>{p.qty}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+      {/* 출고 정보 */}
+      <GridTitle title="출고 정보" desc={detail ? detail.documentNo : ""} />
+      {detail && (
+        <table className="grid">
+          <tbody>
+            <tr>
+              <th>주문번호</th>
+              <td>{detail.documentNo}</td>
+              <th>배송지명</th>
+              <td>{detail.partnerName}</td>
+              <th>상태</th>
+              <td>{문서상태(detail.status)}</td>
+            </tr>
+            <tr>
+              <th>출고요청일</th>
+              <td>{detail.expectedAt ? detail.expectedAt.replace("T", " ") : "-"}</td>
+              <th>품목수</th>
+              <td>{detail.items.length}</td>
+              <th>출고확정일시</th>
+              <td>{detail.completedAt ? detail.completedAt.replace("T", " ") : "-"}</td>
+            </tr>
+          </tbody>
+        </table>
       )}
+
+      <div style={{ textAlign: "right", margin: "8px 0" }}>
+        <button className="btn" onClick={() => navigate("/outbounds")}>목록</button>
+      </div>
+
+      {/* 피킹리스트 */}
+      <GridTitle title="피킹리스트 (로케이션순)" desc={"총 " + pickings.length + "건"}>
+        <button className="btn" onClick={전체집음} disabled={loading || !집기가능}>전체 집음</button>{" "}
+        <button className="btn primary" onClick={출고확정} disabled={loading || !출고확정가능}>출고확정</button>
+      </GridTitle>
+      <table className="grid">
+        <thead>
+          <tr>
+            <th>피킹번호</th>
+            <th>로케이션</th>
+            <th>품목코드</th>
+            <th>품목명</th>
+            <th>LOT</th>
+            <th>수량</th>
+            <th>상태</th>
+            <th>집음</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pickings.length === 0 && (
+            <tr>
+              <td colSpan="8">피킹리스트가 없습니다</td>
+            </tr>
+          )}
+          {pickings.map((row) => (
+            <tr key={row.detailId}>
+              <td>{row.detailId}</td>
+              <td>{row.locationCode}</td>
+              <td>{row.productCode}</td>
+              <td>{row.productName}</td>
+              <td>{row.lotCode}</td>
+              <td>{row.qty}</td>
+              <td>{줄상태(row.status)}</td>
+              <td>
+                {row.status === "ALLOCATED" && 집기가능 ? (
+                  <button className="btn" onClick={() => 집음(row.detailId)} disabled={loading}>집음</button>
+                ) : (
+                  "-"
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }
