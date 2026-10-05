@@ -109,6 +109,10 @@ public class AllocationPlanService {
         for (StockEntity s : allStocks) {
             // 밑에 isShippable로 가서 재고가 이 품목 줄에 출고 가능한지 검사
             if (!isShippable(item, s, shipDate)) continue; 
+
+            // [ED-61] 문서 화주와 다른 화주의 재고는 출고 가능 재고에서 뺀다 (추천 후보와 같은 기준)
+            if (!s.getTenantEntity().getTenantId().equals(item.getDocumentEntity().getTenantEntity().getTenantId())) continue;
+            
             int available = s.getQty() - s.getAllocatedQty(); // 출고 가능시 가용재고 개수 저장 가용 = 실물 − 선점
             if (available > 0) sum += available;
         }
@@ -245,6 +249,10 @@ public class AllocationPlanService {
             for (StockEntity s : allStocks) {
                 // 재고 1행이 이 품목 줄에 출고 가능한지 검사
                 if (!isShippable(item, s, shipDate)) continue; // 출고불가일시(fasle를 받아오면) continue;
+
+                // [ED-61] 안전장치 : 재고의 화주가 문서의 화주와 다르면 후보에서 제외
+                // (같은 품목이면 화주도 같아야 정상이지만, 데이터가 잘못 들어간 경우를 막는다)
+                if (!s.getTenantEntity().getTenantId().equals(documentEntity.getTenantEntity().getTenantId())) continue;
 
                 if (availableOf(s, planned) <= 0) continue; // 0보다 작거나 같으면 꺼낼 수량이 없어서 후보제외
                 candidates.add(s); // 품목 1개마다 전체 재고를 돌면서 이품목에 꺼낼 수 있는 재고만 더함

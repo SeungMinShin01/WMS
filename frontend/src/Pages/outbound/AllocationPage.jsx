@@ -14,6 +14,12 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// [ED-61] 문서 출처 영어 값 → 한글
+const SOURCE_NAME = {
+  WMS: "WMS",
+  PORTAL: "화주요청",
+};
+
 // 07 출고지시 — 담당: 김지환
 // 흐름 : 목록 → 주문 클릭(상세) → 품목 체크 → 추천 받기(미리보기) → 추천 수정 → 피킹리스트 생성
 export default function AllocationPage(props) {
@@ -23,11 +29,13 @@ export default function AllocationPage(props) {
 
   // ─────────────── 2. 상태변수 ───────────────
   const [outbounds, setOutbounds] = useState([]);
+  const [tenants, setTenants] = useState([]); // [ED-61] 화주 선택 목록 [{tenantId, tenantName}]
   const [filter, setFilter] = useState({
     from: "",
     to: "",
     partnerName: "",
     status: "WAITING,ALLOCATED",
+    tenantId: "", // [ED-61] "" = 전체
   });
   const [detail, setDetail] = useState(null); // 선택한 주문 상세 (null = 목록 화면)
   const [stocks, setStocks] = useState([]); // 전체 재고 (추천 수정 select 에 씀)
@@ -36,12 +44,35 @@ export default function AllocationPage(props) {
   const [loading, setLoading] = useState(false); // 요청 중이면 버튼 잠금
 
   // ─────────────── 3. 조회 함수 ───────────────
-  const getList = async () => {
-    const response = await axios.get("/wms/outbounds");
+  // [ED-61] 화주를 고르면 서버에서 그 화주 문서만 받아온다 (tenantId 가 "" 면 전체)
+  const getList = async (tenantId) => {
+    let url = "/wms/outbounds";
+    if (tenantId) {
+      url = url + "?tenantId=" + tenantId;
+    }
+    const response = await axios.get(url);
     setOutbounds(response.data);
   };
 
+  // [ED-61] 화주 선택 목록 : 전체 출고 문서에 들어 있는 화주를 중복 없이 모은다
+  const getTenants = async () => {
+    const response = await axios.get("/wms/outbounds");
+    let result = [];
+    for (let i = 0; i < response.data.length; i++) {
+      const doc = response.data[i];
+      let exists = false;
+      for (let j = 0; j < result.length; j++) {
+        if (result[j].tenantId === doc.tenantId) exists = true;
+      }
+      if (!exists) {
+        result.push({ tenantId: doc.tenantId, tenantName: doc.tenantName });
+      }
+    }
+    setTenants(result);
+  };
+
   // 검색 조건으로 거른 목록 (status 는 "WAITING,ALLOCATED" 처럼 여러 개)
+  // 화주는 서버에서 이미 걸러서 받아온다
   const visibleList = outbounds.filter((outbound) => {
     if (!filter.status.split(",").includes(outbound.status)) return false;
     const day = outbound.expectedAt.substring(0, 10);
@@ -57,12 +88,15 @@ export default function AllocationPage(props) {
 
   const handleSearch = (event) => {
     event.preventDefault();
+    const tenantId = event.target.tenantId.value; // [ED-61]
     setFilter({
       from: event.target.from.value,
       to: event.target.to.value,
       partnerName: event.target.partnerName.value.trim(),
       status: event.target.status.value,
+      tenantId: tenantId,
     });
+    getList(tenantId); // [ED-61] 화주 조건으로 서버에서 다시 받아옴
   };
 
   const handleReset = (event) => {
@@ -72,7 +106,9 @@ export default function AllocationPage(props) {
       to: "",
       partnerName: "",
       status: "WAITING,ALLOCATED",
+      tenantId: "",
     });
+    getList(""); // [ED-61] 전체로 다시 받아옴
   };
 
   const getStocks = async () => {
@@ -90,9 +126,10 @@ export default function AllocationPage(props) {
     setDetail(response.data);
   };
 
-  // ─────────────── 4. 최초 1번 : 주문목록 + 재고 ───────────────
+  // ─────────────── 4. 최초 1번 : 주문목록 + 화주목록 + 재고 ───────────────
   useEffect(() => {
-    getList();
+    getList("");
+    getTenants();
     getStocks();
   }, []);
 
@@ -240,7 +277,7 @@ export default function AllocationPage(props) {
       setPreviews([]);
       getStocks(); // 선점수량 반영
       getDetail(); // 문서 상태·할당수량 새로고침
-      getList(); // 목록 상태 새로고침
+      getList(filter.tenantId); // 목록 상태 새로고침 (고른 화주 유지)
     } catch (error) {
       alert(error.response.data);
     } finally {
@@ -256,6 +293,16 @@ export default function AllocationPage(props) {
         <>
           {/* ━━━━━━━━━━ 목록 ━━━━━━━━━━ */}
           <form className="search" onSubmit={handleSearch}>
+            {/* [ED-61] 화주 선택 */}
+            <label>화주</label>
+            <select name="tenantId" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.tenantId} value={t.tenantId}>
+                  {t.tenantName}
+                </option>
+              ))}
+            </select>
             <label>출고요청일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>배송지명</label>
@@ -283,8 +330,10 @@ export default function AllocationPage(props) {
               <tr>
                 <th>No</th>
                 <th>주문번호</th>
+                <th>화주</th>
                 <th>배송지명</th>
                 <th>출고요청일</th>
+                <th>출처</th>
                 <th>상태</th>
               </tr>
             </thead>
@@ -296,8 +345,10 @@ export default function AllocationPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{outbound.documentNo}</td>
+                  <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
+                  <td>{SOURCE_NAME[outbound.source]}</td>
                   <td>{STATUS_NAME[outbound.status]}</td>
                 </tr>
               ))}
