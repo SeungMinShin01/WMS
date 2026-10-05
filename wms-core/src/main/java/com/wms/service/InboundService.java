@@ -219,6 +219,10 @@ public class InboundService {
         if (!locationEntity.getIsActive())
             throw new IllegalStateException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
 
+        // 칸 단위 화주 검사(ED-60): 다른 화주 재고가 있는 칸에는 적재 불가
+        if(stockService.hasOtherTenant(locationEntity, detailEntity.getLotEntity()))
+            throw new IllegalStateException("다른 화주의 재고가 있는 칸입니다.")
+
         // 적재 capacity 검사 (ED-51): 칸 현재 수량 + 넣을 수량 > 최대 -> 409(capacity null = 제한 없음)
         if(locationEntity.getCapacity() != null){
             int total = stockService.locationTotal(locationEntity);

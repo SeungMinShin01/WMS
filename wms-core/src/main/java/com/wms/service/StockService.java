@@ -97,8 +97,21 @@ public class StockService {
         return total;
     }
 
+    // 칸에 다른 화주 재고가 있는지 (칸 단위 화주 검사) - 넣으려는 LOT의 품목화주 기준
+    public boolean hasOtherTenant(LocationEntity loc, LotEntity lot){
+        Integer myTenantId = lot.getProductEntity().getTenantEntity().getTenantId();
+        for(StockEntity s : stockRepository.findAll()){
+            // 다른 칸이거나 비어 있는 재고는 건너뜀
+            if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
+                continue;
+            if(!s.getTenantEntity().getTenantId().equals(myTenantId))
+                return true;
+        }
+        return false;
+    }
+
     // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유: 결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
-    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount) {
+    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount, boolean hasOtherTenant) {
     }
 
     // 칸 하나 조사
@@ -106,12 +119,15 @@ public class StockService {
         int total = 0;
         boolean hasSameLot = false;
         boolean hasSameProductOtherLot = false;
+        boolean hasOtherTenant = false;
         Set<Integer> otherProducts = new HashSet<>();
         for (StockEntity s : stocks) {
             // 다른 칸 재고,
             if (!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
                 continue;
             total += s.getQty();
+            if(!s.getTenantEntity().getTenantId().equals(lot.getProductEntity().getTenantEntity().getTenantId()))
+                hasOtherTenant = true;  // 다른 화주 재고가 있음(ED-60)
             Integer productId = s.getLotEntity().getProductEntity().getProductId();
             if (s.getLotEntity().getLotId().equals(lot.getLotId()))
                 hasSameLot = true;
@@ -120,7 +136,7 @@ public class StockService {
             else
                 otherProducts.add(productId);
         }
-        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size());
+        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size(), hasOtherTenant);
     }
 
     // 여유 수량 - capacity가 null이면 제한 없음
@@ -153,6 +169,8 @@ public class StockService {
             int free = freeQty(loc, c.total());
             if (free <= 0)
                 continue; // 꽉 찬 칸 -> 탈락
+            if(c.hasOtherTenant())
+                continue;   // 다른 화주 재고가 있는 칸 --> 탈락 (ED-60)
             if (policyViolation(c, mixLot) != null)
                 continue; // 정책 위반 칸 -> 탈락
 
