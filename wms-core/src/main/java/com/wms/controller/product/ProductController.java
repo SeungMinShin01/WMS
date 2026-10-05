@@ -30,7 +30,6 @@ public class ProductController {
         return productService.상품전체조회();
     }
 
-
     // 탤런트 작성할 때 http://localhost:8080/wms/product/detail?productid=1
     @GetMapping("/wms/product/detail")
     public ProductDto 상품개별조회(
@@ -39,7 +38,7 @@ public class ProductController {
     }
 
     @PutMapping("/wms/product")
-    public boolean 상품수정( @RequestBody ProductDto productDto ){
-        return  productService.상품수정( productDto );
-    }    
+    public boolean 상품수정(@RequestBody ProductDto productDto) {
+        return productService.상품수정(productDto);
+    }
 }
