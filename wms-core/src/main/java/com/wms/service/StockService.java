@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.wms.model.dto.inbound.LocationRecommendDto;
 import com.wms.model.dto.stock.StockDto;
 import com.wms.model.dto.stock.StockHistoryDto;
+import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.LocationEntity;
 import com.wms.model.entity.LotEntity;
@@ -84,6 +85,16 @@ public class StockService {
                 .qty(qty)
                 .build();
         return stockRepository.save(newStock);
+    }
+
+    // 칸 하나의 현재 적재 수량 합계 (적재 capacity 검사용, ED-51)
+    public int locationTotal(LocationEntity loc) {
+        int total = 0;
+        for (StockEntity s : stockRepository.findAll()) {
+            if (s.getLocationEntity().getLocationId().equals(loc.getLocationId()))
+                total += s.getQty();
+        }
+        return total;
     }
 
     // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유: 결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
@@ -205,10 +216,10 @@ public class StockService {
 
     // 입출고 이력 - 재고를 바꾼 detail만, 최신순 + 변경 후 수량 계산
     public List<StockHistoryDto> historyFindAll() {
-        // 1. 이력 줄 만들기 (위치 없음 = 검수만 하고 적재 전 -> 재고 변화 없으니 제외 시킴)
+        // 1. 이력 줄 만들기 (검수만된 INSPCETED 줄은 재고 변화가 없으니 제외)
         List<StockHistoryDto> historyDtos = new ArrayList<>();
         for (DocumentItemDetailEntity detail : detailRepository.findAll()) {
-            if (detail.getLocationEntity() == null || detail.getStockEntity() == null)
+            if(detail.getStatus() == DetailStatus.INSPECTED || detail.getStockEntity() == null)
                 continue;
             historyDtos.addAll(StockHistoryDto.from(detail));
         }
