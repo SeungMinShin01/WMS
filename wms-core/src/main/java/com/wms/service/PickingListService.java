@@ -79,6 +79,11 @@ public class PickingListService {
                 throw new IllegalArgumentException("이 문서의 품목 줄이 아닙니다: " + row.getDocumentItemId());
             }
 
+            // 3-3-1. [ED-61] 고른 재고의 화주가 문서의 화주와 다르면 → 409
+            if (!stock.getTenantEntity().getTenantId().equals(documentEntity.getTenantEntity().getTenantId())) {
+                throw new IllegalStateException("다른 화주의 재고입니다 · 재고 " + stock.getStockId());
+            }
+
             // 3-4. 출고 가능한 재고인지 (다른 상품 400 / 칸·소비기한 409)
             allocationPlanService.checkShippable(item, stock, shipDate);
 
@@ -137,7 +142,7 @@ public class PickingListService {
             stockRepository.save(stock);
         }
 
-        // 7. 문서 상태 정리 (일부 할당 → ALLOCATED / 전부 할당 → PICKING)
+        // 7. 문서 상태 정리 (처음 할당하면 WAITING → ALLOCATED, 전부 할당해도 ALLOCATED 유지)
         updateStatusAfterAllocation(documentEntity);
 
         // 8. 결과로 피킹리스트 반환
