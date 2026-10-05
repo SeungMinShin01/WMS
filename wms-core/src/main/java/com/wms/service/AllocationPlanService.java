@@ -259,7 +259,7 @@ public class AllocationPlanService {
         return plan;
     }
 
-    // 3. 계산 도우미 (이 클래스 안에서만 씀)
+    // 3. 계산 (이 클래스 안에서만 씀)
 
     // 재고 1행이 이 품목 줄에 출고 가능한지 true/false 로만 판단 (예외 안 던짐)
     // buildPlan(후보 거르기), shippableQty(화면 표시값) 에서 사용

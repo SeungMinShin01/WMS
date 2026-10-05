@@ -26,6 +26,9 @@ import com.wms.model.repository.StockRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 
+// 출고 문서 목록·상세 조회 + 출고확정 + 주문 취소
+// 메서드 순서 : 목록 조회(ED-12) → 상세 조회(ED-17) → 출고확정(ED-20) → 주문 취소
+// 예) 출고확정에서 재고 3줄 중 2줄 차감 후 예외 → 앞의 2줄 차감도 취소됨
 @Service
 @Transactional
 public class OutboundService {
@@ -48,14 +51,18 @@ public class OutboundService {
     // ED-12 출고 문서 목록 조회
     // ED-61 tenantId 가 있으면 그 화주의 문서만, 없으면(null) 전체
     public List<OutboundListDto> getOutboundList(Integer tenantId) {
-        // 1. 문서 전체를 가져와서 출고 문서만 고른다 (화주를 골랐으면 그 화주 문서만)
+        // 1. 문서 전체를 가져와서 출고 문서만 고른다
+        // findAll : 테이블 전체 행을 엔티티 목록으로 가져옴 (SELECT * FROM document)
         List<DocumentEntity> documentEntities = new ArrayList<>();
         for (DocumentEntity documentEntity : documentRepository.findAll()) {
             // 출고 문서가 아니면 건너뜀
+            // enum 비교는 == / != 
             if (documentEntity.getType() != DocumentType.OUTBOUND) {
                 continue;
             }
             // 화주를 골랐는데 이 문서의 화주와 다르면 건너뜀
+            // tenantId != null 을 먼저 검사 : 화주를 안 골랐으면(null) 뒤는 실행 안 하고 통과 (&& 는 앞이 false 면 뒤를 안 봄)
+            // Integer 끼리는 == 대신 equals 로 값 비교 (== 는 객체 주소 비교라 127 넘으면 틀릴 수 있음)
             if (tenantId != null && !documentEntity.getTenantEntity().getTenantId().equals(tenantId)) {
                 continue;
             }
@@ -63,9 +70,12 @@ public class OutboundService {
         }
 
         // 2. 출고 예정일 빠른 순으로 정렬 (a 의 예정일이 더 이르면 음수 → a 가 앞)
+        // list.sort((a, b) -> ...) : 두 값을 비교하는 규칙대로 목록을 정렬
+        // compareTo : a 가 이르면 음수 / 같으면 0 / 늦으면 양수 → 음수면 a 가 앞에 옴
         documentEntities.sort((a, b) -> a.getExpectedAt().compareTo(b.getExpectedAt()));
 
         // 3. 화면용 목록 객체로 바꿔서 담는다
+        // DTO 변환 : 화면에 필요한 값만 보내고, 연관 엔티티가 줄줄이 따라가는 것을 막음
         List<OutboundListDto> documentDtos = new ArrayList<>();
         for (DocumentEntity documentEntity : documentEntities) {
             documentDtos.add(OutboundListDto.from(documentEntity));
@@ -75,13 +85,17 @@ public class OutboundService {
 
     // ED-17 출고 문서 상세 조회
     public OutboundDetailDto getOutboundDetail(Integer documentId) {
+        // findById : PK 로 한 건 조회 → Optional(있을 수도 없을 수도 있는 상자)로 옴
+        // orElseThrow : 상자가 비어 있으면 그 예외를 던짐 → GlobalExceptionHandler 가 404 응답으로 바꿈
         DocumentEntity documentEntity = documentRepository.findById(documentId).orElseThrow(() ->
             new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
+            // throw : 메서드를 즉시 멈추고 예외를 호출한 쪽으로 던짐 → 400 응답
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
         OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
 
+        // toLocalDate : LocalDateTime(날짜+시간)에서 시간을 떼고 날짜만 남김 (소비기한과 날짜끼리 비교하기 위해)
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();   // 출고 가능 판단 기준일 (출고 예정일)
         List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체 (품목마다 재사용)
 
@@ -90,8 +104,10 @@ public class OutboundService {
             if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {   // 이 문서의 줄만
                 OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
                 // 할당 수량 · 출고 가능 재고 채우기 (추천 받기 전에 화면에서 재고 부족을 미리 보게)
+                // from 으로 기본 값을 채운 뒤, 계산이 필요한 두 값은 set 으로 따로 넣음
                 outboundItemDto.setAllocatedQty(allocationPlanService.allocatedSum(documentItemEntity.getDocumentItemId()));
                 outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, allStocks));
+                // getItems() 로 DTO 안의 품목 목록을 꺼내 그 목록에 바로 추가
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
         }
@@ -111,6 +127,7 @@ public class OutboundService {
         }
 
         // 2. 상태 검사 : 이미 출고됨 409 / 피킹 중이 아님 409
+        // IllegalStateException : 요청 자체는 맞지만 지금 상태에서는 할 수 없을 때 → 409
         if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
             throw new IllegalStateException("이미 출고된 문서입니다");
         }
@@ -149,15 +166,18 @@ public class OutboundService {
             stockRepository.save(stockEntity);
 
             // ED-52 줄 상태 집음(PICKED) → 출고됨(SHIPPED)
+            // moveTo : 엔티티에 만든 상태 변경 메서드 (허용된 이동인지 확인하고 status 값을 바꿈)
             detail.moveTo(DetailStatus.SHIPPED);
             documentItemDetailRepository.save(detail);
         }
 
         // 6. 문서 상태 PICKING → SHIPPED + 완료 시각 기록
+        // moveTo 안에서 canGoTo 로 PICKING → SHIPPED 가 허용된 이동인지 검사, 안 되면 409
         documentEntity.moveTo(DocumentStatus.SHIPPED);
-        documentEntity.setCompletedAt(LocalDateTime.now());
+        documentEntity.setCompletedAt(LocalDateTime.now());   // LocalDateTime.now() : 지금 날짜+시간
         documentRepository.save(documentEntity);
 
+        // name() : enum 값을 글자로 바꿈 (DocumentStatus.SHIPPED → "SHIPPED")
         return documentEntity.getStatus().name();
     }
 
@@ -183,6 +203,7 @@ public class OutboundService {
             StockEntity stockEntity = detail.getStockEntity();
             stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());   // 이 줄이 잡아둔 만큼만 선점 해제
             stockRepository.save(stockEntity);
+            // delete : 엔티티에 해당하는 행을 DB 에서 삭제
             documentItemDetailRepository.delete(detail);                                    // 할당 실적 줄 삭제
         }
 
