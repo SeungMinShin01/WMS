@@ -1,4 +1,4 @@
-# 01. 정합성 Before — 동시 요청 시 재고·문서 데이터
+    # 01. 정합성 Before — 동시 요청 시 재고·문서 데이터
 
 - **대상 API**
   - 할당: `POST /wms/allocations/{documentId}/pickinglist`
