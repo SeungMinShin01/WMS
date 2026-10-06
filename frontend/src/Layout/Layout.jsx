@@ -28,15 +28,17 @@ export default function Layout(props) {
 
           <div className="menu-group">입고관리</div>
           <NavLink to="/inbounds" end>
-            입고예정
+            입고문서
           </NavLink>
           <NavLink to="/inbounds/inspection">입고검수</NavLink>
+          <NavLink to="/inbounds/putaway">물품적재</NavLink>
 
           <div className="menu-group">출고관리</div>
           <NavLink to="/outbounds" end>
-            출고예정
+            출고문서
           </NavLink>
           <NavLink to="/outbounds/allocation">출고지시</NavLink>
+          <NavLink to="/outbounds/picking">피킹리스트</NavLink>
 
           <div className="menu-group">재고관리</div>
           <NavLink to="/stocks" end>
@@ -44,7 +46,7 @@ export default function Layout(props) {
           </NavLink>
           <NavLink to="/stocks/history">입출고이력</NavLink>
 
-          <div className="side-foot">Ver 7.0.0 · WH-01 본 물류센터</div>
+          <div className="side-foot">WH-01 물류센터</div>
         </nav>
 
         <main className="content">

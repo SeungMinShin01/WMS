@@ -29,9 +29,20 @@ public class DocumentEntity extends BaseTime {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer documentId;
 
+    // 화주 (V4)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private TenantEntity tenantEntity;
+
     private String documentNo; // IN-20261001-001
     @Enumerated(EnumType.STRING)
     private DocumentType type;
+
+    // 들어온 경로 (V4). 기본 WMS, Portal 연동 시 PORTAL
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private DocumentSource source = DocumentSource.WMS;
 
     @JoinColumn(name = "partner_id")
     @ManyToOne(fetch = FetchType.LAZY)
@@ -47,6 +58,10 @@ public class DocumentEntity extends BaseTime {
 
     // 상태를 바꾸는 유일한 문. setStatus 는 직접 호출하지 않는다
     public void moveTo(DocumentStatus next) {
+        if (!next.belongsTo(this.type)) {
+            throw new IllegalStateException(
+                    "문서 " + documentNo + "(" + type + ")는 " + next + " 상태가 될 수 없습니다");
+        }
         if (!this.status.canGoTo(next)) {
             throw new IllegalStateException(
                     "문서 " + documentNo + " 상태를 " + status + " → " + next + " 로 바꿀 수 없습니다");

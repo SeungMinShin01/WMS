@@ -58,24 +58,50 @@ jobs:
   # 백엔드 빌드 (컴파일 + jar)
   backend:
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: "1234"
+          MYSQL_DATABASE: wms_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -p1234"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      # application-test.yml 의 ${DB_URL:...} 기본값(3307)을 CI 에서는 3306 으로 덮어쓴다
+      DB_URL: jdbc:mysql://localhost:3306/wms_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USER: root
+      DB_PASSWORD: "1234"
+
     steps:
       - uses: actions/checkout@v4
 
-      # Java 17
       - name: set java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      # Gradle 캐시
       - name: set gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: build
+      # -x test 제거: 테스트까지 통과해야 초록
+      - name: build and test
         run: |
           chmod +x gradlew
-          ./gradlew build -x test --no-daemon
+          ./gradlew build --no-daemon
+
+      # 실패하면 어떤 테스트가 왜 깨졌는지 리포트를 받을 수 있게
+      - name: upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: wms-core/build/reports/tests/test
 
   # 프론트 빌드
   frontend:

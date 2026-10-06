@@ -8,6 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -46,4 +49,18 @@ public class DocumentItemDetailEntity extends BaseTime {
     private StockEntity stockEntity;
 
     private Integer qty;
+
+    private String remark; // 작업자 비고
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private DetailStatus status; // INSPECTED / STORED / ALLOCATED / PICKED / SHIPPED
+
+    // 상태를 바꾸는 유일한 문. setStatus 는 직접 호출하지 않는다
+    public void moveTo(DetailStatus next) {
+        if (!this.status.canGoTo(next)) {
+            throw new IllegalStateException(
+                    "처리 결과 " + detailId + " 상태를 " + status + " → " + next + " 로 바꿀 수 없습니다");
+        }
+        this.status = next;
+    }
 }

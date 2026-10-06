@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class InboundListDto {
+    // ED-10 입고 문서 목록 조회
     private Integer documentId;
     private String documentNo;
     private String partnerName;
@@ -26,7 +27,8 @@ public class InboundListDto {
     private LocalDateTime createdAt;
     private String status;
     private Integer itemCount;
-    private Integer totalExpectedQty;
+    private Integer totalExpectedQty;   // 들어올 예정인 수량
+    private Integer inspectedQty;   // 실제 입고수량 합계 
 
     public static InboundListDto from(DocumentEntity entity, int itemCount, int totalExpectedQty) {
         return InboundListDto.builder()

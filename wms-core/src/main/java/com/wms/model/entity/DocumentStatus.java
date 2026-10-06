@@ -11,6 +11,23 @@ public enum DocumentStatus {
     SHIPPED, // 출고완료 (출고 끝)
     CANCELED; // 취소 (공통 끝)
 
+    // 이 상태가 type 문서에서 쓸 수 있는 상태인가
+    public boolean belongsTo(DocumentType type) {
+        switch (this) {
+            case INSPECTED:
+            case COMPLETED:
+                return type == DocumentType.INBOUND;
+
+            case ALLOCATED:
+            case PICKING:
+            case SHIPPED:
+                return type == DocumentType.OUTBOUND;
+
+            default:
+                return true; // WAITING, CANCELED 는 공통
+        }
+    }
+
     // 이 상태에서 next 로 갈 수 있는가
     public boolean canGoTo(DocumentStatus next) {
         switch (this) {

@@ -16,15 +16,13 @@ import lombok.NoArgsConstructor;
 public class InspectionResultDto {
     // ED-15 품목별 검수 현황(검수 전이면 detailId / qty / locationCode 가 null)
     private Integer documentItemId;
-    private String productCode;
     private String productName;
     private String lotCode;
-    private LocalDate expirDate;
     private Integer expectedQty;
-
     private Integer detailId;
     private Integer qty;
     private String locationCode;
+    private String remark;
 
     public static InspectionResultDto from(DocumentItemDetailEntity entity) {
         return InspectionResultDto.builder()
@@ -36,6 +34,7 @@ public class InspectionResultDto {
                 .qty(entity.getQty())
                 // 적재전이면 location null
                 .locationCode(entity.getLocationEntity() == null ? null : entity.getLocationEntity().getLocationCode())
+                .remark(entity.getRemark())
                 .build();
     }
 }
