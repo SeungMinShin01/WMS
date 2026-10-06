@@ -37,15 +37,14 @@ public class ProductService {
             .orElseThrow(() -> new SaveException("상품 등록 실패] 없는 화주입니다."));
 
     ProductEntity entity = productDto.toEntity(tenant); // 변경: toEntity() → toEntity(tenant)
-    try{
+    
         ProductEntity savedEntity = productRepository.save(entity);
         if (savedEntity.getProductId() >= 1) {
             return savedEntity.getProductId();
         } else {
                 throw new SaveException("상품 등록 실패] PK 생성 ");
             }
-        }catch(Exception e ){ 
-            throw new SaveException("상품 등록 실패] 식별정보에 중복이 있습니다."); }
+   
     }
 
     public List<ProductDto> 상품전체조회() {

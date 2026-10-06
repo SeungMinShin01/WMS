@@ -32,6 +32,8 @@ public class GlobalExceptionHandler {
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> serverError(Exception e){
+        System.out.println("★ 예외 핸들러 실행됨");
+        e.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
     }
 
