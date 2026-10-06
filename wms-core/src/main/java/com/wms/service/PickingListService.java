@@ -195,13 +195,13 @@ public class PickingListService {
 
     // ED-19 피킹 리스트 조회 (로케이션 코드순 = 피킹 동선 순서)
     // createPickingList 8번에서도 부르고, 화면(피킹 페이지)에서도 따로 부름
-  
     @Transactional(readOnly = true)
     public List<PickingListDto> getPickingList(Integer documentId) {
-        // existsById : 그 PK 가 있으면 true (엔티티를 꺼낼 필요 없이 있는지만 확인)
-        if (!documentRepository.existsById(documentId)) {
-            throw new EntityNotFoundException("출고 문서가 없습니다: " + documentId);
-        }
+        // 없는 문서면 404 (빈 목록 [] 이 200 으로 나가지 않게)
+        // findById : PK 로 한 건 조회 → Optional(있을 수도 없을 수도 있는 상자)로 옴
+        // orElseThrow : 상자가 비어 있으면 그 예외를 던짐
+        documentRepository.findById(documentId)
+                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         // stream : 목록을 흐름으로 바꿔 단계별로 처리 (수업에서 배운 방식)
         //   filter(조건)   : 조건이 true 인 것만 남김 → 이 문서의 할당 줄만
         //   sorted((a, b)) : 정렬 → 로케이션 코드 글자 순 (compareTo : a 가 앞이면 음수, 같으면 0, 뒤면 양수)
