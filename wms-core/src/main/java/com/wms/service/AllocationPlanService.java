@@ -264,6 +264,7 @@ public class AllocationPlanService {
     // 재고 1행이 이 품목 줄에 출고 가능한지 true/false 로만 판단 (예외 안 던짐)
     // buildPlan(후보 거르기), shippableQty(화면 표시값) 에서 사용
     // 조건 : 같은 상품 · 운영 중인 칸 · 소비기한 있음 · 잔여일 충분
+    // 상품 비교는 buildPlan 이 재고 전체를 넘기기 때문에 필요 (shippableQty 는 같은 상품만 받아서 항상 통과)
     private boolean isShippable(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
         // 재고 → LOT → 상품 id 와 주문 품목의 상품 id 비교
         if (!s.getLotEntity().getProductEntity().getProductId().equals(item.getProductEntity().getProductId())) return false;
@@ -311,11 +312,14 @@ public class AllocationPlanService {
     // 검사는 부르는 쪽에서 함
     //   추천·피킹리스트 생성 : 0 보다 크면 이미 할당된 줄 → 409
     //   집음·문서 상태 정리  : 요청 수량보다 작으면 아직 덜 할당된 줄
-    //   출고 문서 상세 조회  : 화면의 "할당 수량"
+    //   ED-17 출고 문서 상세 조회  : 화면의 "할당 수량"
     public int allocatedSum(Integer documentItemId) {
         int sum = 0;
-        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) {
+        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) { // detail은 피킹 리스트 생성을 누를 때 처음 생성되서 그 전 (출고 예정 상태)에는 detail이 없음
             if (d.getDocumentItemEntity().getDocumentItemId().equals(documentItemId)) {
+                // 한 품목 줄에 detail이 여러 줄일 수 있음
+                // detail 1줄 : 품목 줄 21, 재고 10, 60개
+                // detail 1줄 : 품목 줄 21, 재고 11, 10개
                 sum += d.getQty();
             }
         }
@@ -348,9 +352,10 @@ public class AllocationPlanService {
 
     // 이 품목 줄의 출고 가능 재고 합계 (OutboundService ED-17 출고 문서 상세 조회에서 호출 → 화면 표시)
     // 추천 후보(buildPlan (1))와 같은 기준 : isShippable 통과 + 같은 화주 + 가용 > 0
-    public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> allStocks) {
+    // productStocks : 이 품목 상품의 재고만 담긴 목록 (OutboundService 에서 상품별로 나눠서 넘겨줌)
+    public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> productStocks) {
         int sum = 0;
-        for (StockEntity s : allStocks) {
+        for (StockEntity s : productStocks) {
             if (!isShippable(item, s, shipDate)) continue;
 
             // [ED-61] 다른 화주 재고는 제외

@@ -3,7 +3,9 @@ package com.wms.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -83,8 +85,9 @@ public class OutboundService {
         return documentDtos;
     }
 
-    // ED-17 출고 문서 상세 조회
+        // ED-17 출고 문서 상세 조회
     public OutboundDetailDto getOutboundDetail(Integer documentId) {
+        // 1. 문서 찾기 + 검사 (없으면 404 / 출고 문서 아니면 400)
         // findById : PK 로 한 건 조회 → Optional(있을 수도 없을 수도 있는 상자)로 옴
         // orElseThrow : 상자가 비어 있으면 그 예외를 던짐 → GlobalExceptionHandler 가 404 응답으로 바꿈
         DocumentEntity documentEntity = documentRepository.findById(documentId).orElseThrow(() ->
@@ -93,20 +96,44 @@ public class OutboundService {
             // throw : 메서드를 즉시 멈추고 예외를 호출한 쪽으로 던짐 → 400 응답
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
+
+        // 2. 문서 정보로 상세 DTO 만들기 (위쪽 "출고 정보" 부분)
         OutboundDetailDto outboundDetailDto = OutboundDetailDto.from(documentEntity);
 
+        // 3. 품목 계산에 쓸 값 준비 (출고 예정일 · 상품별 재고)
         // toLocalDate : LocalDateTime(날짜+시간)에서 시간을 떼고 날짜만 남김 (소비기한과 날짜끼리 비교하기 위해)
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();   // 출고 가능 판단 기준일 (출고 예정일)
-        List<StockEntity> allStocks = stockRepository.findAll();            // 재고 전체 (품목마다 재사용)
 
+        // 3-1. 재고 전체를 상품별로 나눠 둔다 : 상품id → 그 상품의 재고 목록
+        // 품목마다 재고 전체를 넘기지 않고, 그 품목 상품의 재고만 꺼내 넘기기 위해, 재고 전체는 여기서 한 번만 돈다
+        Map<Integer, List<StockEntity>> stocksByProduct = new HashMap<>();
+        for (StockEntity stockEntity : stockRepository.findAll()) {
+            Integer productId = stockEntity.getLotEntity().getProductEntity().getProductId(); // 재고 → LOT → 상품 id
+            // 이 상품이 처음 나왔으면 빈 목록을 먼저 만들어 둔다
+            if (!stocksByProduct.containsKey(productId)) {
+                stocksByProduct.put(productId, new ArrayList<>());
+            }
+            // 이 상품의 목록을 꺼내서 재고를 추가 (꺼낸 목록이 Map 안의 목록이라 따로 put 안 해도 반영됨)
+            stocksByProduct.get(productId).add(stockEntity);
+        }
+
+        // 4. 이 문서의 품목 줄만 골라 DTO 로 바꾸고, 할당수량 · 출고가능재고 채워서 상세 DTO 에 담기 (아래쪽 "주문 품목" 표)
         List<DocumentItemEntity> documentItemEntities = documentItemRepository.findAll();
         for (DocumentItemEntity documentItemEntity : documentItemEntities) {   // 품목 줄 하나씩 꺼내서
             if (documentItemEntity.getDocumentEntity().getDocumentId().equals(documentId)) {   // 이 문서의 줄만
                 OutboundItemDto outboundItemDto = OutboundItemDto.from(documentItemEntity);
+
+                // 이 품목 상품의 재고만 꺼낸다 (창고에 이 상품 재고가 하나도 없으면 빈 목록)
+                Integer productId = documentItemEntity.getProductEntity().getProductId();
+                List<StockEntity> productStocks = new ArrayList<>();
+                if (stocksByProduct.containsKey(productId)) {
+                    productStocks = stocksByProduct.get(productId);
+                }
+
                 // 할당 수량 · 출고 가능 재고 채우기 (추천 받기 전에 화면에서 재고 부족을 미리 보게)
                 // from 으로 기본 값을 채운 뒤, 계산이 필요한 두 값은 set 으로 따로 넣음
                 outboundItemDto.setAllocatedQty(allocationPlanService.allocatedSum(documentItemEntity.getDocumentItemId()));
-                outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, allStocks));
+                outboundItemDto.setAvailableQty(allocationPlanService.shippableQty(documentItemEntity, shipDate, productStocks));
                 // getItems() 로 DTO 안의 품목 목록을 꺼내 그 목록에 바로 추가
                 outboundDetailDto.getItems().add(outboundItemDto);
             }
