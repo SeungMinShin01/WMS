@@ -11,14 +11,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.PickingListDto;
+import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentEntity;
+import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
 import com.wms.model.entity.DocumentStatus;
+import com.wms.model.entity.DocumentType;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.StockRepository;
+
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -73,6 +77,11 @@ public class PickingListService {
             // 3-3. 이 문서의 품목 줄인지 → 400
             if (!item.getDocumentEntity().getDocumentId().equals(documentId)) {
                 throw new IllegalArgumentException("이 문서의 품목 줄이 아닙니다: " + row.getDocumentItemId());
+            }
+
+            // 3-3-1. [ED-61] 고른 재고의 화주가 문서의 화주와 다르면 → 409
+            if (!stock.getTenantEntity().getTenantId().equals(documentEntity.getTenantEntity().getTenantId())) {
+                throw new IllegalStateException("다른 화주의 재고입니다 · 재고 " + stock.getStockId());
             }
 
             // 3-4. 출고 가능한 재고인지 (다른 상품 400 / 칸·소비기한 409)
@@ -133,7 +142,7 @@ public class PickingListService {
             stockRepository.save(stock);
         }
 
-        // 7. 문서 상태 정리 (일부 할당 → ALLOCATED / 전부 할당 → PICKING)
+        // 7. 문서 상태 정리 (처음 할당하면 WAITING → ALLOCATED, 전부 할당해도 ALLOCATED 유지)
         updateStatusAfterAllocation(documentEntity);
 
         // 8. 결과로 피킹리스트 반환
@@ -141,23 +150,14 @@ public class PickingListService {
     }
 
     // 할당 후 문서 상태 정리
-    //   일부 품목만 할당됨 → ALLOCATED (WAITING 이었으면 ALLOCATED 로)
-    //   전 품목 할당됨     → PICKING   (WAITING → ALLOCATED → PICKING, canGoTo 규칙상 ALLOCATED 를 거쳐야 함)
+    // 처음 할당하면 접수(WAITING) → 할당(ALLOCATED)
+    // 품목을 전부 할당해도 할당(ALLOCATED) 에 머문다
+    // 피킹중(PICKING) 은 피킹 확인 API 에서 작업자가 처음 집는 순간 바뀐다
     private void updateStatusAfterAllocation(DocumentEntity documentEntity) {
-        boolean allFilled = true;
-        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentEntity.getDocumentId())) {
-            if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
-                allFilled = false;   // 덜 채워진 줄이 하나라도 있음
-                break;
-            }
+        if (documentEntity.getStatus() == DocumentStatus.WAITING) {   // 아직 접수 상태면
+            documentEntity.moveTo(DocumentStatus.ALLOCATED);         // 할당으로 바꾼다
         }
-        if (documentEntity.getStatus() == DocumentStatus.WAITING) {
-            documentEntity.moveTo(DocumentStatus.ALLOCATED);   // 하나라도 할당했으니 ALLOCATED
-        }
-        if (allFilled) {
-            documentEntity.moveTo(DocumentStatus.PICKING);     // 전부 채워졌으면 PICKING
-        }
-        documentRepository.save(documentEntity);
+        documentRepository.save(documentEntity);                     // 바뀐 상태를 DB 에 저장
     }
 
     // ED-19 피킹 리스트 조회 (로케이션 코드순 = 피킹 동선 순서)
@@ -174,4 +174,53 @@ public class PickingListService {
                 .map((detail) -> PickingListDto.from(detail))
                 .toList();
     }
+
+    // ED-52 피킹 확인 : 작업자가 피킹 줄 1개를 집었다고 표시한다
+    // 할당됨(ALLOCATED) 줄만 집음(PICKED) 으로 바꿀 수 있다
+    // 문서의 모든 품목이 할당된 뒤에만 집을 수 있다 (조장님 결정)
+    // 문서에서 처음 집는 순간 문서도 할당(ALLOCATED) → 피킹중(PICKING)
+    public PickingListDto pickDetail(Integer detailId) {
+
+        // 1. 피킹 줄(할당 실적 1줄) 찾기 → 없으면 404
+        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 줄이 없습니다: " + detailId));
+
+        // 2. 이 줄이 속한 문서 (줄 → 품목 줄 → 문서) 가 출고 문서인지 → 아니면 400
+        DocumentEntity documentEntity = detail.getDocumentItemEntity().getDocumentEntity();
+        if (documentEntity.getType() != DocumentType.OUTBOUND) {
+            throw new IllegalArgumentException("출고 문서의 줄이 아닙니다: " + detailId);
+        }
+
+        // 2-1. [결정] 문서의 모든 품목이 할당됐는지 → 하나라도 덜 할당됐으면 409
+        //      일부만 할당한 채 피킹을 시작하면 남은 품목은 할당·취소를 못 하고 출고도 안 되기 때문
+        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentEntity.getDocumentId())) {
+            if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
+                throw new IllegalStateException("할당이 끝나지 않은 품목이 있습니다: " + item.getProductEntity().getProductName());
+            }
+        }
+
+        // 3. 이미 집었거나 출고된 줄이면 409 (같은 줄 두 번 집기 방지)
+        if (detail.getStatus() == DetailStatus.PICKED) {
+            throw new IllegalStateException("이미 집은 줄입니다: " + detailId);
+        }
+        if (detail.getStatus() == DetailStatus.SHIPPED) {
+            throw new IllegalStateException("이미 출고된 줄입니다: " + detailId);
+        }
+
+        // 4. 줄 상태 할당됨(ALLOCATED) → 집음(PICKED)
+        detail.moveTo(DetailStatus.PICKED);
+        documentItemDetailRepository.save(detail);
+
+        // 5. 문서에서 처음 집은 거면 문서 할당(ALLOCATED) → 피킹중(PICKING)
+        // 이미 피킹중이면 그대로
+        if (documentEntity.getStatus() == DocumentStatus.ALLOCATED) {
+            documentEntity.moveTo(DocumentStatus.PICKING);
+            documentRepository.save(documentEntity);
+        }
+
+        // 6. 바뀐 줄 리턴
+        return PickingListDto.from(detail);
+    }
+
+
 }

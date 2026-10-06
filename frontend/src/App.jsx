@@ -33,6 +33,9 @@ export default function App(props) {
         <Route path="outbounds/picking/:documentId" element={<PickingPage />} />
         <Route path="stocks" element={<StockPage />} />
         <Route path="stocks/history" element={<HistoryPage />} />
+        <Route path="master/products" element={<ProductPage />} />
+        <Route path="master/partners" element={<PartnerPage />} />
+        <Route path="master/locations" element={<LocationPage />} />
       </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
