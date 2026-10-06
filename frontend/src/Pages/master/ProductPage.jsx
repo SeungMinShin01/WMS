@@ -87,6 +87,7 @@ export default function ProductPage(props) {
       return;
     }
     const isEdit = form.productId != null;
+
     try {
       const res = isEdit
         ? await axios.put("/wms/product", form)
@@ -96,11 +97,10 @@ export default function ProductPage(props) {
         setForm(null);
         fetchProducts();
       } else {
-        alert("저장에 실패했습니다.");
+        alert( res.data );
       }
     } catch (err) {
-      console.error("품목 저장 실패", err);
-      alert("저장 중 오류가 발생했습니다.");
+      alert( err.response.data );
     }
   };
 

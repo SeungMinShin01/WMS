@@ -35,4 +35,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
     }
 
+    // 500 코드를 세분화 (등록)
+    @ExceptionHandler(SaveException.class)
+    public ResponseEntity<String> saveError(SaveException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body( e.getMessage());
+    }
 }

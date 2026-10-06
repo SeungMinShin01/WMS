@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.wms.controller.SaveException;
 import com.wms.model.dto.product.ProductDto;
 import com.wms.model.entity.ProductEntity;
 import com.wms.model.repository.ProductRepository;
@@ -18,14 +19,17 @@ public class ProductService {
     @Autowired
     ProductRepository productRepository;
 
-    public boolean 상품등록(ProductDto productDto) {
+    public Integer 상품등록(ProductDto productDto) {
         ProductEntity entity = productDto.toEntity();
-        ProductEntity savedEntity = productRepository.save(entity);
-        if (savedEntity.getProductId() >= 1) {
-            return true;
-        } else {
-            return false;
-        }
+        try{
+            ProductEntity savedEntity = productRepository.save(entity);
+            if (savedEntity.getProductId() >= 1) {
+                return savedEntity.getProductId();
+            } else {
+                throw new SaveException("상품 등록 실패] PK 생성 실패 했습니다.");
+            }
+        }catch(Exception e ){ 
+            throw new SaveException("상품 등록 실패] 식별정보에 중복이 있습니다."); }
     }
 
     public List<ProductDto> 상품전체조회() {

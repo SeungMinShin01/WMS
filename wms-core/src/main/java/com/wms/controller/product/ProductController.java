@@ -19,7 +19,7 @@ public class ProductController {
     private ProductService productService;
 
     @PostMapping("/wms/product")
-    public boolean 상품등록(
+    public Integer 상품등록(
             @RequestBody ProductDto productDto) {
         System.out.println(productDto);
         return productService.상품등록(productDto);
