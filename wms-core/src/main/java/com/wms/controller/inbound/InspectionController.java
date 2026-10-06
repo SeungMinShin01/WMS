@@ -42,7 +42,7 @@ public class InspectionController {
 
     // 적재 1건 ED - 16
     @PutMapping("")
-    public ResponseEntity<Boolean> carry(@RequestBody CarryingDto carryingDto) {
+    public synchronized ResponseEntity<Boolean> carry(@RequestBody CarryingDto carryingDto) {
         return ResponseEntity.ok(inboundService.carry(carryingDto));
     }
 
