@@ -1,6 +1,5 @@
 package com.wms.service;
 
-import com.wms.model.repository.StockRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -37,7 +36,6 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 @Transactional
 public class InboundService {
-    private final StockRepository stockRepository;
     @Autowired
     private DocumentRepository documentRepository;
     @Autowired
@@ -49,10 +47,6 @@ public class InboundService {
     // ED-16
     @Autowired
     private LocationRepository locationRepository;
-
-    InboundService(StockRepository stockRepository) {
-        this.stockRepository = stockRepository;
-    }
 
     // ED-10 입고 문서 목록 조회
     public List<InboundListDto> findAll() {
