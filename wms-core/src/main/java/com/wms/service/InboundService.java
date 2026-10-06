@@ -196,7 +196,7 @@ public class InboundService {
     // ED-16 적재 1건
     public boolean carry(CarryingDto carryingDto) {
         // 검수 결과 조회
-        DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(carryingDto.getDetailId())
+        DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findByIdForUpdate(carryingDto.getDetailId())
                 .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
 
         DocumentEntity documentEntity = detailEntity.getDocumentItemEntity().getDocumentEntity();
