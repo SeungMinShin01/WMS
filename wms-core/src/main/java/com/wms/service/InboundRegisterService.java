@@ -84,7 +84,7 @@ public class InboundRegisterService {
 
     // 입고 문서에 품목 1줄 등록 -> 생성된 documentItemId 반환
     public Integer createItem(Integer documentId, InboundItemCreateDto dto){
-        // 필수값 400 
+        // 필수값 400, StringUtils.hasText는 null,빈 문자열, 공백만 있는 경우를 모두 걸러줌
         if (dto.getProductId() == null || !StringUtils.hasText(dto.getLotCode()) || dto.getExpiryDate() == null) {
             throw new IllegalArgumentException("품목, LOT 번호, 소비기한은 필수입니다.");
         }
@@ -108,6 +108,7 @@ public class InboundRegisterService {
         }
 
         // LOT: 같은 품목 + 같은 LOT 번호가 있으면 재사용, 없으면 새로 등록
+        // .trim 앞뒤 공백 지우기
         String lotCode = dto.getLotCode().trim();
         LotEntity lot;
         Optional<LotEntity> found = lotRepository.findByProductEntityAndLotCode(product, lotCode);
@@ -160,5 +161,5 @@ public class InboundRegisterService {
         }
         return list;
     }
-    
+
 }
