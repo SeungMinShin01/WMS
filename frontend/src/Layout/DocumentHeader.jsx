@@ -26,6 +26,12 @@ export default function DocumentHeader(props) {
   return (
     <table className="form head">
       <tbody>
+        {doc.tenantName && (
+          <tr>
+            <th>화주</th>
+            <td colSpan={5}>{doc.tenantName}</td>
+          </tr>
+        )}
         <tr>
           <th>{label.no}</th>
           <td>{doc.documentNo}</td>
