@@ -47,7 +47,7 @@ public class OutboundController {
 
     // ED-17 출고 문서 상세 조회
     // @PathVariable : 주소 경로 안의 {documentId} 자리 값을 받음
-    //   예) /wms/outbounds/10 → documentId = 10
+    //   예) http://localhost:8080/wms/outbounds/67 → documentId = 10
     @GetMapping("/wms/outbounds/{documentId}")
     public ResponseEntity<OutboundDetailDto> getOutboundDetail(@PathVariable(name = "documentId") Integer documentId) {
         return ResponseEntity.ok(outboundService.getOutboundDetail(documentId));
