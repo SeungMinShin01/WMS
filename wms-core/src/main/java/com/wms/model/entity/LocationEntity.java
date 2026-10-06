@@ -33,6 +33,7 @@ public class LocationEntity extends BaseTime {
     // 창고의 구역이나 위치 이름을 글자로 저장
     @Builder.Default
     private Boolean isActive = true;
-
-    private Integer capacity; // 칸당 최대 적재량 (단위: BOX), null = 제한 없음 (V2)
+    // @Builder.Default = 기본값 true 무시하고 null 로 바꾸는 버그 안전장치
+    // isActive = 이 위치가 지금 사용 가능한 상태인지(참/거짓) 나타내는 변수
+    private Integer capacity; // 로케이션별 적재량
 }

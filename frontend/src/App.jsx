@@ -8,6 +8,9 @@ import StockPage from "./Pages/stock/StockPage";
 import HistoryPage from "./Pages/stock/HistoryPage";
 import PutawayPage from "./Pages/inbound/PutawayPage";
 import PickingPage from "./Pages/outbound/PickingPage";
+import ProductPage from "./Pages/master/ProductPage";
+import PartnerPage from "./Pages/master/PartnerPage";
+import LocationPage from "./Pages/master/LocationPage";
 
 export default function App(props) {
   return (
@@ -33,6 +36,9 @@ export default function App(props) {
         <Route path="outbounds/picking/:documentId" element={<PickingPage />} />
         <Route path="stocks" element={<StockPage />} />
         <Route path="stocks/history" element={<HistoryPage />} />
+        <Route path="master/products" element={<ProductPage />} />
+        <Route path="master/partners" element={<PartnerPage />} />
+        <Route path="master/locations" element={<LocationPage />} />
       </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
