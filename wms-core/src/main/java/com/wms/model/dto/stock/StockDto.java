@@ -18,6 +18,7 @@ public class StockDto {
     
     // ED - 21 : 재고 하나 조회
     private Integer stockId;
+    private String tenantName;
     private String productCode;
     private String productName;
     private String spec;    // 규격(없으면 null)
@@ -34,6 +35,7 @@ public class StockDto {
         // ED - 21 : 전체 재고 조회
         return StockDto.builder()
                 .stockId(entity.getStockId())
+                .tenantName(entity.getTenantEntity().getTenantName())
                 .productCode(entity.getLotEntity().getProductEntity().getProductCode())
                 .productName(entity.getLotEntity().getProductEntity().getProductName())
                 .spec(entity.getLotEntity().getProductEntity().getSpec())
