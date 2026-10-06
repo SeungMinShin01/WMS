@@ -208,6 +208,10 @@ public class InboundService {
         if(detailEntity.getStatus() != DetailStatus.INSPECTED)
             throw new IllegalStateException("이미 적재된 검수 기록입니다");
 
+        // 동시성(ED-48): 검사 + 변경을 SQL 한 문장으로. 0행이면 다른 요청이 먼저 적재
+        int updated = documentItemDetailRepository.changeStatus(detailEntity.getDetailId(), DetailStatus.INSPECTED, DetailStatus.STORED);
+        if(updated==0) throw new IllegalStateException("이미 적재된 검수 기록입니다.")
+
         // 적재할 칸 조회
         LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId())
                 .orElseThrow(() -> new EntityNotFoundException("로케이션이 없습니다."));
