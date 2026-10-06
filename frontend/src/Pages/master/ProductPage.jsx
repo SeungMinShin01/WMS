@@ -96,6 +96,7 @@ export default function ProductPage(props) {
         alert(isEdit ? "수정되었습니다." : "등록되었습니다.");
         setForm(null);
         fetchProducts();
+    // 수정한 부분
       } else {
         alert( res.data );
       }

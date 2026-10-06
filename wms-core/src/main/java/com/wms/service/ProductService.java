@@ -1,16 +1,20 @@
 package com.wms.service;
 
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;   // 필수값 검사용 (스프링에 이미 들어 있음)
 
 import com.wms.controller.SaveException;
 import com.wms.model.dto.product.ProductDto;
 import com.wms.model.entity.ProductEntity;
+import com.wms.model.entity.TenantEntity;
 import com.wms.model.repository.ProductRepository;
+import com.wms.model.repository.TenantRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -18,15 +22,27 @@ import jakarta.transaction.Transactional;
 public class ProductService {
     @Autowired
     ProductRepository productRepository;
+    @Autowired
+    private TenantRepository tenantRepository;   // 추가
 
     public Integer 상품등록(ProductDto productDto) {
-        ProductEntity entity = productDto.toEntity();
-        try{
-            ProductEntity savedEntity = productRepository.save(entity);
-            if (savedEntity.getProductId() >= 1) {
-                return savedEntity.getProductId();
-            } else {
-                throw new SaveException("상품 등록 실패] PK 생성 실패 했습니다.");
+    // 추가: 필수값 검사 (없으면 거부)
+    if (productDto.getTenantId() == null
+            || !StringUtils.hasText(productDto.getProductCode())
+            || !StringUtils.hasText(productDto.getProductName())) {
+        throw new SaveException("상품 등록 실패] 필수값이 없습니다.");
+    }
+    // 추가: 화주 조회 (없으면 거부)
+    TenantEntity tenant = tenantRepository.findById(productDto.getTenantId())
+            .orElseThrow(() -> new SaveException("상품 등록 실패] 없는 화주입니다."));
+
+    ProductEntity entity = productDto.toEntity(tenant); // 변경: toEntity() → toEntity(tenant)
+    try{
+        ProductEntity savedEntity = productRepository.save(entity);
+        if (savedEntity.getProductId() >= 1) {
+            return savedEntity.getProductId();
+        } else {
+                throw new SaveException("상품 등록 실패] PK 생성 ");
             }
         }catch(Exception e ){ 
             throw new SaveException("상품 등록 실패] 식별정보에 중복이 있습니다."); }
