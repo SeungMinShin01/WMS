@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s # 5초마다 수집 (부하 측정 중 변화를 보려고 짧게)
+
+scrape_configs:
+  - job_name: wms-core
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"] # 내 PC 에서 도는 스프링
