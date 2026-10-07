@@ -104,7 +104,7 @@ public class OutboundService {
     public String confirmShipment(Integer documentId) {
 
         // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
-        DocumentEntity documentEntity = documentRepository.findById(documentId)
+        DocumentEntity documentEntity = documentRepository.findByIdForUpdate(documentId) //  ED-64 findById -> findByIdForUpdate
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);

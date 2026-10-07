@@ -43,6 +43,11 @@ public class PickingListService {
     // ED-18 피킹리스트 생성 (할당 확정)
     // rows : 사용자가 최종 확정한 [ {documentItemId, stockId, qty}, ... ]
     public List<PickingListDto> createPickingList(Integer documentId, List<AllocationDto> rows) {
+        
+        // [ED-64 비관적 락] 이 문서 1행을 먼저 잠근다 (트랜잭션의 첫 쿼리여야 함)
+        documentRepository.findByIdForUpdate(documentId)
+                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
+
 
         // 1. 문서 검사 (404 / 400 / 409 대기·할당 상태 아님)
         DocumentEntity documentEntity = allocationPlanService.checkAllocatable(documentId);
