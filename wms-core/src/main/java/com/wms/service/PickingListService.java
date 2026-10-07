@@ -1,6 +1,7 @@
 package com.wms.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,13 +134,24 @@ public class PickingListService {
             }
         }
 
-        // 6. 저장 : 할당 내역(detail) + 재고 선점수량 증가
+        // 6. [ED-64 조건부 UPDATE] 재고 선점 : stockId 작은 순으로 (순서를 고정해서 데드락 방지)
+        //    가용이 모자라면(다른 요청이 먼저 선점) 바뀐 행 수 0 → 409, 예외라서 앞서 바꾼 재고도 롤백됨
+        //    기존 stock.setAllocatedQty(...) + stockRepository.save(stock) 는 지움 (함정 1)
+        List<Integer> stockIds = new ArrayList<>(stockSum.keySet());
+        stockIds.sort((a, b) -> a.compareTo(b));
+        for (Integer stockId : stockIds) {
+            int changed = stockRepository.allocate(stockId, stockSum.get(stockId));
+            if (changed == 0) {
+                throw new IllegalStateException(stockMap.get(stockId).getLocationEntity().getLocationCode()
+                        + " 가용 수량이 부족합니다 (다른 요청이 먼저 할당)");
+            }
+        }
+
+        // 6-1. 할당 내역(detail) 저장
         for (AllocationDto row : rows) {
             DocumentItemEntity item = itemMap.get(row.getDocumentItemId());
             StockEntity stock = stockMap.get(row.getStockId());
             documentItemDetailRepository.save(row.toEntity(item, stock));
-            stock.setAllocatedQty(stock.getAllocatedQty() + row.getQty());
-            stockRepository.save(stock);
         }
 
         // 7. 문서 상태 정리 (처음 할당하면 WAITING → ALLOCATED, 전부 할당해도 ALLOCATED 유지)

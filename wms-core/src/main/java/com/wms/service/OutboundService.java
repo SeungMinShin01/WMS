@@ -98,28 +98,30 @@ public class OutboundService {
         return outboundDetailDto;
     }
 
-    // ED-20 출고확정 (문서 단위) : PICKING 문서의 피킹리스트 전체를 한 번에 출고
-    // ED-52 모든 피킹 줄이(PICKED) 이어야 출고확정 가능, 확정하면 줄도 출고됨(SHIPPED)
-    // 문서 상태가 "출고됨 표시" 역할을 한다 → 이미 SHIPPED 면 409 (더블클릭·새로고침 후 재클릭 방어)
+        // ED-20 출고확정 (문서 단위) : PICKING 문서의 피킹리스트 전체를 한 번에 출고
+    // [ED-64 조건부 UPDATE] 확인(PICKING 인가) + 변경(SHIPPED) 을 UPDATE 한 문장으로 맨 앞에서 처리
     public String confirmShipment(Integer documentId) {
 
-        // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
+        // 0. 조건부 UPDATE : 문서가 PICKING 일 때만 SHIPPED 로 (바뀐 행 수 0 = 이미 누가 했거나 상태가 안 맞음)
+        //    clearAutomatically 때문에 엔티티 조회는 반드시 이 뒤에 (함정 2)
+        int changed = documentRepository.changeStatus(documentId, DocumentStatus.PICKING, DocumentStatus.SHIPPED);
+
+        // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400 (UPDATE 뒤에 조회 → 최신 상태가 보임)
         DocumentEntity documentEntity = documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
 
-        // 2. 상태 검사 : 이미 출고됨 409 / 피킹 중이 아님 409
-        if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
-            throw new IllegalStateException("이미 출고된 문서입니다");
-        }
-        if (documentEntity.getStatus() != DocumentStatus.PICKING) {
+        // 2. 상태를 못 바꿨으면 409 (이미 출고됨 / 피킹 중이 아님)
+        if (changed == 0) {
+            if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
+                throw new IllegalStateException("이미 출고된 문서입니다");
+            }
             throw new IllegalStateException("피킹 중인 문서만 출고확정할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
         }
 
-        // 3. ED-52 이 문서의 피킹 줄(할당 실적)만 먼저 모은다
-        //    할당 실적 전체 → 줄 → 품목 줄 → 문서 순으로 올라가 문서번호가 같은 것만 담는다
+        // 3. 이 문서의 피킹 줄 모으기
         List<DocumentItemDetailEntity> details = new ArrayList<>();
         for (DocumentItemDetailEntity detail : documentItemDetailRepository.findAll()) {
             if (detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
@@ -127,34 +129,27 @@ public class OutboundService {
             }
         }
 
-        // 4. ED-52 피킹 검사 : 한 줄이라도 집음(PICKED) 이 아니면 409
-        //    재고를 빼기 전에 모든 줄을 먼저 검사한다 (몇 줄만 빼다가 중간에 멈추지 않게)
+        // 4. 피킹 검사 : 한 줄이라도 집음(PICKED) 이 아니면 409 → 예외라서 0번의 상태 변경도 롤백됨
         for (DocumentItemDetailEntity detail : details) {
             if (detail.getStatus() != DetailStatus.PICKED) {
                 throw new IllegalStateException("피킹이 끝나지 않은 줄이 있습니다");
             }
         }
 
-        // 5. 줄마다 재고 차감 (실물 qty 와 선점 allocatedQty 를 같이 줄임) + 줄 상태 변경
+        // 5. 줄마다 재고 차감 : 조건부 UPDATE (실물·선점이 출고 수량 이상일 때만)
+        //    기존 setQty / setAllocatedQty / stockRepository.save 는 지움 (함정 1 : 남기면 옛 값으로 다시 덮어씀)
         for (DocumentItemDetailEntity detail : details) {
-            StockEntity stockEntity = detail.getStockEntity();   // 이 줄이 가리키는 재고 행 1개
-
-            // 재고 숫자가 이상하면 DB 제약(CHECK) 오류(500) 대신 409 로 원인을 알려줌
-            if (stockEntity.getAllocatedQty() < detail.getQty() || stockEntity.getQty() < detail.getQty()) {
+            int rows = stockRepository.ship(detail.getStockEntity().getStockId(), detail.getQty());
+            if (rows == 0) {
                 throw new IllegalStateException("재고 수량이 맞지 않습니다: " + detail.getLocationEntity().getLocationCode()
-                        + " · 출고 " + detail.getQty() + " · 실물 " + stockEntity.getQty() + " · 선점 " + stockEntity.getAllocatedQty());
+                        + " · 출고 " + detail.getQty());
             }
-            stockEntity.setQty(stockEntity.getQty() - detail.getQty());                     // 실물 차감
-            stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());   // 선점 해제
-            stockRepository.save(stockEntity);
-
-            // ED-52 줄 상태 집음(PICKED) → 출고됨(SHIPPED)
+            // 줄 상태 집음(PICKED) → 출고됨(SHIPPED)
             detail.moveTo(DetailStatus.SHIPPED);
             documentItemDetailRepository.save(detail);
         }
 
-        // 6. 문서 상태 PICKING → SHIPPED + 완료 시각 기록
-        documentEntity.moveTo(DocumentStatus.SHIPPED);
+        // 6. 완료 시각 기록 (상태는 0번에서 이미 SHIPPED 로 바뀜 → moveTo 안 함)
         documentEntity.setCompletedAt(LocalDateTime.now());
         documentRepository.save(documentEntity);
 
