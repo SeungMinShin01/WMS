@@ -1,0 +1,12 @@
+{
+  "scenario": "ship",
+  "run": 5,
+  "vus": 20,
+  "ok": 10,
+  "rejected": 10,
+  "bad": 0,
+  "failed": 0,
+  "neterr": 0,
+  "p95_ms": 174,
+  "at": "2026-10-07T03:18:25.821Z"
+}
