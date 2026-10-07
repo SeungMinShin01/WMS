@@ -1,5 +1,7 @@
 package com.wms.controller;
 
+import java.util.concurrent.CompletionException;
+
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +30,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> conflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    }
+
+    // 비동기(@Async) 작업에서 난 예외는 CompletionException 포장지에 싸여서 온다 (ED-65)
+    // → 안의 진짜 예외를 꺼내 위의 400/404/409 처리에 그대로 넘긴다
+    @ExceptionHandler(CompletionException.class)
+    public ResponseEntity<String> completion(CompletionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof IllegalArgumentException c) return badRequest(c);
+        if (cause instanceof EntityNotFoundException c) return NotFound(c);
+        if (cause instanceof IllegalStateException c) return conflict(c);
+        return serverError(e);
     }
 
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)

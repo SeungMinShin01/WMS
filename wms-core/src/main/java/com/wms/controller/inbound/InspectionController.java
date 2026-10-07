@@ -48,15 +48,8 @@ public class InspectionController {
     // 적재 1건 ED - 16
     @PutMapping("")
     public ResponseEntity<Boolean> carry(@RequestBody CarryingDto carryingDto) {
-        try{
-            // 대기열에 넣고 -> 워커가 처리할때까지 기다렸다 결과 응답(실험에서 성공/409를 세기 위해)
-            return ResponseEntity.ok(carryAsyncService.carry(carryingDto).join());
-        }catch(CompletionException e){
-            // 워커 스레드에서 난 예외를 원래 예외로 꺼내 GlobalExceptionController가 처리
-            if(e.getCause() instanceof RuntimeException cause)
-                throw cause;
-            throw e;
-        }
+        // 대기열에 넣고 -> 워커가 처리할때까지 기다렸다 결과 응답(실험에서 성공/409를 세기 위해)
+        return ResponseEntity.ok(carryAsyncService.carry(carryingDto).join());
     }
 
     // 적치 추천 (검수 기록 1건 기준) — mixLot=true면 혼용적재 모드
