@@ -1,5 +1,6 @@
 package com.wms.controller;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -29,13 +30,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
 
-
+    // [추가] 409 Conflict - DB UNIQUE 위반 (동시에 같은 코드로 등록한 경우)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<String> duplicate(DataIntegrityViolationException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 등록된 코드입니다.");
+    }
     
-
-
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> serverError(Exception e){
+        e.printStackTrace();   // [추가] 원인을 서버 콘솔에 남긴다
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
     }
 

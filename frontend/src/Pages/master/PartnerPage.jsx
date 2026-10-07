@@ -85,25 +85,28 @@ export default function PartnerPage(props) {
 
   // [추가] 저장: partnerId가 없으면 등록(POST), 있으면 수정(PUT)
   const 저장 = async () => {
-    if (!form.partnerCode.trim() || !form.partnerName.trim()) {
-      alert("거래처코드와 거래처명은 필수입니다.");
+    // 규격 필수 추가 (서버도 검사하지만 화면에서 먼저 안내)
+    if (!form.productCode.trim() || !form.productName.trim() || !form.spec.trim()) {
+      alert("품목코드, 품목명, 규격은 필수입니다.");
       return;
     }
-    const isEdit = form.partnerId != null;
+    const isEdit = form.productId != null;
+
     try {
       const res = isEdit
-        ? await axios.put("/wms/partner", form)
-        : await axios.post("/wms/partner", form);
-      if (res.data) {          // === true 제외
+        ? await axios.put("/wms/product", form)
+        : await axios.post("/wms/product", form);
+      if (res.data) {   // 등록은 새 번호, 수정은 true
         alert(isEdit ? "수정되었습니다." : "등록되었습니다.");
         setForm(null);
-        fetchPartners();
+        fetchProducts();
       } else {
         alert("저장에 실패했습니다.");
       }
     } catch (err) {
-      console.error("거래처 저장 실패", err);
-      alert("저장 중 오류가 발생했습니다.");
+      // 서버가 보낸 문구(400, 404, 409)가 있으면 그대로 보여준다
+      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      alert(msg || "저장 중 오류가 발생했습니다.");
     }
   };
 
@@ -132,7 +135,7 @@ export default function PartnerPage(props) {
         <button className="btn" onClick={신규}>신규</button>
       </GridTitle>
       <table className="grid">
-        {/* [초안 그대로] 표 머리 */}        
+        {/* [초안 그대로] 표 머리 */}
         <thead>
           <tr>
             <th>No</th>
