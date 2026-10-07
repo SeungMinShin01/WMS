@@ -94,7 +94,7 @@ export default function PartnerPage(props) {
       const res = isEdit
         ? await axios.put("/wms/partner", form)
         : await axios.post("/wms/partner", form);
-      if (res.data === true) {
+      if (res.data) {          // === true 제외
         alert(isEdit ? "수정되었습니다." : "등록되었습니다.");
         setForm(null);
         fetchPartners();

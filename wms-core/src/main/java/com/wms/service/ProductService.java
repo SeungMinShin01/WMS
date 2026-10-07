@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;   // 필수값 검사용 (스프링에 이미 들어 있음)
 
 import com.wms.controller.SaveException;
@@ -16,9 +17,10 @@ import com.wms.model.entity.TenantEntity;
 import com.wms.model.repository.ProductRepository;
 import com.wms.model.repository.TenantRepository;
 
-import jakarta.transaction.Transactional;
+
 
 @Service
+@Transactional(readOnly = true)
 public class ProductService {
     @Autowired
     ProductRepository productRepository;
