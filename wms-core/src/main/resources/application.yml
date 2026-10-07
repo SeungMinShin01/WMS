@@ -28,3 +28,10 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+# ED-65 적재 비동기 실험 설정 (실행할 때 --args 로 바꿔 끼운다)
+carry:
+  pool:
+    core: 1
+    max: 1
+    queue: 100
+  sync: false

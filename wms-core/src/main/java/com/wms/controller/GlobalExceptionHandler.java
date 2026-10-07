@@ -1,5 +1,6 @@
 package com.wms.controller;
 
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -33,6 +34,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> serverError(Exception e){
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
+    }
+
+    // 503 Service Unavailable - 적재 대기열이 가득 차서 요청을 받을 수 없음 (ED-65)
+    @ExceptionHandler(TaskRejectedException.class)
+    public ResponseEntity<String> busy(TaskRejectedException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("요청이 많아 잠시 후 다시 시도하세요.");
     }
 
 }
