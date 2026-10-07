@@ -88,6 +88,7 @@ export default function StockPage(props) {
         <thead>
           <tr>
             <th>No</th>
+            <th>화주</th>
             <th>품목코드</th>
             <th>품목명</th>
             <th>규격</th>
@@ -106,6 +107,7 @@ export default function StockPage(props) {
           {visibleList.map((s, index) => (
             <tr key={s.stockId}>
               <td>{index + 1}</td>
+              <td>{s.tenantName}</td>
               <td>{s.productCode}</td>
               <td className="left">{s.productName}</td>
               <td>{s.spec ?? "—"}</td>

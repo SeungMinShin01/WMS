@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import InboundCreateForm from "./InboundCreateForm";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -27,6 +28,8 @@ export default function InboundPage(props) {
     documentNo: "",
     status: "",
   }); // 조회 조건
+
+  const [creating, setCreating] = useState(false); 
 
   // ED-10 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const getList = async () => {
@@ -87,7 +90,15 @@ export default function InboundPage(props) {
     <>
       <PageTitle title="입고문서" path="홈 > 입고관리 > 입고문서" />
 
-      {detail === null ? (
+      {creating ? (
+        <InboundCreateForm
+          onCancel={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            getList();
+          }}
+        />
+      ) : detail === null ? (
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
@@ -109,14 +120,15 @@ export default function InboundPage(props) {
           </form>
 
           <GridTitle title="입고문서 목록" desc={`총 ${visibleList.length}건`}>
-            <button className="btn">신규</button>
+            <button className="btn" onClick={() => setCreating(true)}>신규</button>
           </GridTitle>
           <table className="grid">
             <thead>
               <tr>
                 <th>No</th>
                 <th>입고번호</th>
-                <th>화주명</th>
+                <th>화주</th>
+                <th>공급사명</th>
                 <th>입고예정일</th>
                 <th>품목수</th>
                 <th>예정수량 합계</th>
@@ -134,6 +146,7 @@ export default function InboundPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
+                  <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
                   <td className="num">{inbound.itemCount}</td>
