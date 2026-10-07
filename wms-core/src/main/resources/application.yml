@@ -17,3 +17,14 @@ spring:
 logging:
   level:
     org.hibernate.SQL: debug # 실행되는 SQL을 로그에 출력. 쿼리가 몇 번 나가는지 볼 수 있음
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: wms-core
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

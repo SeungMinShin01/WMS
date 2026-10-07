@@ -14,11 +14,6 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
-// [ED-61] 문서 출처 영어 값 → 한글
-const SOURCE_NAME = {
-  WMS: "WMS",
-  PORTAL: "화주요청",
-};
 
 // 07 출고지시 — 담당: 김지환
 // 흐름 : 목록 → 주문 클릭(상세) → 품목 체크 → 추천 받기(미리보기) → 추천 수정 → 피킹리스트 생성
@@ -333,7 +328,6 @@ export default function AllocationPage(props) {
                 <th>화주</th>
                 <th>배송지명</th>
                 <th>출고요청일</th>
-                <th>출처</th>
                 <th>상태</th>
               </tr>
             </thead>
@@ -348,7 +342,6 @@ export default function AllocationPage(props) {
                   <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
-                  <td>{SOURCE_NAME[outbound.source]}</td>
                   <td>{STATUS_NAME[outbound.status]}</td>
                 </tr>
               ))}
