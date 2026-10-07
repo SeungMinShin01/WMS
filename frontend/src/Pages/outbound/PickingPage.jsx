@@ -29,12 +29,6 @@ export default function PickingPage(props) {
     return status;
   };
 
-  // [ED-61] 출처 한글
-  const 출처 = (source) => {
-    if (source === "WMS") return "WMS";
-    if (source === "PORTAL") return "화주요청";
-    return source;
-  };
 
   // 줄 상태 한글
   const 줄상태 = (status) => {
@@ -250,7 +244,6 @@ export default function PickingPage(props) {
               <th>화주</th>
               <th>배송지명</th>
               <th>출고요청일</th>
-              <th>출처</th>
               <th>상태</th>
               <th>선택</th>
             </tr>
@@ -267,7 +260,6 @@ export default function PickingPage(props) {
                 <td>{row.tenantName}</td>
                 <td>{row.partnerName}</td>
                 <td>{row.expectedAt ? row.expectedAt.replace("T", " ") : "-"}</td>
-                <td>{출처(row.source)}</td>
                 <td>{문서상태(row.status)}</td>
                 <td>
                   <button className="btn" onClick={() => navigate(`/outbounds/picking/${row.documentId}`)}>선택</button>
