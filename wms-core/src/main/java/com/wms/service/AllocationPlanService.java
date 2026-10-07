@@ -1,7 +1,6 @@
 package com.wms.service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,10 +27,24 @@ import jakarta.persistence.EntityNotFoundException;
 // ED-18 할당 계획 (검증 + 추천 계산 + 미리보기)
 // - DB 에 아무것도 저장하지 않음, 어느 재고에서 몇 개 꺼낼지 계산까지만
 // - 예외는 GlobalExceptionHandler 가 응답으로 바꿈 : 404 없음 / 400 잘못된 요청 / 409 상태·재고 충돌
-//   1. 미리보기          : previewAllocate
-//   2. 미리보기 단계     : checkAllocatable → selectItems → buildPlan
-//   3. 계산 도우미       : isShippable, availableOf
-//   4. 다른 서비스 호출용 : itemsOf, allocatedSum, checkShippable, shippableQty
+//
+// 메서드 순서 (위 → 아래 = 실행되는 순서)
+//   1. previewAllocate         : 추천 받기 시작 (컨트롤러가 부름)
+//   2. checkAllocatable        : 문서 검사
+//   3. selectItems             : 체크한 품목 줄 고르기
+//      3-1. itemsOf            : 문서의 품목 줄 전체
+//      3-2. allocatedSum       : 품목 줄의 할당 합계
+//   4. buildPlan               : 추천 계산 (꺼낼 순서 계산은 FefoStrategy 파일)
+//      4-1. isShippable        : 출고 가능한가 true/false
+//      4-2. failReason         : 출고 가능 규칙 5개 (한 곳에 모음)
+//      4-3. availableOf        : 계획 반영 가용수량
+//   5. 다른 서비스에서만 부르는 메서드
+//      5-1. checkShippable     : 사용자가 고른 재고 검사 (PickingListService)
+//      5-2. shippableQty       : 출고 가능 재고 합계 (OutboundService ED-17)
+//
+// [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
+//   buildPlan 의 역할을 "재고를 상품별로 묶기 → 그 상품 재고만 규칙으로 거르기 → 계산은 AllocationStrategy 에 맡기기 → DTO 변환" 으로 나눔
+//   어떤 재고를 먼저 꺼낼지(FEFO 우선순위) 계산은 FefoStrategy (우선순위 큐 2단계) 가 담당
 @Service
 public class AllocationPlanService {
 
@@ -39,8 +52,10 @@ public class AllocationPlanService {
     @Autowired private DocumentItemRepository documentItemRepository;
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
     @Autowired private StockRepository stockRepository;
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] 추천 계산 전략 (구현체 FefoStrategy 를 스프링이 넣어줌)
+    @Autowired private AllocationStrategy allocationStrategy;
 
-    // 1. 미리보기 (컨트롤러가 부르는 메서드)
+    // ===== 1. 추천 받기 시작 (컨트롤러가 부르는 메서드) =====
 
     // 선택한 품목 줄들의 추천 결과를 돌려줌 (저장 안 함)
     // documentItemIds 가 비어 있으면 문서의 전체 품목 줄이 대상
@@ -48,9 +63,9 @@ public class AllocationPlanService {
     // 실수로 엔티티 값을 바꿔도 DB 에 반영(더티 체킹)되지 않게 막는 안전장치
     @Transactional(readOnly = true)
     public List<AllocationPreviewDto> previewAllocate(Integer documentId, List<Integer> documentItemIds) {
-        DocumentEntity documentEntity = checkAllocatable(documentId);              // 문서 검사 (404/400/409)
-        List<DocumentItemEntity> items = selectItems(documentId, documentItemIds); // 품목 줄 고르기 (400/409)
-        List<AllocationPreviewDto> result = buildPlan(documentEntity, items);      // 추천 계산 (재고 부족 409)
+        DocumentEntity documentEntity = checkAllocatable(documentId);              // 2. 문서 검사 (404/400/409)
+        List<DocumentItemEntity> items = selectItems(documentId, documentItemIds); // 3. 품목 줄 고르기 (400/409)
+        List<AllocationPreviewDto> result = buildPlan(documentEntity, items);      // 4. 추천 계산 (재고 부족 409)
 
         // 로케이션 코드 순 정렬 (피킹 동선 순서)
         // list.sort((a, b) -> ...) : 목록 안의 두 값 a, b 를 비교하는 규칙을 주면 그 규칙대로 정렬
@@ -59,7 +74,7 @@ public class AllocationPlanService {
         return result;
     }
 
-    // 2. 미리보기 단계
+    // ===== 2. 문서 검사 =====
 
     // 문서 검사 : 없는 문서 404 / 출고 문서 아님 400 / 대기·할당 상태 아님 409
     // WAITING(할당 전), ALLOCATED(할당 중) 에서만 통과
@@ -84,10 +99,12 @@ public class AllocationPlanService {
         return documentEntity;
     }
 
+    // ===== 3. 품목 줄 고르기 =====
+
     // 사용자가 체크한 품목 줄만 골라냄
     // 선택 없음 → 전체 / 이 문서에 없는 id 400 / 이미 할당된 줄 409
     private List<DocumentItemEntity> selectItems(Integer documentId, List<Integer> documentItemIds) {
-        List<DocumentItemEntity> all = itemsOf(documentId); // 이 문서의 품목 줄 전체
+        List<DocumentItemEntity> all = itemsOf(documentId); // 3-1. 이 문서의 품목 줄 전체
         if (all.isEmpty()) { // isEmpty : 목록이 비어 있으면 true
             throw new IllegalStateException("품목이 없는 문서입니다: " + documentId);
         }
@@ -118,185 +135,14 @@ public class AllocationPlanService {
 
         // 이미 할당된 줄이면 막음 (다른 사람이 먼저 할당했거나, 새로고침 안 한 화면에서 다시 누른 경우)
         for (DocumentItemEntity item : selected) {
-            if (allocatedSum(item.getDocumentItemId()) > 0) {
+            if (allocatedSum(item.getDocumentItemId()) > 0) { // 3-2. 할당 합계
                 throw new IllegalStateException("이미 할당된 품목입니다: " + item.getProductEntity().getProductName());
             }
         }
         return selected;
     }
 
-    // 추천 계산 (DB 저장 X) : 품목 줄마다 어느 재고에서 몇 개 꺼낼지 정해 목록으로 돌려줌
-    // [LOT 정하기] 1 소비기한 빠른 순 → 2-1 LOT 가용 합계 많은 순 → 2-2 LOT 첫 적재일 빠른 순 → 2-3 lotId
-    // [칸 정하기]  3-1 칸 가용수량 많은 순 → 3-2 칸 적재일 빠른 순 → 3-3 stockId
-    private List<AllocationPreviewDto> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
-        LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate(); // 출고 예정일 (시간 떼고 날짜만)
-        List<StockEntity> allStocks = stockRepository.findAll();           // 재고 전체 (품목마다 재사용)
-
-        // Map<키, 값> : 이름표(키)로 값을 찾아 쓰는 메모장
-        // HashMap : Map 의 실제 구현체. 키로 바로 찾아서 빠름 (순서는 보장 안 함)
-        // planned : 재고번호(stockId) → 이번 계산에서 이미 쓴 수량
-        //   처음엔 비어 있고, (5)에서 재고를 꺼낼 때마다 기록됨
-        //   → 한 문서에 같은 상품 품목 줄이 2개면, 뒤 줄이 앞 줄이 쓴 수량을 또 쓰지 않게 막음
-        Map<Integer, Integer> planned = new HashMap<>();
-        List<AllocationPreviewDto> plan = new ArrayList<>(); // 결과 (추천 1줄 = DTO 1개)
-
-        for (DocumentItemEntity item : items) {
-            int need = item.getExpectedQty(); // 이 품목 줄에서 채워야 할 수량
-
-            // (1) 후보 거르기 : 출고 가능 + 같은 화주 + 꺼낼 수량 있음
-            List<StockEntity> candidates = new ArrayList<>();
-            for (StockEntity s : allStocks) {
-                if (!isShippable(item, s, shipDate)) continue; // 상품·칸·소비기한·잔여일 조건 탈락
-
-                // [ED-61] 재고 화주 ≠ 문서 화주면 제외 (정상이면 같지만 잘못 들어간 데이터 방어)
-                if (!s.getTenantEntity().getTenantId().equals(documentEntity.getTenantEntity().getTenantId())) continue;
-
-                if (availableOf(s, planned) <= 0) continue; // 꺼낼 수량 없음
-                candidates.add(s);
-            }
-
-            // (2) 후보 가용 합계 < 필요량 → 409
-            int totalAvailable = 0;
-            for (StockEntity s : candidates) {
-                totalAvailable += availableOf(s, planned);
-            }
-            if (totalAvailable < need) {
-                throw new IllegalStateException(item.getProductEntity().getProductName()
-                        + " 가용 부족 · 필요 " + need + " · 가용 " + totalAvailable);
-            }
-
-            // (3) LOT 단위 값 만들기 (정렬 2-1, 2-2 에서 사용)
-            // 한 LOT 가 여러 칸에 나뉘어 있을 수 있음 (재고 행 여러 개) → LOT 기준으로 모아야 함
-            // lotTotal   : LOT번호 → 그 LOT 의 가용 합계
-            // lotFirstIn : LOT번호 → 그 LOT 에서 가장 이른 적재 시각
-            Map<Integer, Integer> lotTotal = new HashMap<>();
-            Map<Integer, LocalDateTime> lotFirstIn = new HashMap<>();
-            for (StockEntity s : candidates) {
-                Integer lotId = s.getLotEntity().getLotId();
-
-                // LOT 가용 합계 누적
-                // containsKey(키) : Map 에 그 키가 있으면 true
-                // get(키)         : 그 키에 적힌 값을 꺼냄
-                // put(키, 값)     : 키가 없으면 새로 적고, 있으면 새 값으로 덮어씀
-                // 예) LOT 7 이 칸 2개(가용 30, 20)에 있으면
-                //     첫 재고 : 키 없음 → before 0 → put(7, 30)
-                //     둘째 재고 : 키 있음 → before 30 → put(7, 50)
-                int before = 0;
-                if (lotTotal.containsKey(lotId)) {
-                    before = lotTotal.get(lotId);
-                }
-                lotTotal.put(lotId, before + availableOf(s, planned));
-
-                // LOT 첫 적재 시각 : 처음 나온 LOT 이거나, 지금 적힌 시각보다 더 이르면 덮어씀
-                // → 끝나면 LOT 마다 가장 이른 적재 시각만 남음
-                LocalDateTime in = s.getCreatedAt();
-                if (!lotFirstIn.containsKey(lotId) || in.isBefore(lotFirstIn.get(lotId))) {
-                    lotFirstIn.put(lotId, in);
-                }
-            }
-
-            // (4) 정렬 (LOT 기준 전부 → 칸 기준 전부)
-            // sort 규칙 : 음수를 돌려주면 a 가 앞, 양수면 b 가 앞, 0 이면 같은 순위
-            // A.compareTo(B) : A 가 작거나 이르면 음수 / 같으면 0 / 크거나 늦으면 양수
-            //   → a.compareTo(b) 는 작은 값이 앞 (오름차순)
-            //   → b.compareTo(a) 처럼 자리를 바꾸면 큰 값이 앞 (내림차순, "많은 순")
-            // 기준마다 result 가 0 이 아니면 순서가 정해진 것 → 바로 return
-            //                  0 이면 그 기준으로는 같음 → 다음 기준으로 넘어감
-            candidates.sort((a, b) -> {
-                Integer lotA = a.getLotEntity().getLotId();
-                Integer lotB = b.getLotEntity().getLotId();
-
-                // 1 소비기한 빠른 순 (FEFO : 먼저 만료되는 것부터)
-                int result = a.getLotEntity().getExpiryDate().compareTo(b.getLotEntity().getExpiryDate());
-                if (result != 0) return result;
-
-                // 2-1 LOT 가용 합계 많은 순 (b, a 자리 바꿈) : 한 LOT 를 통째로 먼저 소진 → LOT 섞임 줄임
-                result = lotTotal.get(lotB).compareTo(lotTotal.get(lotA));
-                if (result != 0) return result;
-
-                // 2-2 LOT 첫 적재일 빠른 순 : 먼저 들어온 LOT 먼저 (FIFO)
-                result = lotFirstIn.get(lotA).compareTo(lotFirstIn.get(lotB));
-                if (result != 0) return result;
-
-                // 2-3 lotId 작은 순 : 위가 다 같을 때 순서를 하나로 고정
-                result = lotA.compareTo(lotB);
-                if (result != 0) return result;
-
-                // 3-1 칸 가용수량 많은 순 (b, a 자리 바꿈) : 적은 칸 수에서 꺼내 피킹 동선 줄임
-                // availableOf 는 int(기본형)라 .compareTo 를 못 씀 → Integer.compare(x, y) 사용
-                // Integer.compare : x < y 음수 / 같으면 0 / x > y 양수 (빼기 x - y 는 숫자가 넘칠 위험이 있어 안 씀)
-                result = Integer.compare(availableOf(b, planned), availableOf(a, planned));
-                if (result != 0) return result;
-
-                // 3-2 칸 적재일 빠른 순
-                result = a.getCreatedAt().compareTo(b.getCreatedAt());
-                if (result != 0) return result;
-
-                // 3-3 stockId 작은 순 (마지막 고정 기준)
-                return a.getStockId().compareTo(b.getStockId());
-            });
-
-            // (5) 정렬 순서대로 필요한 만큼 담기 (저장 X, planned 에만 기록)
-            for (StockEntity s : candidates) {
-                if (need == 0) break; // 다 채웠으면 종료
-
-                // Math.min(x, y) : 두 수 중 작은 값
-                // 재고가 넉넉하면 need 만큼만, 모자라면 이 재고에 있는 만큼만 가져감
-                int take = Math.min(need, availableOf(s, planned));
-
-                plan.add(AllocationPreviewDto.from(item, s, take)); // 추천 1줄 (품목 + 재고 + 수량)
-
-                // planned 에 이 재고를 쓴 수량 누적 (위 (3)의 containsKey → get → put 과 같은 방식)
-                int used = 0;
-                if (planned.containsKey(s.getStockId())) {
-                    used = planned.get(s.getStockId());
-                }
-                planned.put(s.getStockId(), used + take);
-
-                need -= take; // 남은 필요량 줄이기
-            }
-        }
-        return plan;
-    }
-
-    // 3. 계산 (이 클래스 안에서만 씀)
-
-    // 재고 1행이 이 품목 줄에 출고 가능한지 true/false 로만 판단 (예외 안 던짐)
-    // buildPlan(후보 거르기), shippableQty(화면 표시값) 에서 사용
-    // 조건 : 같은 상품 · 운영 중인 칸 · 소비기한 있음 · 잔여일 충분
-    // 상품 비교는 buildPlan 이 재고 전체를 넘기기 때문에 필요 (shippableQty 는 같은 상품만 받아서 항상 통과)
-    private boolean isShippable(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
-        // 재고 → LOT → 상품 id 와 주문 품목의 상품 id 비교
-        if (!s.getLotEntity().getProductEntity().getProductId().equals(item.getProductEntity().getProductId())) return false;
-        if (!s.getLocationEntity().getIsActive()) return false; // 안 쓰는 칸
-
-        LocalDate expiry = s.getLotEntity().getExpiryDate();
-        if (expiry == null) return false; // 소비기한 없음
-
-        // 잔여일 검사 : 소비기한 >= 출고예정일 + 출고 허용 잔여일 이어야 통과
-        // plusDays(n) : 그 날짜에 n 일을 더한 새 날짜 (원래 날짜는 안 바뀜)
-        //   예) shipDate 2026-10-05, minShipDays 30 → limitDate 2026-11-04
-        // isBefore(날짜) : 앞 날짜가 괄호 날짜보다 이르면 true (같은 날은 false → 통과)
-        //   예) 2026-10-25.isBefore(2026-11-04) → true → 잔여일 부족
-        int minShipDays = item.getProductEntity().getMinShipDays();
-        LocalDate limitDate = shipDate.plusDays(minShipDays);
-        if (expiry.isBefore(limitDate)) return false;
-        return true;
-    }
-
-    // 계획 반영 가용수량 = 실물 − 선점 − 이번 계산에서 이미 쓴 수량(planned)
-    private int availableOf(StockEntity s, Map<Integer, Integer> planned) {
-        int used = 0; // planned 에 이 재고가 없으면 아직 안 쓴 것 → 0
-        if (planned.containsKey(s.getStockId())) {
-            used = planned.get(s.getStockId());
-        }
-        return s.getQty() - s.getAllocatedQty() - used;
-    }
-
-   
-    // 4. 다른 서비스에서도 부르는 메서드
-
-    // 이 문서의 품목 줄 전체 (document_item 중 document_id 가 같은 것)
+    // 3-1. 이 문서의 품목 줄 전체 (document_item 중 document_id 가 같은 것)
     // 사용 : selectItems / PickingListService / OutboundService
     public List<DocumentItemEntity> itemsOf(Integer documentId) {
         List<DocumentItemEntity> items = new ArrayList<>();
@@ -308,7 +154,7 @@ public class AllocationPlanService {
         return items;
     }
 
-    // 품목 줄 1개에 지금까지 할당된 수량 합계 (document_item_detail 의 qty 합)
+    // 3-2. 품목 줄 1개에 지금까지 할당된 수량 합계 (document_item_detail 의 qty 합)
     // 검사는 부르는 쪽에서 함
     //   추천·피킹리스트 생성 : 0 보다 크면 이미 할당된 줄 → 409
     //   집음·문서 상태 정리  : 요청 수량보다 작으면 아직 덜 할당된 줄
@@ -326,40 +172,191 @@ public class AllocationPlanService {
         return sum;
     }
 
-    // 재고 1행이 이 품목 줄에 출고 가능한지 검사 (PickingListService 피킹리스트 생성에서 호출)
-    // isShippable 과 조건은 같지만, 이유를 알려줘야 해서 false 대신 예외를 던짐
-    // 다른 상품 400 / 사용 안 하는 칸 409 / 소비기한 없음 409 / 잔여일 부족 409
-    // FEFO 순서(더 빠른 소비기한을 두고 늦은 걸 골랐는지)는 검사 안 함 → 사용자 수정 허용
-    public void checkShippable(DocumentItemEntity item, StockEntity stock, LocalDate shipDate) {
-        Integer productId = item.getProductEntity().getProductId();
-        if (!stock.getLotEntity().getProductEntity().getProductId().equals(productId)) {
-            throw new IllegalArgumentException("주문 품목과 다른 상품의 재고입니다 · 재고 " + stock.getStockId());
+    // ===== 4. 추천 계산 =====
+
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] buildPlan 구조 변경
+    // 추천 계산 (DB 저장 X) : 품목 줄마다 어느 재고에서 몇 개 꺼낼지 정해 목록으로 돌려줌
+    // 전 : 재고 전체를 품목마다 돌며 if 로 거르기 → lotTotal·lotFirstIn Map → 후보 전체를 비교 7단계로 sort → 앞에서부터 담기
+    // 후 : (가) 재고를 상품별로 한 번 묶기
+    //      (나) 품목 줄마다 그 상품 재고만 꺼내기
+    //      (다) 규칙으로 거르기 + 가용 계산
+    //      (라) 가용 부족 409
+    //      (마) 꺼낼 재고·수량 계산은 allocationStrategy.plan() 에 맡기기 (FefoStrategy : LOT 큐 → 칸 큐)
+    //      (바) 결과를 DTO 로 바꾸고 planned 에 기록
+    // 우선순위 (FefoStrategy 안에서 그대로 유지)
+    //   [LOT 정하기] 1 소비기한 빠른 순 → 2-1 LOT 가용 합계 많은 순 → 2-2 LOT 첫 적재일 빠른 순 → 2-3 lotId
+    //   [칸 정하기]  3-1 칸 가용수량 많은 순 → 3-2 칸 적재일 빠른 순 → 3-3 stockId
+    private List<AllocationPreviewDto> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
+        LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate(); // 출고 예정일 (시간 떼고 날짜만)
+
+        // (가) 재고를 상품별로 묶기 (buildPlan 시작할 때 한 번만)
+        // 전 : allStocks(재고 전체)를 품목 줄마다 처음부터 끝까지 돌았음 → 품목 수 × 재고 수
+        // 후 : 상품id → 그 상품의 재고 목록 으로 한 번 묶어 두고, 품목 줄마다 자기 상품 재고만 꺼냄
+        //      (ED-17 OutboundService 의 stocksByProduct 와 같은 방식)
+        Map<Integer, List<StockEntity>> stocksByProduct = new HashMap<>();
+        for (StockEntity s : stockRepository.findAll()) {
+            Integer productId = s.getLotEntity().getProductEntity().getProductId(); // 재고 → LOT → 상품 id
+            if (!stocksByProduct.containsKey(productId)) {         // 처음 나온 상품이면
+                stocksByProduct.put(productId, new ArrayList<>()); // 빈 목록을 먼저 만들어 둠
+            }
+            stocksByProduct.get(productId).add(s);                 // 그 상품 목록에 재고 추가
         }
-        if (!stock.getLocationEntity().getIsActive()) {
-            throw new IllegalStateException("사용하지 않는 칸의 재고입니다 · 재고 " + stock.getStockId());
+
+        // planned : 재고번호(stockId) → 이번 계산에서 이미 쓴 수량
+        //   처음엔 비어 있고, (바)에서 재고를 꺼낼 때마다 기록됨
+        //   → 한 문서에 같은 상품 품목 줄이 2개면, 뒤 줄이 앞 줄이 쓴 수량을 또 쓰지 않게 막음
+        Map<Integer, Integer> planned = new HashMap<>();
+        List<AllocationPreviewDto> plan = new ArrayList<>(); // 결과 (추천 1줄 = DTO 1개)
+
+        for (DocumentItemEntity item : items) {
+            int need = item.getExpectedQty(); // 이 품목 줄에서 채워야 할 수량
+
+            // (나) 이 품목 상품의 재고만 꺼내기 (없으면 빈 목록)
+            Integer productId = item.getProductEntity().getProductId();
+            List<StockEntity> productStocks = new ArrayList<>();
+            if (stocksByProduct.containsKey(productId)) {
+                productStocks = stocksByProduct.get(productId);
+            }
+
+            // (다) 후보 거르기 : 규칙 통과(4-1 isShippable) + 꺼낼 수량 있음(4-3 availableOf)
+            // available : 재고번호 → 이번 계산 기준 가용수량 (실물 − 선점 − planned)
+            //   후보마다 한 번 계산해 두고 (라) 합계 검사와 (마) 전략 계산에서 같이 씀
+            List<StockEntity> candidates = new ArrayList<>();
+            Map<Integer, Integer> available = new HashMap<>();
+            for (StockEntity s : productStocks) {
+                if (!isShippable(item, s, shipDate)) continue; // 규칙 하나라도 실패하면 후보 제외
+                int canTake = availableOf(s, planned);
+                if (canTake <= 0) continue;                    // 꺼낼 수량 없음
+                candidates.add(s);
+                available.put(s.getStockId(), canTake);
+            }
+
+            // (라) 후보 가용 합계 < 필요량 → 409
+            int totalAvailable = 0;
+            for (StockEntity s : candidates) {
+                totalAvailable += available.get(s.getStockId());
+            }
+            if (totalAvailable < need) {
+                throw new IllegalStateException(item.getProductEntity().getProductName()
+                        + " 가용 부족 · 필요 " + need + " · 가용 " + totalAvailable);
+            }
+
+            // (마) 어떤 재고에서 몇 개 꺼낼지 전략에게 맡김 → FefoStrategy.plan()
+            // 전 : 여기서 lotTotal·lotFirstIn 을 만들고 candidates.sort(비교 7단계) 후 for 로 담음
+            // 후 : LOT 우선순위 큐 → 그 LOT 의 칸 우선순위 큐 순서로 need 만큼 꺼내서 돌려줌
+            List<AllocationStrategy.Pick> picks = allocationStrategy.plan(need, candidates, available);
+
+            // (바) 꺼낸 순서대로 추천 1줄씩 만들고 planned 에 기록 (저장 X)
+            for (AllocationStrategy.Pick pick : picks) {
+                StockEntity s = pick.getStock();
+                int take = pick.getQty();
+                plan.add(AllocationPreviewDto.from(item, s, take)); // 추천 1줄 (품목 + 재고 + 수량)
+
+                // planned 에 이 재고를 쓴 수량 누적 → 다음 품목 줄이 같은 재고를 쓸 때 가용에서 빠짐
+                int used = 0;
+                if (planned.containsKey(s.getStockId())) {
+                    used = planned.get(s.getStockId());
+                }
+                planned.put(s.getStockId(), used + take);
+            }
         }
-        LocalDate expiry = stock.getLotEntity().getExpiryDate();
-        if (expiry == null) {
-            throw new IllegalStateException("소비기한이 없는 재고입니다 · 재고 " + stock.getStockId());
-        }
-        int minShipDays = item.getProductEntity().getMinShipDays();
-        LocalDate limitDate = shipDate.plusDays(minShipDays); // 출고예정일 + 최소 잔여일 (isShippable 과 같은 계산)
-        if (expiry.isBefore(limitDate)) {
-            throw new IllegalStateException("소비기한 잔여일이 부족합니다 · 재고 " + stock.getStockId()
-                    + " · 소비기한 " + expiry + " · 필요 " + limitDate + " 이후 (최소 " + minShipDays + "일)");
-        }
+        return plan;
     }
 
-    // 이 품목 줄의 출고 가능 재고 합계 (OutboundService ED-17 출고 문서 상세 조회에서 호출 → 화면 표시)
-    // 추천 후보(buildPlan (1))와 같은 기준 : isShippable 통과 + 같은 화주 + 가용 > 0
+    // 4-1. 재고 1행이 출고 가능한지 true/false (예외 안 던짐)
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
+    // 전 : 안에 if 4개를 직접 적음 (checkShippable 과 중복)
+    // 후 : 4-2 failReason 이 null 이면(걸린 규칙이 없으면) 출고 가능
+    private boolean isShippable(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
+        return failReason(item, s, shipDate) == null;
+    }
+
+    // 4-2. 출고 가능 규칙 5개 (한 곳에 모음)
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] 새로 추가
+    // 재고 1행이 이 품목 줄에 출고 가능한지 규칙 5개를 위에서부터 검사
+    //   통과하면 null, 걸리면 그 규칙의 이유 메시지를 돌려줌 (처음 걸린 규칙에서 바로 return)
+    // 추천(isShippable), 직접 선택 검증(checkShippable), 출고 가능 재고(shippableQty) 가 모두 이 메서드를 씀
+    // → 규칙을 바꿀 때 여기 한 곳만 고치면 됨
+    // 전 : 같은 규칙이 isShippable(if 4개) / checkShippable(if 4개) / buildPlan·shippableQty(화주 if) 에 흩어져 있었음
+    private String failReason(DocumentItemEntity item, StockEntity s, LocalDate shipDate) {
+        // 1. 같은 상품 (재고 → LOT → 상품 id 와 주문 품목의 상품 id 비교)
+        //    buildPlan·shippableQty 는 같은 상품 재고만 받아서 항상 통과하지만,
+        //    checkShippable(사용자가 직접 고른 재고) 에서는 다른 상품을 막아야 해서 남겨 둠
+        if (!s.getLotEntity().getProductEntity().getProductId().equals(item.getProductEntity().getProductId())) {
+            return "주문 품목과 다른 상품의 재고입니다 · 재고 " + s.getStockId();
+        }
+
+        // 2. 운영 중인 칸
+        if (!s.getLocationEntity().getIsActive()) {
+            return "사용하지 않는 칸의 재고입니다 · 재고 " + s.getStockId();
+        }
+
+        // 3. 소비기한 있음
+        LocalDate expiry = s.getLotEntity().getExpiryDate();
+        if (expiry == null) {
+            return "소비기한이 없는 재고입니다 · 재고 " + s.getStockId();
+        }
+
+        // 4. 잔여일 충분 : 소비기한 >= 출고예정일 + 출고 허용 잔여일 (같은 날은 통과)
+        // plusDays(n) : 그 날짜에 n 일을 더한 새 날짜
+        // isBefore(날짜) : 앞 날짜가 괄호 날짜보다 이르면 true → 잔여일 부족
+        int minShipDays = item.getProductEntity().getMinShipDays();
+        LocalDate limitDate = shipDate.plusDays(minShipDays);
+        if (expiry.isBefore(limitDate)) {
+            return "소비기한 잔여일이 부족합니다 · 재고 " + s.getStockId()
+                    + " · 소비기한 " + expiry + " · 필요 " + limitDate + " 이후 (최소 " + minShipDays + "일)";
+        }
+
+        // 5. [ED-61] 같은 화주 (같은 상품이면 화주도 같아야 정상이지만 잘못 들어간 데이터 방어)
+        if (!s.getTenantEntity().getTenantId().equals(item.getDocumentEntity().getTenantEntity().getTenantId())) {
+            return "다른 화주의 재고입니다 · 재고 " + s.getStockId();
+        }
+
+        return null; // 전부 통과
+    }
+
+    // 4-3. 계획 반영 가용수량 = 실물 − 선점 − 이번 계산에서 이미 쓴 수량(planned)
+    private int availableOf(StockEntity s, Map<Integer, Integer> planned) {
+        int used = 0; // planned 에 이 재고가 없으면 아직 안 쓴 것 → 0
+        if (planned.containsKey(s.getStockId())) {
+            used = planned.get(s.getStockId());
+        }
+        return s.getQty() - s.getAllocatedQty() - used;
+    }
+
+    // ===== 5. 다른 서비스에서만 부르는 메서드 =====
+
+    // 5-1. 사용자가 고른 재고 1행이 이 품목 줄에 출고 가능한지 검사 (PickingListService 피킹리스트 생성에서 호출)
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
+    // 전 : isShippable 과 같은 조건을 if 4개로 한 번 더 적고 각각 throw
+    // 후 : 같은 4-2 failReason 으로 검사하고, 걸린 이유로 예외 (메시지 그대로)
+    //      다른 상품이면 요청이 잘못된 것 → 400 / 나머지(칸·소비기한·잔여일·화주) → 409
+    // FEFO 순서(더 빠른 소비기한을 두고 늦은 걸 골랐는지)는 검사 안 함 → 사용자 수정 허용
+    public void checkShippable(DocumentItemEntity item, StockEntity stock, LocalDate shipDate) {
+        String reason = failReason(item, stock, shipDate);
+        if (reason == null) {
+            return; // 전부 통과
+        }
+
+        // 상품이 다르면 400 (failReason 이 상품을 맨 먼저 검사하므로 이때 reason 은 상품 메시지)
+        boolean sameProduct = stock.getLotEntity().getProductEntity().getProductId()
+                .equals(item.getProductEntity().getProductId());
+        if (!sameProduct) {
+            throw new IllegalArgumentException(reason); // 400
+        }
+        throw new IllegalStateException(reason);        // 409
+    }
+
+    // 5-2. 이 품목 줄의 출고 가능 재고 합계 (OutboundService ED-17 출고 문서 상세 조회에서 호출 → 화면 표시)
+    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
+    // 추천 후보(buildPlan (다))와 같은 기준 : 4-1 isShippable 통과(같은 화주 포함) + 가용 > 0
+    // 전 : isShippable + 화주 if 를 따로 검사
+    // 후 : isShippable 하나로 검사 (화주는 failReason 5번에 들어감)
     // productStocks : 이 품목 상품의 재고만 담긴 목록 (OutboundService 에서 상품별로 나눠서 넘겨줌)
     public int shippableQty(DocumentItemEntity item, LocalDate shipDate, List<StockEntity> productStocks) {
         int sum = 0;
         for (StockEntity s : productStocks) {
             if (!isShippable(item, s, shipDate)) continue;
-
-            // [ED-61] 다른 화주 재고는 제외
-            if (!s.getTenantEntity().getTenantId().equals(item.getDocumentEntity().getTenantEntity().getTenantId())) continue;
 
             int available = s.getQty() - s.getAllocatedQty(); // 가용 = 실물 − 선점
             if (available > 0) sum += available;
