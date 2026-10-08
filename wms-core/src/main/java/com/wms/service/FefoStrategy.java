@@ -69,10 +69,13 @@ public class FefoStrategy implements AllocationStrategy {
 
         // LOT 마다 묶음(LotGroup)을 만들어 LOT 큐에 넣기
         for (Integer lotId : stocksByLot.keySet()) {
+            // stocksByLot.keySet() = stocksByLot의 키만 전부 모아서 for문 돌림
             List<StockEntity> stocks = stocksByLot.get(lotId);
 
             LotGroup group = new LotGroup();
+            // group → [ lotId: null | expiryDate: null | total: 0 | firstIn: null | stocks: null ]
             group.lotId = lotId;
+            // stocks.get(0)은 Map의 get이 아니라 List의 get이라 괄호안숫자는 몇번째 칸(인덱스)인지 
             group.expiryDate = stocks.get(0).getLotEntity().getExpiryDate();
             group.stocks = stocks;
             group.total = 0;
@@ -92,6 +95,9 @@ public class FefoStrategy implements AllocationStrategy {
         int remain = need; // 아직 채워야 할 수량
 
         while (remain > 0 && !lotQueue.isEmpty()) {
+            // poll 전 : lotQueue = [B, A]
+            // LotGroup lot = lotQueue.poll();
+            // poll 후 : lotQueue = [A] B가 빠지고 lot에 B가 들어감 그래서 lot.stack 이나 lot.total 같은 값을 꺼내 쓸 수 있음
             LotGroup lot = lotQueue.poll(); // poll() : 1등을 꺼내고 큐에서 뺌
 
             // 2단계 칸 큐 : 이 LOT 의 칸(재고 행)들만 넣음
