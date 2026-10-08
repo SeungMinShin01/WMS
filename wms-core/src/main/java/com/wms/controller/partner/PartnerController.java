@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.wms.model.dto.partner.PartnerDto;
 import com.wms.service.PartnerService;
 import com.wms.security.AdminOnly;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 @RestController
 public class PartnerController {
@@ -20,6 +22,7 @@ public class PartnerController {
     private PartnerService partnerService;
 
     @AdminOnly
+    @AuditLog(action = AuditAction.PARTNER_CREATE, target = "partnerCode", fields = { "partnerName", "partnerType" })
     @PostMapping("/wms/partner")
     public boolean 거래처등록(
             @RequestBody PartnerDto partnerDto) {
@@ -42,6 +45,7 @@ public class PartnerController {
     }
 
     @AdminOnly
+    @AuditLog(action = AuditAction.PARTNER_UPDATE, target = "partnerId", fields = { "partnerCode", "partnerName" })
     @PutMapping("/wms/partner")
     public boolean 거래처수정(@RequestBody PartnerDto partnerDto) {
         return partnerService.거래처수정(partnerDto);
