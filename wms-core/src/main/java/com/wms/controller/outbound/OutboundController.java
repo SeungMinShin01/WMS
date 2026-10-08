@@ -70,7 +70,7 @@ public class OutboundController {
     //   : 상태코드 201(새로 만들어짐) + 본문에 값을 담아 응답
     //   ok() 는 200 만 되므로, 다른 상태코드를 쓸 때는 status() 로 정하고 body() 로 본문을 넣음
     @PostMapping("/wms/allocations/{documentId}/pickinglist")
-    public synchronized ResponseEntity<List<PickingListDto>> createPickingList(
+    public ResponseEntity<List<PickingListDto>> createPickingList(
             @PathVariable(name = "documentId") Integer documentId,
             @RequestBody List<AllocationDto> rows) {
         List<PickingListDto> pickingList = pickingListService.createPickingList(documentId, rows);
@@ -94,7 +94,7 @@ public class OutboundController {
     // ED-20 출고확정 (문서 단위) → 200 + 바뀐 상태 "SHIPPED" / 이미 출고됨 → 409
     // 문서 상태와 재고 수량을 바꾸는 수정이라 PUT
     @PutMapping("/wms/outbounds/{documentId}/ship")
-    public synchronized ResponseEntity<String> confirmShipment(@PathVariable(name = "documentId") Integer documentId) {
+    public ResponseEntity<String> confirmShipment(@PathVariable(name = "documentId") Integer documentId) {
         return ResponseEntity.ok(outboundService.confirmShipment(documentId));
     }
 
