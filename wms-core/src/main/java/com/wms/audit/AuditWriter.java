@@ -35,8 +35,8 @@ public class AuditWriter {
         String line = String.join(",",
                 csv(time.format(TIME_FORMAT)),
                 csv(user == null || user.userId() == null ? "" : String.valueOf(user.userId())),
-                csv(""), // loginId - 사용자 캐시
-                csv(""), // userName - 사용자 캐시
+                csv(user == null ? "" : user.loginId()),
+                csv(user == null ? "" : user.userName()),
                 csv(user == null || user.role() == null ? "" : user.role().name()),
                 csv(action.name()),
                 csv(target),
