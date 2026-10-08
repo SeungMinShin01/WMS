@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.core.annotation.Order;
 
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ import java.util.concurrent.CompletionException;
 @Slf4j
 @Aspect
 @Component
+@Order(1) // 권한 검사(2)보다 바깥 → 403 도 기록
 @RequiredArgsConstructor
 public class AuditAspect {
 
