@@ -2,11 +2,15 @@ package com.wms.controller;
 
 import java.util.concurrent.CompletionException;
 
+
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.wms.security.ForbiddenException;
+import com.wms.security.UnauthorizedException;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -32,6 +36,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
 
+    // 401 Unauthorized - 로그인 필요 / 토큰 만료·위조 / 아이디·비밀번호 불일치
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<String> unauthorized(UnauthorizedException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+    }
+
+    // 403 Forbidden - 로그인은 했지만 권한 없음 (WORKER가 관리자 API 호출)
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<String> forbidden(ForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+    }
     // 비동기(@Async) 작업에서 난 예외는 CompletionException 포장지에 싸여서 온다 (ED-65)
     // → 안의 진짜 예외를 꺼내 위의 400/404/409 처리에 그대로 넘긴다
     @ExceptionHandler(CompletionException.class)
