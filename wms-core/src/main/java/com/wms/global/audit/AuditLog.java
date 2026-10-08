@@ -31,6 +31,7 @@ public @interface AuditLog {
     // 대상 번호의 이름 예) "detailId" → target 칸에 "detailId:14"
     String target() default "";
 
+    String[] fields() default {};
     // detail 칸에 함께 남길 값 이름들 예) {"locationId"} -> "적재 location=13"
 
 }
