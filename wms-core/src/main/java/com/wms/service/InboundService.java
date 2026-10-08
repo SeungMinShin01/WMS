@@ -1,6 +1,5 @@
 package com.wms.service;
 
-import com.wms.model.repository.StockRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -37,7 +36,6 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 @Transactional
 public class InboundService {
-    private final StockRepository stockRepository;
     @Autowired
     private DocumentRepository documentRepository;
     @Autowired
@@ -49,10 +47,6 @@ public class InboundService {
     // ED-16
     @Autowired
     private LocationRepository locationRepository;
-
-    InboundService(StockRepository stockRepository) {
-        this.stockRepository = stockRepository;
-    }
 
     // ED-10 입고 문서 목록 조회
     public List<InboundListDto> findAll() {
@@ -80,6 +74,7 @@ public class InboundService {
             int totalQty = 0;
             for (DocumentItemEntity item : allItems) {
                 // 품목이 문서에 포함되어있는지 확인, 포함되어있으면  품목수+1 , 예정수량 더하기
+                // 쉽게 문서에 품목이 몇종류, 예정수량을 확인해서 더하기 
                 if (item.getDocumentEntity().getDocumentId().equals(documentEntity.getDocumentId())) {
                     itemCount++;
                     totalQty += item.getExpectedQty();

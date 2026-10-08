@@ -1,15 +1,11 @@
 package com.wms.service;
 
-import com.wms.model.repository.DocumentItemRepository;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,7 +26,6 @@ import com.wms.model.repository.StockRepository;
 @Service
 @Transactional
 public class StockService {
-    private final DocumentItemRepository documentItemRepository;
     @Autowired
     private StockRepository stockRepository;
     @Autowired
@@ -38,9 +33,6 @@ public class StockService {
     @Autowired
     private DocumentItemDetailRepository detailRepository;
 
-    StockService(DocumentItemRepository documentItemRepository) {
-        this.documentItemRepository = documentItemRepository;
-    }
 
     // ED-21 재고 조회
     public List<StockDto> stockFindAll() {
@@ -111,16 +103,15 @@ public class StockService {
     }
 
     // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유: 결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
-    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, int otherProductCount, boolean hasOtherTenant) {
+    private record LocationCheck(int total, boolean hasSameLot, boolean hasSameProductOtherLot, boolean hasOtherTenant) {
     }
 
     // 칸 하나 조사
     private LocationCheck check(LocationEntity loc, LotEntity lot, List<StockEntity> stocks) {
-        int total = 0;
-        boolean hasSameLot = false;
-        boolean hasSameProductOtherLot = false;
-        boolean hasOtherTenant = false;
-        Set<Integer> otherProducts = new HashSet<>();
+        int total = 0;  // 칸 합계
+        boolean hasSameLot = false; // 같은 LOT 유무
+        boolean hasSameProductOtherLot = false; // 같은 품목인데 LOT만 다른것이 있는지
+        boolean hasOtherTenant = false; // 다른 화주의 재고 유무
         for (StockEntity s : stocks) {
             // 다른 칸 재고,
             if (!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
@@ -133,10 +124,8 @@ public class StockService {
                 hasSameLot = true;
             else if (productId.equals(lot.getProductEntity().getProductId()))
                 hasSameProductOtherLot = true;
-            else
-                otherProducts.add(productId);
         }
-        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, otherProducts.size(), hasOtherTenant);
+        return new LocationCheck(total, hasSameLot, hasSameProductOtherLot, hasOtherTenant);
     }
 
     // 여유 수량 - capacity가 null이면 제한 없음
@@ -221,7 +210,7 @@ public class StockService {
 
             // 3. 여유 비교 (제한없음 null은 가장 큰 여유칸으로 취급하기 )
             int freeA = a.getFreeQty() == null ? Integer.MAX_VALUE : a.getFreeQty();
-            int freeB = a.getFreeQty() == null ? Integer.MAX_VALUE : b.getFreeQty();
+            int freeB = b.getFreeQty() == null ? Integer.MAX_VALUE : b.getFreeQty();
             if(freeA != freeB){
                 if(a.getFits()) return freeA - freeB;   // 전부 들어가는 칸끼리: 여유 작은 칸이 앞 (딱 맞는칸, Best Fit)
                 else            return freeB - freeA;   // 부족한 칸끼리: 여유 큰 칸이 앞으로 (많이 들어가는 칸)          

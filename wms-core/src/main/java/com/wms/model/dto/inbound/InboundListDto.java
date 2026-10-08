@@ -18,6 +18,7 @@ public class InboundListDto {
     // ED-10 입고 문서 목록 조회
     private Integer documentId;
     private String documentNo;
+    private String tenantName;  // 화주명
     private String partnerName;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime expectedAt;
@@ -34,6 +35,7 @@ public class InboundListDto {
         return InboundListDto.builder()
                 .documentId(entity.getDocumentId())
                 .documentNo(entity.getDocumentNo())
+                .tenantName(entity.getTenantEntity().getTenantName())
                 .partnerName(entity.getPartnerEntity().getPartnerName())
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
