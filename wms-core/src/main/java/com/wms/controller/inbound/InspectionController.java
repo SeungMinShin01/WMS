@@ -34,6 +34,7 @@ public class InspectionController {
     private InboundService inboundService;
 
     // 검수 1건 등록 ED - 14
+    @AuditLog(action = AuditAction.INSPECT, target = "documentItemId", fields = { "qty" })
     @PostMapping("")
     public ResponseEntity<Integer> inspectionSave(@RequestBody InspectionDto inspectionDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(inboundService.inspectionSave(inspectionDto));
