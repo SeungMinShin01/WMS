@@ -85,8 +85,11 @@ public class InboundRegisterService {
     // 입고 문서에 품목 1줄 등록 -> 생성된 documentItemId 반환
     public Integer createItem(Integer documentId, InboundItemCreateDto dto){
         // 필수값 400, StringUtils.hasText는 null,빈 문자열, 공백만 있는 경우를 모두 걸러줌
-        if (dto.getProductId() == null || !StringUtils.hasText(dto.getLotCode()) || dto.getExpiryDate() == null) {
-            throw new IllegalArgumentException("품목, LOT 번호, 소비기한은 필수입니다.");
+        if (dto.getProductId() == null || dto.getManufactureDate() == null || dto.getExpiryDate() == null) {
+            throw new IllegalArgumentException("품목, 제조일자, 소비기한은 필수입니다.");
+        }
+        if (dto.getManufactureDate().isAfter(dto.getExpiryDate())) {
+            throw new IllegalArgumentException("제조일자가 소비기한보다 늦을 수 없습니다.");
         }
         if (dto.getExpectedQty() == null || dto.getExpectedQty() <= 0) {
             throw new IllegalArgumentException("예정 수량은 1 이상이어야 합니다.");
@@ -107,30 +110,42 @@ public class InboundRegisterService {
             throw new IllegalArgumentException("문서의 화주와 다른 화주의 품목입니다.");
         }
 
-        // LOT: 같은 품목 + 같은 LOT 번호가 있으면 재사용, 없으면 새로 등록
-        // .trim 앞뒤 공백 지우기
-        String lotCode = dto.getLotCode().trim();
+        // LOT 번호 = LOT-제조일자-공급사코드-순번
+        // 같은품목 + 같은 제조일자 + 같은공급사 = 같은 LOT -> 재사용
+        String prefix = "LOT-" + dto.getManufactureDate().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                        + "-" + document.getPartnerEntity().getPartnerCode() + "-";
         LotEntity lot;
-        Optional<LotEntity> found = lotRepository.findByProductEntityAndLotCode(product, lotCode);
-        if (found.isPresent()) {
+        Optional<LotEntity> found = lotRepository.findFirstByProductEntityAndLotCodeStartingWith(product, prefix);
+        if(found.isPresent()){
             lot = found.get();
-            if (!dto.getExpiryDate().equals(lot.getExpiryDate())) {
-                throw new IllegalStateException("같은 LOT 번호인데 소비기한이 다릅니다. (기존: " + lot.getExpiryDate() + ")");
+            if(!dto.getExpiryDate().equals(lot.getExpiryDate())){
+                throw new IllegalStateException("같은 LOT(" + lot.getLotCode() + ")인데 소비기한이 다릅니다. (기존: " + lot.getExpiryDate() + ")");
             }
-            if (documentItemRepository.existsByDocumentEntityAndLotEntity(document, lot)) {
+            if(documentItemRepository.existsByDocumentEntityAndLotEntity(document, lot)){
                 throw new IllegalStateException("이 문서에 이미 등록된 LOT입니다.");
             }
-        } else {
+        }else{
             lot = lotRepository.save(LotEntity.builder()
-                    .productEntity(product)
-                    .lotCode(lotCode)
-                    .expiryDate(dto.getExpiryDate())
-                    .build());
+                                .productEntity(product)
+                                .lotCode(nextLotCode(prefix))
+                                .expiryDate(dto.getExpiryDate())
+                                .build());
         }
         DocumentItemEntity saved = documentItemRepository.save(dto.toEntity(document, product, lot));
         return saved.getDocumentItemId();
     }       
     
+    // LOT 순번: 같은 제조일자·공급사 접두어 중 가장 큰 번호 +1 (문서번호 생성과 같은 방식)
+    private String nextLotCode(String prefix){
+        Optional<LotEntity> last = lotRepository.findTopByLotCodeStartingWithOrderByLotCodeDesc(prefix);
+        int next = 1;
+        if(last.isPresent()){
+            next = Integer.parseInt(last.get().getLotCode().substring(prefix.length())) + 1; // 01 -> 02
+        }
+        return prefix + String.format("%02d", next);
+    }
+
+
     // 등록화면 선택지 1. 화주목록
     public List<RegisterOptionDto> tenantOptions(){
         List<RegisterOptionDto> list = new ArrayList<>();
