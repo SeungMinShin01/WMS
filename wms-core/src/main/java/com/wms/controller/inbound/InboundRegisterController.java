@@ -16,6 +16,8 @@ import com.wms.model.dto.inbound.InboundCreateDto;
 import com.wms.model.dto.inbound.InboundItemCreateDto;
 import com.wms.model.dto.inbound.RegisterOptionDto;
 import com.wms.service.InboundRegisterService;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 // ED-60 입고 문서 등록 (조회는 InboundController, 등록은 여기)
 @RestController
@@ -25,12 +27,15 @@ public class InboundRegisterController {
     private InboundRegisterService inboundRegisterService;
 
     // 입고 문서 헤더 등록 → 201 + documentId
+    @AuditLog(action = AuditAction.INBOUND_CREATE, fields = { "tenantId", "partnerId", "expectedDate" })
     @PostMapping("")
     public ResponseEntity<Integer> createDocument(@RequestBody InboundCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(inboundRegisterService.createDocument(dto));
     }
 
     // 입고 문서 품목 등록 → 201 + documentItemId
+    @AuditLog(action = AuditAction.INBOUND_ITEM_ADD, target = "documentId", fields = { "productId", "expectedQty",
+            "expiryDate" })
     @PostMapping("/{documentId}/items")
     public ResponseEntity<Integer> createItem(@PathVariable(name = "documentId") Integer documentId,
             @RequestBody InboundItemCreateDto dto) {
