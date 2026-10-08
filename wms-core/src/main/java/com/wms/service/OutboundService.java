@@ -144,7 +144,7 @@ public class OutboundService {
     // ED-20 출고확정 (문서 단위) : PICKING 문서의 피킹리스트 전체를 한 번에 출고
     // ED-52 모든 피킹 줄이(PICKED) 이어야 출고확정 가능, 확정하면 줄도 출고됨(SHIPPED)
     // 문서 상태가 "출고됨 표시" 역할을 한다 → 이미 SHIPPED 면 409 (더블클릭·새로고침 후 재클릭 방어)
-    public synchronized String confirmShipment(Integer documentId) {
+    public String confirmShipment(Integer documentId) {
 
         // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
         DocumentEntity documentEntity = documentRepository.findById(documentId)
