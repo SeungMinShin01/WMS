@@ -2,96 +2,123 @@ package com.wms.service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;   // 필수값 검사용
+import org.springframework.util.StringUtils;
 
 import com.wms.model.dto.partner.PartnerDto;
 import com.wms.model.entity.PartnerEntity;
-import com.wms.model.entity.TenantEntity;                 // [추가]
+import com.wms.model.entity.TenantEntity;
 import com.wms.model.repository.PartnerRepository;
 import com.wms.model.repository.TenantRepository;
 
-import jakarta.persistence.EntityNotFoundException;       // [추가]
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @Transactional(readOnly = true)
 public class PartnerService {
     @Autowired private PartnerRepository partnerRepository;
-    @Autowired private TenantRepository tenantRepository;   // [추가]
+    @Autowired private TenantRepository tenantRepository;
 
-    // [변경] boolean → Integer (새 거래처 번호를 돌려준다), 화주 검사 추가
-    @Transactional   // [추가] 클래스가 readOnly라서 쓰기 메서드는 따로 붙인다
-    public Integer 거래처등록( PartnerDto partnerDto ){
-        // [추가] 1. 필수값 검사 (400)
-        if (partnerDto.getTenantId() == null) {
-            throw new IllegalArgumentException("화주를 선택하세요");
+    // 필수값 + 구분 검사 (등록, 수정 공통) → 400, 비운 항목을 모아서 알린다
+    private void 입력검사(PartnerDto dto, boolean 화주필수) {
+        List<String> errors = new ArrayList<>();
+        if (화주필수 && dto.getTenantId() == null) {
+            errors.add("화주를 선택하세요");
         }
-        if (!StringUtils.hasText(partnerDto.getPartnerCode())) {
-            throw new IllegalArgumentException("거래처코드는 필수입니다");
+        if (!StringUtils.hasText(dto.getPartnerCode())) {
+            errors.add("거래처코드는 필수입니다");
         }
-        if (!StringUtils.hasText(partnerDto.getPartnerName())) {
-            throw new IllegalArgumentException("거래처명은 필수입니다");
+        if (!StringUtils.hasText(dto.getPartnerName())) {
+            errors.add("거래처명은 필수입니다");
         }
+        if (!StringUtils.hasText(dto.getPartnerType())) {
+            errors.add("구분은 필수입니다");
+        } else if (!"SUPPLIER".equals(dto.getPartnerType()) && !"CUSTOMER".equals(dto.getPartnerType())) {
+            errors.add("구분은 SUPPLIER 또는 CUSTOMER만 가능합니다");
+        }
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException(String.join(", ", errors));
+        }
+    }
 
-        // [추가] 2. 화주 조회 (없으면 404)
+    // 같은 화주 안에서 코드 중복이면 거부 → 409 (excludeId: 수정할 때 자기 자신 제외)
+    private void 중복검사(Integer tenantId, String code, Integer excludeId) {
+        for (PartnerEntity p : partnerRepository.findAll()) {
+            boolean sameTenant = p.getTenantEntity().getTenantId().equals(tenantId);
+            boolean sameCode = p.getPartnerCode().equals(code);
+            boolean self = excludeId != null && p.getPartnerId().equals(excludeId);
+            if (sameTenant && sameCode && !self) {
+                throw new IllegalStateException("이미 등록된 거래처코드입니다: " + code);
+            }
+        }
+    }
+
+    @Transactional
+    public Integer 거래처등록(PartnerDto partnerDto) {
+        // 1. 필수값, 구분 검사 → 400
+        입력검사(partnerDto, true);
+
+        // 2. 화주 찾기 → 없으면 404
         TenantEntity tenant = tenantRepository.findById(partnerDto.getTenantId())
                 .orElseThrow(() -> new EntityNotFoundException("화주가 없습니다: " + partnerDto.getTenantId()));
 
-        // [추가] 3. 같은 화주 안에서 거래처코드 중복이면 거부 (409), 다른 화주는 같은 코드 허용
-        for (PartnerEntity p : partnerRepository.findAll()) {
-            boolean sameTenant = p.getTenantEntity().getTenantId().equals(tenant.getTenantId());
-            boolean sameCode = p.getPartnerCode().equals(partnerDto.getPartnerCode());
-            if (sameTenant && sameCode) {
-                throw new IllegalStateException("이미 등록된 거래처코드입니다: " + partnerDto.getPartnerCode());
-            }
-        }
+        // 3. 같은 화주 안 코드 중복 → 409 (다른 화주의 같은 코드는 허용)
+        중복검사(tenant.getTenantId(), partnerDto.getPartnerCode(), null);
 
-        // [변경] toEntity() → toEntity(tenant), true/false 대신 새 번호
-        PartnerEntity saved = partnerRepository.save( partnerDto.toEntity(tenant) );
+        // 4. 저장 → 새 거래처 번호를 돌려준다
+        PartnerEntity saved = partnerRepository.save(partnerDto.toEntity(tenant));
         return saved.getPartnerId();
     }
 
-    // http://localhost:8080/wms/partner/detail?partnerid=1
-    // [그대로] 클래스의 readOnly 트랜잭션이 적용된다
-    public PartnerDto 거래처개별조회( int partnerid ){
-        Optional<PartnerEntity> optional = partnerRepository.findById( partnerid ); // 1. findById 엔티티 개별조회
-        if( optional.isPresent() ) { // 2. 조회 결과 존재하면
-            PartnerEntity entity = optional.get(); // 3. 엔티티 꺼내기
-            return PartnerDto.from(entity);
+    // [변경] tenantId가 있으면 그 화주 거래처만, 없으면 전체
+    public List<PartnerDto> 거래처전체조회(Integer tenantId) {
+        List<PartnerDto> list = new ArrayList<>();
+        for (PartnerEntity entity : partnerRepository.findAll()) {
+            if (tenantId == null || entity.getTenantEntity().getTenantId().equals(tenantId)) {
+                list.add(PartnerDto.from(entity));
+            }
         }
-        return null;
-    }
-
-    // [그대로]
-    public List<PartnerDto> 거래처전체조회(){
-        List<PartnerEntity> entities = partnerRepository.findAll(); // 1. findAll 엔티티 전체조회
-        List<PartnerDto> list = new ArrayList<>(); // 2. 엔티티 -> dto 변환
-        entities.forEach( (entity) -> {
-            PartnerDto dto = PartnerDto.from( entity );
-            list.add( dto );
-        });
         return list;
     }
 
-    // [그대로] 화주 변경 막기, 코드 중복 검사는 나중에 (ED-62)
+    // [변경] 없으면 null(200)이 아니라 404
+    public PartnerDto 거래처개별조회(int partnerid) {
+        PartnerEntity entity = partnerRepository.findById(partnerid)
+                .orElseThrow(() -> new EntityNotFoundException("거래처가 없습니다: " + partnerid));
+        return PartnerDto.from(entity);
+    }
+
+    // [변경] 404 / 화주 변경 400 / 필수값 400 / 같은 화주 코드 중복 409
     @Transactional
-    public boolean 거래처수정( PartnerDto partnerDto ){
-        // 1. 수정할 pk 이용하여 엔티티 찾기
-        Optional<PartnerEntity> optional = partnerRepository.findById( partnerDto.getPartnerId() );
-        if( optional.isPresent() ){ // 존재하면 엔티티 수정한다.
-            PartnerEntity entity = optional.get();
-            entity.setPartnerId( partnerDto.getPartnerId() );
-            entity.setPartnerCode( partnerDto.getPartnerCode() );
-            entity.setPartnerName( partnerDto.getPartnerName() );
-            entity.setPartnerType( partnerDto.getPartnerType() );
-            entity.setContact( partnerDto.getContact() );
-            entity.setAddress( partnerDto.getAddress() );
-            return true;
+    public boolean 거래처수정(PartnerDto partnerDto) {
+        // 1. 없으면 404
+        if (partnerDto.getPartnerId() == null) {
+            throw new IllegalArgumentException("거래처 번호가 없습니다");
         }
-        return false;
+        PartnerEntity entity = partnerRepository.findById(partnerDto.getPartnerId())
+                .orElseThrow(() -> new EntityNotFoundException("거래처가 없습니다: " + partnerDto.getPartnerId()));
+
+        // 2. 화주는 바꿀 수 없다 → 400
+        Integer currentTenantId = entity.getTenantEntity().getTenantId();
+        if (partnerDto.getTenantId() != null && !partnerDto.getTenantId().equals(currentTenantId)) {
+            throw new IllegalArgumentException("화주는 바꿀 수 없습니다");
+        }
+
+        // 3. 필수값, 구분 검사 → 400 (화주는 기존 것을 쓰므로 필수 아님)
+        입력검사(partnerDto, false);
+
+        // 4. 같은 화주 + 같은 코드인데 자기 자신이 아닌 것이 있으면 → 409
+        중복검사(currentTenantId, partnerDto.getPartnerCode(), entity.getPartnerId());
+
+        // 5. 값 바꾸기 (화주는 안 바꿈)
+        entity.setPartnerCode(partnerDto.getPartnerCode());
+        entity.setPartnerName(partnerDto.getPartnerName());
+        entity.setPartnerType(partnerDto.getPartnerType());
+        entity.setContact(partnerDto.getContact());
+        entity.setAddress(partnerDto.getAddress());
+        return true;
     }
 }

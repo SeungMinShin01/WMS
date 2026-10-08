@@ -28,8 +28,9 @@ public class PartnerController {
 
     // [변경] List<PartnerDto> → ResponseEntity<List<PartnerDto>>
     @GetMapping("/wms/partners")
-    public ResponseEntity<List<PartnerDto>> 거래처전체조회() {
-        return ResponseEntity.ok(partnerService.거래처전체조회());
+    public ResponseEntity<List<PartnerDto>> 거래처전체조회(
+        @RequestParam(name = "tenantId", required = false) Integer tenantId) {   // [변경]
+    return ResponseEntity.ok(partnerService.거래처전체조회(tenantId));
     }
 
     // [변경] PartnerDto → ResponseEntity<PartnerDto>, 겹쳐 있던 중괄호 {{ }} 정리

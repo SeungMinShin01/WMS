@@ -29,9 +29,10 @@ public class ProductController {
 
     // [변경] 반환 List<ProductDto> → ResponseEntity<List<ProductDto>>
     @GetMapping("/wms/products")
-    public ResponseEntity<List<ProductDto>> 상품전체조회() {
-        return ResponseEntity.ok(productService.상품전체조회());
-    }
+    public ResponseEntity<List<ProductDto>> 상품전체조회(
+        @RequestParam(name = "tenantId", required = false) Integer tenantId) {   // [변경]
+    return ResponseEntity.ok(productService.상품전체조회(tenantId));
+}
 
     // 확인할 때 http://localhost:8080/wms/product/detail?productid=1
     // 탤런트 작성할 때 http://localhost:8080/wms/product/detail?productid=1
