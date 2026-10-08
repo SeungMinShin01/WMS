@@ -174,7 +174,7 @@ public class AllocationPlanService {
 
     // ===== 3. 추천 계산 =====
 
-    // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] buildPlan 구조 변경
+        // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] buildPlan 구조 변경
     // 추천 계산 (DB 저장 X) : 품목 줄마다 어느 재고에서 몇 개 꺼낼지 정해 목록으로 돌려줌
     // 전 : 재고 전체를 품목마다 돌며 if 로 거르기 → lotTotal·lotFirstIn Map → 후보 전체를 비교 7단계로 sort → 앞에서부터 담기
     // 후 : (가) 재고를 상품별로 한 번 묶기
@@ -182,7 +182,9 @@ public class AllocationPlanService {
     //      (다) 규칙으로 거르기 + 가용 계산
     //      (라) 가용 부족 409
     //      (마) 꺼낼 재고·수량 계산은 allocationStrategy.plan() 에 맡기기 (FefoStrategy : LOT 큐 → 칸 큐)
-    //      (바) 결과를 DTO 로 바꾸고 planned 에 기록
+    //      (바) 결과를 DTO 로 바꾸기
+    // 한 문서에 같은 상품 품목 줄은 1개만 있음 (등록 단계에서 막음)
+    //   → 품목 줄마다 다른 상품의 재고를 쓰므로, 앞 줄이 쓴 수량을 따로 기록할 필요 없음
     // 우선순위 (FefoStrategy 안에서 그대로 유지)
     //   [LOT 정하기] 1 소비기한 빠른 순 → 2-1 LOT 가용 합계 많은 순 → 2-2 LOT 첫 적재일 빠른 순 → 2-3 lotId
     //   [칸 정하기]  3-1 칸 가용수량 많은 순 → 3-2 칸 적재일 빠른 순 → 3-3 stockId
@@ -202,10 +204,6 @@ public class AllocationPlanService {
             stocksByProduct.get(productId).add(s);                 // 그 상품 목록에 재고 추가
         }
 
-        // planned : 재고번호(stockId) → 이번 계산에서 이미 쓴 수량
-        //   처음엔 비어 있고, (바)에서 재고를 꺼낼 때마다 기록됨
-        //   → 한 문서에 같은 상품 품목 줄이 2개면, 뒤 줄이 앞 줄이 쓴 수량을 또 쓰지 않게 막음
-        Map<Integer, Integer> planned = new HashMap<>();
         List<AllocationPreviewDto> plan = new ArrayList<>(); // 결과 (추천 1줄 = DTO 1개)
 
         for (DocumentItemEntity item : items) {
@@ -218,14 +216,14 @@ public class AllocationPlanService {
                 productStocks = stocksByProduct.get(productId);
             }
 
-            // (다) 후보 거르기 : 규칙 통과(4-1 isShippable) + 꺼낼 수량 있음(4-3 availableOf)
-            // available : 재고번호 → 이번 계산 기준 가용수량 (실물 − 선점 − planned)
+            // (다) 후보 거르기 : 규칙 통과(3-1 isShippable) + 꺼낼 수량 있음(3-3 availableOf)
+            // available : 재고번호 → 가용수량 (실물 − 선점)
             //   후보마다 한 번 계산해 두고 (라) 합계 검사와 (마) 전략 계산에서 같이 씀
             List<StockEntity> candidates = new ArrayList<>();
             Map<Integer, Integer> available = new HashMap<>();
             for (StockEntity s : productStocks) {
                 if (!isShippable(item, s, shipDate)) continue; // 규칙 하나라도 실패하면 후보 제외
-                int canTake = availableOf(s, planned);
+                int canTake = availableOf(s);
                 if (canTake <= 0) continue;                    // 꺼낼 수량 없음
                 candidates.add(s);
                 available.put(s.getStockId(), canTake);
@@ -246,18 +244,9 @@ public class AllocationPlanService {
             // 후 : LOT 우선순위 큐 → 그 LOT 의 칸 우선순위 큐 순서로 need 만큼 꺼내서 돌려줌
             List<AllocationStrategy.Pick> picks = allocationStrategy.plan(need, candidates, available);
 
-            // (바) 꺼낸 순서대로 추천 1줄씩 만들고 planned 에 기록 (저장 X)
+            // (바) 꺼낸 순서대로 추천 1줄씩 만들기 (저장 X)
             for (AllocationStrategy.Pick pick : picks) {
-                StockEntity s = pick.getStock();
-                int take = pick.getQty();
-                plan.add(AllocationPreviewDto.from(item, s, take)); // 추천 1줄 (품목 + 재고 + 수량)
-
-                // planned 에 이 재고를 쓴 수량 누적 → 다음 품목 줄이 같은 재고를 쓸 때 가용에서 빠짐
-                int used = 0;
-                if (planned.containsKey(s.getStockId())) {
-                    used = planned.get(s.getStockId());
-                }
-                planned.put(s.getStockId(), used + take);
+                plan.add(AllocationPreviewDto.from(item, pick.getStock(), pick.getQty())); // 추천 1줄 (품목 + 재고 + 수량)
             }
         }
         return plan;
@@ -315,13 +304,9 @@ public class AllocationPlanService {
         return null; // 전부 통과
     }
 
-    // 3-3. 계획 반영 가용수량 = 실물 − 선점 − 이번 계산에서 이미 쓴 수량(planned)
-    private int availableOf(StockEntity s, Map<Integer, Integer> planned) {
-        int used = 0; // planned 에 이 재고가 없으면 아직 안 쓴 것 → 0
-        if (planned.containsKey(s.getStockId())) {
-            used = planned.get(s.getStockId());
-        }
-        return s.getQty() - s.getAllocatedQty() - used;
+    // 3-3. 가용수량 = 실물 − 선점
+    private int availableOf(StockEntity s) {
+        return s.getQty() - s.getAllocatedQty();
     }
 
     // ===== 4. 다른 서비스에서만 부르는 메서드 =====

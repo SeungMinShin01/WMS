@@ -18,7 +18,7 @@ public interface AllocationStrategy {
     // available  : 재고번호 → 이번 계산 기준 가용수량 (실물 − 선점 − 같은 문서 앞 품목 줄이 이미 쓴 수량)
     // 리턴       : 꺼낼 순서대로 담긴 Pick 목록 (수량 합계 = need)
     List<Pick> plan(int need, List<StockEntity> candidates, Map<Integer, Integer> available);
-
+    // available  : 재고번호 → 가용수량 (실물 − 선점)
     // 계산 결과 1줄 = 이 재고(stock)에서 qty 개 꺼낸다
     // 인터페이스 안에 만든 클래스라 밖에서는 AllocationStrategy.Pick 으로 부름
     class Pick {
