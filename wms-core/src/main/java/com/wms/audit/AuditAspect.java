@@ -1,7 +1,10 @@
 package com.wms.audit;
 
+import com.wms.security.ForbiddenException;
 import com.wms.security.LoginInterceptor;
 import com.wms.security.LoginUser;
+import com.wms.security.UnauthorizedException;
+
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,7 @@ import java.lang.reflect.RecordComponent;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.CompletionException;
 
 @Slf4j
 @Aspect
@@ -142,9 +146,15 @@ public class AuditAspect {
     }
 
     private String reason(Throwable e) {
+        // 적재 예외가 CompletionException 안에 있음
+        if (e instanceof CompletionException && e.getCause() != null) {
+            e = e.getCause();
+        }
         if (e instanceof IllegalStateException
                 || e instanceof IllegalArgumentException
-                || e instanceof EntityNotFoundException) {
+                || e instanceof EntityNotFoundException
+                || e instanceof ForbiddenException
+                || e instanceof UnauthorizedException) {
             return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         }
         return e.getClass().getSimpleName();
