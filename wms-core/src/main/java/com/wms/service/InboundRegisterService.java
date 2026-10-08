@@ -45,6 +45,7 @@ import com.wms.model.repository.TenantRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import lombok.val;
 
 // ED-60 입고문서 등록
 @Service 
@@ -162,7 +163,7 @@ public class InboundRegisterService {
 
     // =============== 엑셀 일괄 등록 ===============
     // 한줄 = 품목 1줄. 화주+공급사+입고예정일이 같은 줄은 한 문서로 묶음
-    // 열: A 화주코드 | B 공급사코드 | C 입고예정일 | D 품목코드 | E 제조일자 | F 소비기한 | G 예정수량
+    // 열: A 화주명 | B 공급사명 | C 입고예정일 | D 품목명 | E 제조일자 | F 소비기한 | G 예정수량
     // 한 줄이라도 틀리면 전체 취소 (클래스 @Transactional → 예외가 나면 전부 롤백)
     public String uploadExcel(MultipartFile file){
         if(file == null || file.isEmpty())
@@ -179,14 +180,11 @@ public class InboundRegisterService {
                 int rowNo = i + 1;  // 엑셀 화면에 보이는 행 번호
 
                 try{
-                    // 1. 코드 -> 엔티티 (코드는 화주별로 유일해서 화주를 먼저 찾음)
-                    TenantEntity tenant = tenantRepository.findByTenantCode(text(row.getCell(0)))
-                            .orElseThrow(()-> new EntityNotFoundException("화주코드가 없습니다."));
-                    PartnerEntity partner = partnerRepository.findByTenantEntityAndPartnerCode(tenant, text(row.getCell(1)))
-                            .orElseThrow(()-> new EntityNotFoundException("공급사코드가 없습니다."));
+                     // 1. 이름 → 엔티티(ID). 공급사·품목은 그 화주 안에서만 찾음
+                    TenantEntity tenant = findTenant(text(row.getCell(0)));
+                    PartnerEntity partner = findPartner(tenant, text(row.getCell(1)));
                     LocalDate expectedDate = date(row.getCell(2), "입고예정일");
-                    ProductEntity product = productRepository.findByTenantEntityAndProductCode(tenant, text(row.getCell(3)))
-                            .orElseThrow(()-> new EntityNotFoundException("품목코드가 없습니다."));
+                    ProductEntity product = findProduct(tenant, text(row.getCell(3)));
 
                     // 2. 같은 화주+공급사+날짜면 이미 만든 문서에 붙이고, 처음이면 문서 생성
                     String key = tenant.getTenantId() + "|" + partner.getPartnerId() + "|" + expectedDate;
@@ -230,7 +228,8 @@ public class InboundRegisterService {
 
     // 셀 -> 날짜(엑셀 날짜 형식, "2026-10-12" 글자 둘 다 허용)
     private LocalDate date(Cell cell, String name){
-        if(cell != null && cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell))
+        // 숫자 셀이면 엑셀 날짜 일련번호로 봄 (서식이 빠져 46307처럼 보여도 날짜로 읽음)
+        if(cell != null && cell.getCellType() == CellType.NUMERIC)
             return cell.getLocalDateTimeCellValue().toLocalDate();
         try{
             return LocalDate.parse(text(cell));
@@ -250,6 +249,34 @@ public class InboundRegisterService {
         }
     }
 
+    // ===== 엑셀: 이름(없으면 코드)로 찾기 =====
+    // 이름은 DB에서 유일 보장이 없음 -> 0개면 404, 2개 이상이면 409 1개일 때만 사용
+    // 화주 찾기
+    private TenantEntity findTenant(String value){
+        if(value.isEmpty()) throw new IllegalArgumentException("화주가 비었습니다.");
+        List<TenantEntity> found = tenantRepository.findByTenantName(value);
+        if(found.isEmpty()) throw new EntityNotFoundException("화주 '" + value + "'을(를) 찾을 수 없습니다.");
+        if(found.size() > 1) throw new IllegalStateException("화주 '" + value + "'이(가) 여러 개입니다. 코드로 입력하세요.");
+        return found.get(0);
+    }
+
+    // 공급사 찾기(화주안에서만)
+    private PartnerEntity findPartner(TenantEntity tenant, String value){
+        if(value.isEmpty()) throw new IllegalArgumentException("공급사가 비었습니다.");
+        List<PartnerEntity> found = partnerRepository.findByTenantEntityAndPartnerName(tenant, value);
+        if(found.isEmpty()) throw new EntityNotFoundException("공급사 '" + value + "'을(를) 찾을 수 없습니다.");
+        if(found.size() > 1) throw new IllegalStateException("공급사 '" + value + "'이(가) 여러 개입니다. 기준정보를 확인하세요.");
+        return found.get(0);
+    }
+
+    // 품목 찾기(화주안에서만)
+    private ProductEntity findProduct(TenantEntity tenant, String value){
+        if(value.isEmpty()) throw new IllegalArgumentException("품목이 비었습니다.");
+        List<ProductEntity> found = productRepository.findByTenantEntityAndProductName(tenant, value);
+        if(found.isEmpty()) throw new EntityNotFoundException("품목 '" + value + "'을(를) 찾을 수 없습니다.");
+        if(found.size() > 1) throw new IllegalStateException("품목 '" + value + "'이(가) 여러 개입니다. 기준정보를 확인하세요.");
+        return found.get(0);
+    }
 
     // 등록화면 선택지 1. 화주목록
     public List<RegisterOptionDto> tenantOptions(){
