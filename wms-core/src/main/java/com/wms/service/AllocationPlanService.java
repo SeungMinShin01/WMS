@@ -29,18 +29,18 @@ import jakarta.persistence.EntityNotFoundException;
 // - 예외는 GlobalExceptionHandler 가 응답으로 바꿈 : 404 없음 / 400 잘못된 요청 / 409 상태·재고 충돌
 //
 // 메서드 순서 (위 → 아래 = 실행되는 순서)
-//   1. previewAllocate         : 추천 받기 시작 (컨트롤러가 부름)
-//   2. checkAllocatable        : 문서 검사
-//   3. selectItems             : 체크한 품목 줄 고르기
-//      3-1. itemsOf            : 문서의 품목 줄 전체
-//      3-2. allocatedSum       : 품목 줄의 할당 합계
-//   4. buildPlan               : 추천 계산 (꺼낼 순서 계산은 FefoStrategy 파일)
-//      4-1. isShippable        : 출고 가능한가 true/false
-//      4-2. failReason         : 출고 가능 규칙 5개 (한 곳에 모음)
-//      4-3. availableOf        : 계획 반영 가용수량
-//   5. 다른 서비스에서만 부르는 메서드
-//      5-1. checkShippable     : 사용자가 고른 재고 검사 (PickingListService)
-//      5-2. shippableQty       : 출고 가능 재고 합계 (OutboundService ED-17)
+//   previewAllocate         : 추천 받기 시작 (컨트롤러가 부름)
+//   1. checkAllocatable        : 문서 검사
+//   2. selectItems             : 체크한 품목 줄 고르기
+//      2-1. itemsOf            : 문서의 품목 줄 전체
+//      2-2. allocatedSum       : 품목 줄의 할당 합계
+//   3. buildPlan               : 추천 계산 (꺼낼 순서 계산은 FefoStrategy 파일)
+//      3-1. isShippable        : 출고 가능한가 true/false
+//      3-2. failReason         : 출고 가능 규칙 5개 (한 곳에 모음)
+//      3-3. availableOf        : 계획 반영 가용수량
+//   4. 다른 서비스에서만 부르는 메서드
+//      4-1. checkShippable     : 사용자가 고른 재고 검사 (PickingListService)
+//      4-2. shippableQty       : 출고 가능 재고 합계 (OutboundService ED-17)
 //
 // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
 //   buildPlan 의 역할을 "재고를 상품별로 묶기 → 그 상품 재고만 규칙으로 거르기 → 계산은 AllocationStrategy 에 맡기기 → DTO 변환" 으로 나눔
@@ -55,7 +55,7 @@ public class AllocationPlanService {
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] 추천 계산 전략 (구현체 FefoStrategy 를 스프링이 넣어줌)
     @Autowired private AllocationStrategy allocationStrategy;
 
-    // ===== 1. 추천 받기 시작 (컨트롤러가 부르는 메서드) =====
+    // ===== 추천 받기 시작 (컨트롤러가 부르는 메서드) =====
 
     // 선택한 품목 줄들의 추천 결과를 돌려줌 (저장 안 함)
     // documentItemIds 가 비어 있으면 문서의 전체 품목 줄이 대상
@@ -74,7 +74,7 @@ public class AllocationPlanService {
         return result;
     }
 
-    // ===== 2. 문서 검사 =====
+    // ===== 1. 문서 검사 =====
 
     // 문서 검사 : 없는 문서 404 / 출고 문서 아님 400 / 대기·할당 상태 아님 409
     // WAITING(할당 전), ALLOCATED(할당 중) 에서만 통과
@@ -99,7 +99,7 @@ public class AllocationPlanService {
         return documentEntity;
     }
 
-    // ===== 3. 품목 줄 고르기 =====
+    // ===== 2. 품목 줄 고르기 ===== 추천 계산할 품목 줄 목록만들기
 
     // 사용자가 체크한 품목 줄만 골라냄
     // 선택 없음 → 전체 / 이 문서에 없는 id 400 / 이미 할당된 줄 409
@@ -142,7 +142,7 @@ public class AllocationPlanService {
         return selected;
     }
 
-    // 3-1. 이 문서의 품목 줄 전체 (document_item 중 document_id 가 같은 것)
+    // 2-1. 이 문서의 품목 줄 전체 (document_item 중 document_id 가 같은 것)
     // 사용 : selectItems / PickingListService / OutboundService
     public List<DocumentItemEntity> itemsOf(Integer documentId) {
         List<DocumentItemEntity> items = new ArrayList<>();
@@ -154,7 +154,7 @@ public class AllocationPlanService {
         return items;
     }
 
-    // 3-2. 품목 줄 1개에 지금까지 할당된 수량 합계 (document_item_detail 의 qty 합)
+    // 2-2. 품목 줄 1개에 지금까지 할당된 수량 합계 (document_item_detail 의 qty 합)
     // 검사는 부르는 쪽에서 함
     //   추천·피킹리스트 생성 : 0 보다 크면 이미 할당된 줄 → 409
     //   집음·문서 상태 정리  : 요청 수량보다 작으면 아직 덜 할당된 줄
@@ -172,7 +172,7 @@ public class AllocationPlanService {
         return sum;
     }
 
-    // ===== 4. 추천 계산 =====
+    // ===== 3. 추천 계산 =====
 
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] buildPlan 구조 변경
     // 추천 계산 (DB 저장 X) : 품목 줄마다 어느 재고에서 몇 개 꺼낼지 정해 목록으로 돌려줌
@@ -263,7 +263,7 @@ public class AllocationPlanService {
         return plan;
     }
 
-    // 4-1. 재고 1행이 출고 가능한지 true/false (예외 안 던짐)
+    // 3-1. 재고 1행이 출고 가능한지 true/false (예외 안 던짐)
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
     // 전 : 안에 if 4개를 직접 적음 (checkShippable 과 중복)
     // 후 : 4-2 failReason 이 null 이면(걸린 규칙이 없으면) 출고 가능
@@ -271,7 +271,7 @@ public class AllocationPlanService {
         return failReason(item, s, shipDate) == null;
     }
 
-    // 4-2. 출고 가능 규칙 5개 (한 곳에 모음)
+    // 3-2. 출고 가능 규칙 5개 (한 곳에 모음)
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] 새로 추가
     // 재고 1행이 이 품목 줄에 출고 가능한지 규칙 5개를 위에서부터 검사
     //   통과하면 null, 걸리면 그 규칙의 이유 메시지를 돌려줌 (처음 걸린 규칙에서 바로 return)
@@ -315,7 +315,7 @@ public class AllocationPlanService {
         return null; // 전부 통과
     }
 
-    // 4-3. 계획 반영 가용수량 = 실물 − 선점 − 이번 계산에서 이미 쓴 수량(planned)
+    // 3-3. 계획 반영 가용수량 = 실물 − 선점 − 이번 계산에서 이미 쓴 수량(planned)
     private int availableOf(StockEntity s, Map<Integer, Integer> planned) {
         int used = 0; // planned 에 이 재고가 없으면 아직 안 쓴 것 → 0
         if (planned.containsKey(s.getStockId())) {
@@ -324,9 +324,9 @@ public class AllocationPlanService {
         return s.getQty() - s.getAllocatedQty() - used;
     }
 
-    // ===== 5. 다른 서비스에서만 부르는 메서드 =====
+    // ===== 4. 다른 서비스에서만 부르는 메서드 =====
 
-    // 5-1. 사용자가 고른 재고 1행이 이 품목 줄에 출고 가능한지 검사 (PickingListService 피킹리스트 생성에서 호출)
+    // 4-1. 사용자가 고른 재고 1행이 이 품목 줄에 출고 가능한지 검사 (PickingListService 피킹리스트 생성에서 호출)
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
     // 전 : isShippable 과 같은 조건을 if 4개로 한 번 더 적고 각각 throw
     // 후 : 같은 4-2 failReason 으로 검사하고, 걸린 이유로 예외 (메시지 그대로)
@@ -347,7 +347,7 @@ public class AllocationPlanService {
         throw new IllegalStateException(reason);        // 409
     }
 
-    // 5-2. 이 품목 줄의 출고 가능 재고 합계 (OutboundService ED-17 출고 문서 상세 조회에서 호출 → 화면 표시)
+    // 4-2. 이 품목 줄의 출고 가능 재고 합계 (OutboundService ED-17 출고 문서 상세 조회에서 호출 → 화면 표시)
     // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링]
     // 추천 후보(buildPlan (다))와 같은 기준 : 4-1 isShippable 통과(같은 화주 포함) + 가용 > 0
     // 전 : isShippable + 화주 if 를 따로 검사
