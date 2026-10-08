@@ -1,0 +1,12 @@
+{
+  "scenario": "carry",
+  "run": 3,
+  "vus": 20,
+  "ok": 2,
+  "rejected": 18,
+  "bad": 0,
+  "failed": 0,
+  "neterr": 0,
+  "p95_ms": 342,
+  "at": "2026-10-07T04:02:38.450Z"
+}
