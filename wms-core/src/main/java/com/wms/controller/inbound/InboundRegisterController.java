@@ -21,7 +21,8 @@ import com.wms.service.InboundRegisterService;
 @RestController
 @RequestMapping("/wms/inbounds")
 public class InboundRegisterController {
-    @Autowired private InboundRegisterService inboundRegisterService;
+    @Autowired
+    private InboundRegisterService inboundRegisterService;
 
     // 입고 문서 헤더 등록 → 201 + documentId
     @PostMapping("")
@@ -32,25 +33,25 @@ public class InboundRegisterController {
     // 입고 문서 품목 등록 → 201 + documentItemId
     @PostMapping("/{documentId}/items")
     public ResponseEntity<Integer> createItem(@PathVariable(name = "documentId") Integer documentId,
-                                              @RequestBody InboundItemCreateDto dto) {
+            @RequestBody InboundItemCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(inboundRegisterService.createItem(documentId, dto));
     }
 
     // 등록 화면 선택지1. 화주목록
     @GetMapping("/tenants")
-    public ResponseEntity<List<RegisterOptionDto>> tenantOptions(){
+    public ResponseEntity<List<RegisterOptionDto>> tenantOptions() {
         return ResponseEntity.ok(inboundRegisterService.tenantOptions());
     }
 
     // 등록 화면 선택지2. 화주의 공급사
     @GetMapping("/tenants/{tenantId}/suppliers")
-    public ResponseEntity<List<RegisterOptionDto>> supplierOptions(@PathVariable (name="tenantId")Integer tenantId){
+    public ResponseEntity<List<RegisterOptionDto>> supplierOptions(@PathVariable(name = "tenantId") Integer tenantId) {
         return ResponseEntity.ok(inboundRegisterService.supplierOptions(tenantId));
     }
 
     // 등록 화면 선택지3. 화주의 품목
     @GetMapping("/tenants/{tenantId}/products")
-    public ResponseEntity<List<RegisterOptionDto>> productOptions(@PathVariable (name="tenantId")Integer tenantId){
+    public ResponseEntity<List<RegisterOptionDto>> productOptions(@PathVariable(name = "tenantId") Integer tenantId) {
         return ResponseEntity.ok(inboundRegisterService.productOptions(tenantId));
     }
 }
