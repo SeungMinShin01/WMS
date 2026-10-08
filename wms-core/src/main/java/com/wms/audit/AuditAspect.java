@@ -1,6 +1,7 @@
-package com.wms.global.audit;
+package com.wms.audit;
 
-import com.wms.global.auth.LoginUser;
+import com.wms.security.LoginInterceptor;
+import com.wms.security.LoginUser;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,7 @@ public class AuditAspect {
 
         // 1. 실행 전: 누가, 어디서, 무엇을
         HttpServletRequest request = currentRequest();
-        LoginUser user = LoginUser.from(request);
+        LoginUser user = currentUser(request);
         String ip = clientIp(request);
         String uri = request == null ? "" : request.getMethod() + " " + request.getRequestURI();
 
@@ -64,6 +65,14 @@ public class AuditAspect {
     private HttpServletRequest currentRequest() {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             return attributes.getRequest();
+        }
+        return null;
+    }
+
+    private LoginUser currentUser(HttpServletRequest request) {
+        if (request != null
+                && request.getAttribute(LoginInterceptor.LOGIN_USER) instanceof LoginUser user) {
+            return user;
         }
         return null;
     }

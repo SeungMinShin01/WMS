@@ -1,4 +1,4 @@
-package com.wms.global.audit;
+package com.wms.audit;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;

@@ -1,4 +1,4 @@
-package com.wms.global.audit;
+package com.wms.audit;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import com.wms.global.auth.LoginUser;
+import com.wms.security.LoginUser;
 
 /*
  * 감사 로그 CSV 한 줄을 만들어 "AUDIT" 로거로 보낸다
@@ -34,11 +34,10 @@ public class AuditWriter {
             boolean success, String reason, String ip, String uri, long elapseMs) {
         String line = String.join(",",
                 csv(time.format(TIME_FORMAT)),
-                csv(user.getUserId() == null ? "" : String.valueOf(user.getUserId())), // String.valueOf(값) : 값을 문자열로
-                                                                                       // 바꿔준다.
-                csv(user.getLoginId()),
-                csv(user.getName()),
-                csv(user.getRole()),
+                csv(user == null || user.userId() == null ? "" : String.valueOf(user.userId())),
+                csv(""), // loginId - 사용자 캐시
+                csv(""), // userName - 사용자 캐시
+                csv(user == null || user.role() == null ? "" : user.role().name()),
                 csv(action.name()),
                 csv(target),
                 csv(detail),
