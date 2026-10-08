@@ -313,3 +313,72 @@ table.form.head td {
   min-width: 0;
   overflow-x: auto;
 }
+
+
+
+/* ===== 로그인 · 회원가입 ===== */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4f5f7;
+}
+.auth-box {
+  width: 380px;
+  background: #fff;
+  border: 1px solid #d5d9e0;
+}
+.auth-head {
+  background: #1f3f7a;
+  color: #fff;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.auth-head img {
+  height: 28px;
+}
+.auth-head b {
+  font-size: 14px;
+}
+.auth-body {
+  padding: 20px 16px;
+}
+.auth-body table.form {
+  width: 100%;
+}
+.auth-body table.form th {
+  width: 90px;
+}
+.auth-body input,
+.auth-body select {
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #c9ced6;
+}
+.auth-actions {
+  margin-top: 14px;
+}
+.auth-actions .btn {
+  width: 100%;
+  height: 32px;
+}
+.auth-foot {
+  margin-top: 12px;
+  text-align: center;
+  color: #666;
+}
+.auth-foot a {
+  color: #1f3f7a;
+}
+.top .logout {
+  margin-left: 8px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid #8ea3c9;
+  padding: 2px 8px;
+  cursor: pointer;
+}
