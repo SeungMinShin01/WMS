@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 스프링 부트 기본 콘솔 로그 유지 -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- application.yml의 logging.file.path 값 (없으면 logs) -->
+    <springProperty scope="context" name="LOG_DIR" source="logging.file.path" defaultValue="logs"/>
+
+    <!-- 감사 로그 파일 : audit.csv, 날짜가 바뀌면 audit.날짜.csv로 넘김, 90일 1GB 보관 -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/audit.csv</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/audit.%d{yyyy-MM-dd}.csv</fileNamePattern>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <charset>UTF-8</charset>
+            <layout class="ch.qos.logback.classic.PatternLayout">
+                <pattern>%msg%n</pattern>
+            </layout>
+        </encoder>
+    </appender>
+
+    <!-- 비동기 : 바로 쓰지 않고 큐에 담았다가 뒤에서 씀 -->
+    <appender name="AUDIT_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>false</neverBlock>
+        <maxFlushTime>2000</maxFlushTime>
+        <appender-ref ref="AUDIT_FILE"/>
+    </appender>
+
+    <!-- "AUDIT" 이름으로 온 로그는 비동기로만 (콘솔과 섞지 않음)-->
+    <logger name="AUDIT" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_ASYNC"/>
+    </logger>
+
+    <!-- 그외 모든 로그는 기존처럼 콘솔로 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
