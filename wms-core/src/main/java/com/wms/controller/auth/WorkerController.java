@@ -14,20 +14,23 @@ import org.springframework.web.bind.annotation.RestController;
 import com.wms.model.dto.auth.WorkerCreateDto;
 import com.wms.model.dto.auth.WorkerDto;
 import com.wms.service.WorkerService;
+import com.wms.security.AdminOnly;
 
-// 관리자 전용: /wms/workers 는 LoginInterceptor가 ADMIN만 통과시킴
+// 팀장변경 /관리자 전용: 클래스 전체에 @AdminOnly
+@AdminOnly
 @RequestMapping("/wms/workers")
 @RestController
 public class WorkerController {
-    @Autowired private WorkerService workerService;
+    @Autowired
+    private WorkerService workerService;
 
     @GetMapping
-    public ResponseEntity<List<WorkerDto>> findAll(){
+    public ResponseEntity<List<WorkerDto>> findAll() {
         return ResponseEntity.ok(workerService.findAll());
     }
 
     @PostMapping
-    public ResponseEntity<Integer> create(@RequestBody WorkerCreateDto dto){
+    public ResponseEntity<Integer> create(@RequestBody WorkerCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(workerService.create(dto));
     }
 }
