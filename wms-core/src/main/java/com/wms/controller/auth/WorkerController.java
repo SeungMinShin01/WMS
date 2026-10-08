@@ -15,6 +15,8 @@ import com.wms.model.dto.auth.WorkerCreateDto;
 import com.wms.model.dto.auth.WorkerDto;
 import com.wms.service.WorkerService;
 import com.wms.security.AdminOnly;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 // 팀장변경 /관리자 전용: 클래스 전체에 @AdminOnly
 @AdminOnly
@@ -29,6 +31,7 @@ public class WorkerController {
         return ResponseEntity.ok(workerService.findAll());
     }
 
+    @AuditLog(action = AuditAction.WORKER_CREATE, target = "loginId", fields = { "userName" })
     @PostMapping
     public ResponseEntity<Integer> create(@RequestBody WorkerCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(workerService.create(dto));
