@@ -2,6 +2,8 @@ package com.wms.audit;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 @Getter
 @RequiredArgsConstructor
@@ -25,7 +27,10 @@ public enum AuditAction {
     PARTNER_CREATE("거래처 등록"),
     PARTNER_UPDATE("거래처 수정"),
     PRODUCT_CREATE("품목 등록"),
-    PRODUCT_UPDATE("품목 수정");
+    PRODUCT_UPDATE("품목 수정"),
+
+    // 계정
+    WORKER_CREATE("작업자 계정 생성");
 
     private final String label; // 한글 이름 (CSV detail 칸에 사용)
 
