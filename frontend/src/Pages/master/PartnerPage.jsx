@@ -1,15 +1,13 @@
-// [변경] useEffect, useState, axios import 추가 (초안엔 PageTitle, GridTitle만 있었음)
 import { useEffect, useState } from "react";
 import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 
-// [추가] 구분 코드를 화면 표시명으로 바꾸는 표
 const TYPE_LABEL = { SUPPLIER: "공급사", CUSTOMER: "납품처" };
 
-// [추가] 신규 버튼을 눌렀을 때 상세 패널에 들어갈 빈 값
 const EMPTY = {
   partnerId: null,
+  tenantId: "", // [추가] 신규일 때 화주를 직접 고르게 비워 둔다
   partnerCode: "PT-",
   partnerName: "",
   partnerType: "SUPPLIER",
@@ -17,17 +15,15 @@ const EMPTY = {
   address: "",
 };
 
-// [추가] "2026-10-05T12:34:56" → "2026-10-05" (등록일 표시용)
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // 01-2 거래처 — 담당: 기준정보 담당 (공급사 SUPPLIER / 납품처 CUSTOMER)
 export default function PartnerPage(props) {
-  // [추가] 화면 데이터를 담는 상태 3개
-  const [partners, setPartners] = useState([]); // 서버에서 받은 전체 목록
-  const [filtered, setFiltered] = useState([]); // 조회조건으로 거른, 화면에 보이는 목록
-  const [form, setForm] = useState(null); // 하단 상세 (null이면 안내 문구)
+  const [partners, setPartners] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [form, setForm] = useState(null);
+  const [tenants, setTenants] = useState([]); // [추가] 화주 select 옵션
 
-  // [추가] 목록 조회 (GET /wms/partners)
   const fetchPartners = async () => {
     try {
       const res = await axios.get("/wms/partners");
@@ -38,31 +34,38 @@ export default function PartnerPage(props) {
     }
   };
 
-  // [추가] 상세 조회 (GET /wms/partner/detail?partnerid=)
+  // [추가] 화주 목록 조회 (GET /wms/tenants)
+  const fetchTenants = async () => {
+    try {
+      const res = await axios.get("/wms/tenants");
+      setTenants(res.data);
+    } catch (err) {
+      console.error("화주 목록 조회 실패", err);
+    }
+  };
+
   const fetchDetail = async (partnerId) => {
     try {
       const res = await axios.get("/wms/partner/detail", {
         params: { partnerid: partnerId },
       });
-      if (!res.data) {
-        alert("거래처 정보를 찾을 수 없습니다.");
-        return;
-      }
       setForm(res.data);
     } catch (err) {
-      console.error("거래처 상세 조회 실패", err);
+      // [변경] 없는 거래처(404)면 서버 문구를 보여준다
+      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      alert(msg || "거래처 정보를 불러오지 못했습니다.");
     }
   };
 
-  // [추가] 화면이 처음 열릴 때 목록을 한 번 불러온다
   useEffect(() => {
     fetchPartners();
+    fetchTenants(); // [추가]
   }, []);
 
-  // [변경] 초안은 preventDefault()만 했음 → 서버가 조회조건을 안 받아서 프론트에서 거른다
   const 조회 = (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
+    const tenantId = data.get("tenantId"); // [추가]
     const code = data.get("partnerCode").trim();
     const name = data.get("partnerName").trim();
     const type = data.get("partnerType");
@@ -70,6 +73,7 @@ export default function PartnerPage(props) {
     setFiltered(
       partners.filter(
         (p) =>
+          (tenantId === "" || String(p.tenantId) === tenantId) && // [추가]
           (code === "" || code === "PT-" || p.partnerCode?.includes(code)) &&
           (name === "" || p.partnerName?.includes(name)) &&
           (type === "" || p.partnerType === type)
@@ -77,29 +81,32 @@ export default function PartnerPage(props) {
     );
   };
 
-  // [추가] 신규 버튼: 빈 폼을 하단 상세에 띄운다
   const 신규 = () => setForm({ ...EMPTY });
 
-  // [추가] 상세 패널 입력값이 바뀔 때 form 상태에 반영
   const 입력 = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  // [추가] 저장: partnerId가 없으면 등록(POST), 있으면 수정(PUT)
+  // [변경] 품목 코드가 섞여 있던 것을 거래처 기준으로 교체, 화주 필수 추가
   const 저장 = async () => {
-    // 규격 필수 추가 (서버도 검사하지만 화면에서 먼저 안내)
-    if (!form.productCode.trim() || !form.productName.trim() || !form.spec.trim()) {
-      alert("품목코드, 품목명, 규격은 필수입니다.");
+    if (!form.tenantId) {
+      alert("화주를 선택하세요.");
       return;
     }
-    const isEdit = form.productId != null;
+    if (!form.partnerCode.trim() || !form.partnerName.trim()) {
+      alert("거래처코드와 거래처명은 필수입니다.");
+      return;
+    }
+    const isEdit = form.partnerId != null;
+    const body = { ...form, tenantId: Number(form.tenantId) }; // 문자열 → 숫자
 
     try {
       const res = isEdit
-        ? await axios.put("/wms/product", form)
-        : await axios.post("/wms/product", form);
-      if (res.data) {   // 등록은 새 번호, 수정은 true
+        ? await axios.put("/wms/partner", body)
+        : await axios.post("/wms/partner", body);
+      if (res.data) {
+        // 등록은 새 번호, 수정은 true
         alert(isEdit ? "수정되었습니다." : "등록되었습니다.");
         setForm(null);
-        fetchProducts();
+        fetchPartners();
       } else {
         alert("저장에 실패했습니다.");
       }
@@ -112,11 +119,19 @@ export default function PartnerPage(props) {
 
   return (
     <>
-      {/* [초안 그대로] */}
       <PageTitle title="거래처 관리" path="홈 > 기준정보 > 거래처" />
 
-      {/* [초안 그대로] 조회조건: form 안에 label + input 나열. 조회 버튼은 submit */}
       <form className="search" onSubmit={조회}>
+        {/* [추가] 화주 조회조건 */}
+        <label>화주</label>
+        <select name="tenantId">
+          <option value="">전체</option>
+          {tenants.map((t) => (
+            <option key={t.tenantId} value={t.tenantId}>
+              {t.tenantName}
+            </option>
+          ))}
+        </select>
         <label>거래처코드</label>
         <input type="text" name="partnerCode" defaultValue="PT-" />
         <label>거래처명</label>
@@ -130,15 +145,14 @@ export default function PartnerPage(props) {
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
-      {/* [변경] desc "총 0건" → 실제 건수 / 신규 버튼에 onClick 추가 */}
       <GridTitle title="거래처 목록" desc={`총 ${filtered.length}건`}>
         <button className="btn" onClick={신규}>신규</button>
       </GridTitle>
       <table className="grid">
-        {/* [초안 그대로] 표 머리 */}
         <thead>
           <tr>
             <th>No</th>
+            <th>화주</th> {/* [추가] */}
             <th>거래처코드</th>
             <th>거래처명</th>
             <th>구분</th>
@@ -146,12 +160,11 @@ export default function PartnerPage(props) {
             <th>등록일</th>
           </tr>
         </thead>
-        {/* [변경] 초안은 비어 있던 tbody → 서버 데이터를 .map으로 출력 */}
         <tbody>
           {filtered.map((p, i) => (
-            // 행 클릭 시 상세 조회
             <tr key={p.partnerId} onClick={() => fetchDetail(p.partnerId)}>
               <td>{i + 1}</td>
+              <td>{p.tenantName}</td> {/* [추가] */}
               <td>{p.partnerCode}</td>
               <td>{p.partnerName}</td>
               <td>{TYPE_LABEL[p.partnerType]}</td>
@@ -162,7 +175,6 @@ export default function PartnerPage(props) {
         </tbody>
       </table>
 
-      {/* [추가] 하단 상세 영역 (입고예정 화면처럼 선택 전에는 안내 문구만) */}
       {form == null ? (
         <p className="empty">목록에서 거래처를 클릭하면 상세가 나옵니다.</p>
       ) : (
@@ -171,6 +183,21 @@ export default function PartnerPage(props) {
             <button className="btn primary" onClick={저장}>저장</button>
           </GridTitle>
           <div className="panel">
+            {/* [추가] 화주: 신규는 선택, 수정은 바꿀 수 없다(표시만) */}
+            <label>화주</label>
+            <select
+              name="tenantId"
+              value={String(form.tenantId ?? "")}
+              onChange={입력}
+              disabled={form.partnerId != null}
+            >
+              <option value="">선택</option>
+              {tenants.map((t) => (
+                <option key={t.tenantId} value={String(t.tenantId)}>
+                  {t.tenantName}
+                </option>
+              ))}
+            </select>
             <label>거래처코드</label>
             <input name="partnerCode" value={form.partnerCode ?? ""} onChange={입력} />
             <label>거래처명</label>
