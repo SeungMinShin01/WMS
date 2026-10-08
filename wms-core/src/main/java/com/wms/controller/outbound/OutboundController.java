@@ -59,7 +59,7 @@ public class OutboundController {
     // 본문 : [ {"documentItemId":21, "stockId":10, "qty":50}, ... ] (미리보기 결과를 사용자가
     // 수정한 값)
     @PostMapping("/wms/allocations/{documentId}/pickinglist")
-    public ResponseEntity<List<PickingListDto>> createPickingList(
+    public synchronized ResponseEntity<List<PickingListDto>> createPickingList(
             @PathVariable(name = "documentId") Integer documentId,
             @RequestBody List<AllocationDto> rows) {
         List<PickingListDto> pickingList = pickingListService.createPickingList(documentId, rows);
@@ -81,7 +81,7 @@ public class OutboundController {
 
     // ED-20 출고확정 (문서 단위) → 200 + 바뀐 상태 "SHIPPED" / 이미 출고됨 → 409
     @PutMapping("/wms/outbounds/{documentId}/ship")
-    public ResponseEntity<String> confirmShipment(@PathVariable(name = "documentId") Integer documentId) {
+    public synchronized ResponseEntity<String> confirmShipment(@PathVariable(name = "documentId") Integer documentId) {
         return ResponseEntity.ok(outboundService.confirmShipment(documentId));
     }
 
