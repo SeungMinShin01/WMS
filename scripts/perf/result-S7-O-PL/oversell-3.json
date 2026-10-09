@@ -1,0 +1,25 @@
+{
+  "scenario": "oversell",
+  "run": 3,
+  "vus": 20,
+  "a": {
+    "ok": 1,
+    "rejected": 9,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "b": {
+    "ok": 1,
+    "rejected": 8,
+    "busy": 0,
+    "bad": 0,
+    "failed": 1,
+    "neterr": 0
+  },
+  "p95_ms": 338,
+  "p99_ms": 343,
+  "max_ms": 345,
+  "at": "2026-10-09T06:47:16.371Z"
+}
