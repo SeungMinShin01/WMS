@@ -1,0 +1,25 @@
+{
+  "scenario": "cross",
+  "run": 5,
+  "vus": 20,
+  "a": {
+    "ok": 4,
+    "rejected": 6,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "b": {
+    "ok": 4,
+    "rejected": 6,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "p95_ms": 315,
+  "p99_ms": 317,
+  "max_ms": 317,
+  "at": "2026-10-09T07:59:53.130Z"
+}
