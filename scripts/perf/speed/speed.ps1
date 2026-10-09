@@ -1,4 +1,4 @@
-# 속도 측정: 데이터 규모 하나에 대해 API 별로 예열 → 본 측정 반복
+﻿# 속도 측정: 데이터 규모 하나에 대해 API 별로 예열 → 본 측정 반복
 # 서버는 미리 띄워 둔다 (AUTH_ENABLED=false, SQL 로그 끔)
 #
 # 사용법 (WMS 폴더에서, DB 비밀번호는 환경변수로):
@@ -18,6 +18,7 @@ param(
   [int]$Vus = 5,             # 동시 사용자 수
   [string[]]$Only = @(),     # 일부 API 만 (비우면 전부)
   [switch]$SkipLoad,         # 데이터를 다시 만들지 않음 (읽기만 다시 잴 때)
+  [switch]$NoPng,            # Grafana PNG 저장 건너뜀
   [string]$Database = 'wms_db',
   [string]$Sample = ''
 )
@@ -83,4 +84,11 @@ foreach ($ep in $eps) {
 
 # 3. 예열 결과 지우기 (회차 0 이하)
 Get-ChildItem $out -Filter '*.json' | Where-Object { $_.BaseName -match '-(-?\d+)$' -and [int]$Matches[1] -le 0 } | Remove-Item
+
+# 4. API 별 Grafana PNG (본 측정 회차 구간). -NoPng 로 건너뜀
+if (-not $NoPng) {
+  foreach ($ep in $eps) {
+    powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep
+  }
+}
 Write-Host "== done: $out"

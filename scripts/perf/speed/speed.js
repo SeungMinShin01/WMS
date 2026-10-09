@@ -87,6 +87,7 @@ export function handleSummary(data) {
     p95_ms: Math.round(d['p(95)']), p99_ms: Math.round(d['p(99)']), max_ms: Math.round(d.max),
     rps: Number((data.metrics.http_reqs.values.rate).toFixed(2)),
     avg_resp_kb: reqs ? Math.round(recv / reqs / 1024) : 0,
+    dur_ms: Math.round(data.state.testRunDurationMs),   // 회차 소요 시간 (Grafana PNG 구간 계산용)
     at: new Date().toISOString(),
   };
   const line = `${EP} #${RUN}  p95 ${result.p95_ms}ms  med ${result.med_ms}ms  max ${result.max_ms}ms  실패 ${failed}/${reqs}  응답 ${result.avg_resp_kb}KB\n`;
