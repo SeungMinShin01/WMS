@@ -6,3 +6,5 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+    jsonData:
+      timeInterval: 1s # 그래프 최소 간격 = Prometheus 수집 간격 (기본 15s 라 점이 15초마다 찍혔음)
