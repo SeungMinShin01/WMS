@@ -26,6 +26,8 @@ services:
       GF_RENDERING_CALLBACK_URL: http://grafana:3000/
       # 로컬 측정용: 로그인 없이 보기 전용 (PNG 스크립트가 로그인 없이 받아 가려고)
       # EC2 등 외부에서 접속 가능한 서버에는 이 두 줄을 넣지 말 것
+      # Grafana ↔ 렌더러가 서로 확인하는 토큰 (Grafana 13 부터 기본값 금지). renderer 의 AUTH_TOKEN 과 같아야 함
+      GF_RENDERING_RENDERER_TOKEN: ${GRAFANA_RENDERER_TOKEN:-wms-local-render-token}
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
@@ -38,6 +40,8 @@ services:
   # 패널 → PNG 변환 (헤드리스 크롬). 포트를 밖으로 열 필요 없음 (grafana 만 내부에서 호출)
   renderer:
     image: grafana/grafana-image-renderer:latest
+    environment:
+      AUTH_TOKEN: ${GRAFANA_RENDERER_TOKEN:-wms-local-render-token}
 
 volumes:
   prometheus-data:
