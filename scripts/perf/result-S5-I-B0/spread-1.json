@@ -1,0 +1,25 @@
+{
+  "scenario": "spread",
+  "run": 1,
+  "vus": 20,
+  "a": {
+    "ok": 20,
+    "rejected": 0,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "b": {
+    "ok": 0,
+    "rejected": 0,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "p95_ms": 130,
+  "p99_ms": 130,
+  "max_ms": 130,
+  "at": "2026-10-09T07:16:29.950Z"
+}
