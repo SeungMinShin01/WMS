@@ -1,0 +1,6 @@
+﻿N	T	stock_rows	detail_rows	document_rows	location_rows	lot_rows
+1000	43	1099	1107	345	342	556
+chk	cnt
+tenant mismatch (0 이어야 함)	0
+doc-item tenant mismatch (0 이어야 함)	0
+generate 1s / Warmup 1 x 3 / Runs 3 x 10 / VUS 1

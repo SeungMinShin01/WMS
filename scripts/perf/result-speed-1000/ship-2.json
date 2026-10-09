@@ -1,0 +1,19 @@
+{
+  "ep": "ship",
+  "run": 2,
+  "iter": 10,
+  "vus": 1,
+  "offset": 13,
+  "requests": 10,
+  "failed": 0,
+  "avg_ms": 1976,
+  "min_ms": 1703,
+  "med_ms": 1989,
+  "p95_ms": 2187,
+  "p99_ms": 2239,
+  "max_ms": 2252,
+  "rps": 0.51,
+  "avg_resp_kb": 0,
+  "dur_ms": 19770,
+  "at": "2026-10-09T09:46:53.608Z"
+}

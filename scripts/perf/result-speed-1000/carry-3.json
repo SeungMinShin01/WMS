@@ -1,0 +1,19 @@
+{
+  "ep": "carry",
+  "run": 3,
+  "iter": 10,
+  "vus": 1,
+  "offset": 23,
+  "requests": 10,
+  "failed": 0,
+  "avg_ms": 2299,
+  "min_ms": 1906,
+  "med_ms": 2366,
+  "p95_ms": 2533,
+  "p99_ms": 2555,
+  "max_ms": 2560,
+  "rps": 0.43,
+  "avg_resp_kb": 0,
+  "dur_ms": 23007,
+  "at": "2026-10-09T09:44:45.925Z"
+}

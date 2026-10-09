@@ -1,0 +1,19 @@
+{
+  "ep": "inbound_detail",
+  "run": 3,
+  "iter": 10,
+  "vus": 1,
+  "offset": 0,
+  "requests": 10,
+  "failed": 0,
+  "avg_ms": 108,
+  "min_ms": 86,
+  "med_ms": 101,
+  "p95_ms": 143,
+  "p99_ms": 152,
+  "max_ms": 154,
+  "rps": 9.18,
+  "avg_resp_kb": 1,
+  "dur_ms": 1089,
+  "at": "2026-10-09T09:38:07.557Z"
+}

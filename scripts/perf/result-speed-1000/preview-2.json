@@ -1,0 +1,19 @@
+{
+  "ep": "preview",
+  "run": 2,
+  "iter": 10,
+  "vus": 1,
+  "offset": 0,
+  "requests": 10,
+  "failed": 0,
+  "avg_ms": 1153,
+  "min_ms": 916,
+  "med_ms": 1100,
+  "p95_ms": 1534,
+  "p99_ms": 1624,
+  "max_ms": 1647,
+  "rps": 0.87,
+  "avg_resp_kb": 0,
+  "dur_ms": 11540,
+  "at": "2026-10-09T09:41:58.669Z"
+}

@@ -1,0 +1,19 @@
+{
+  "ep": "locations",
+  "run": 3,
+  "iter": 10,
+  "vus": 1,
+  "offset": 0,
+  "requests": 10,
+  "failed": 0,
+  "avg_ms": 40,
+  "min_ms": 25,
+  "med_ms": 35,
+  "p95_ms": 64,
+  "p99_ms": 64,
+  "max_ms": 64,
+  "rps": 24.4,
+  "avg_resp_kb": 16,
+  "dur_ms": 410,
+  "at": "2026-10-09T09:39:25.965Z"
+}
