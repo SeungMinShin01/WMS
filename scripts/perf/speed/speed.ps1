@@ -19,6 +19,8 @@ param(
   [string[]]$Only = @(),     # 일부 API 만 (비우면 전부)
   [switch]$SkipLoad,         # 데이터를 다시 만들지 않음 (읽기만 다시 잴 때)
   [switch]$NoPng,            # Grafana PNG 저장 건너뜀
+  [string]$PngEps = 'stocks,history,outbound_detail,carry,alloc',   # PNG 를 뽑을 API ('all' 이면 전부)
+  [string]$PngPanels = '2,3,9,10,11',   # 처리량, p95, API별 p95, JVM 힙, GC ('' 이면 전부)
   [string]$Database = 'wms_db',
   [string]$Sample = ''
 )
@@ -87,8 +89,13 @@ Get-ChildItem $out -Filter '*.json' | Where-Object { $_.BaseName -match '-(-?\d+
 
 # 4. API 별 Grafana PNG (본 측정 회차 구간). -NoPng 로 건너뜀
 if (-not $NoPng) {
-  foreach ($ep in $eps) {
-    powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep
+  $pngList = if ($PngEps -eq 'all') { $eps } else { $eps | Where-Object { ($PngEps -split ',') -contains $_ } }
+  foreach ($ep in $pngList) {
+    if ($PngPanels -eq '') {
+      powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep
+    } else {
+      powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep -Panels $PngPanels
+    }
   }
 }
 Write-Host "== done: $out"

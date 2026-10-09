@@ -16,6 +16,7 @@ param(
   [string]$To = '',
   [int]$Pad = 10,
   [int]$Tail = 15,
+  [string[]]$Panels = @(),   # 일부 패널만 (예: -Panels 2,3,9). 비우면 전부
   [string]$Grafana = 'http://localhost:3000',
   [int]$Width = 1200,
   [int]$Height = 450
@@ -27,6 +28,9 @@ $panels = [ordered]@{
   '5' = 'carry-queue'; '6' = 'db-acquire'; '7' = 'k6-status'; '8' = 'p99'
   '9' = 'api-p95'; '10' = 'jvm-heap'; '11' = 'gc-pause'
 }
+
+# -File 로 호출하면 '2,3,9' 가 한 문자열로 들어오므로 쉼표로 나눈다
+$want = @($Panels | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' })
 
 function ToMs([datetime]$t) { ([DateTimeOffset]$t).ToUnixTimeMilliseconds() }
 
@@ -55,6 +59,7 @@ if (-not (Test-Path $out)) { New-Item -ItemType Directory -Path $out | Out-Null 
 
 Write-Host "== $Name  $([DateTimeOffset]::FromUnixTimeMilliseconds($fromMs).LocalDateTime) ~ $([DateTimeOffset]::FromUnixTimeMilliseconds($toMs).LocalDateTime)"
 foreach ($id in $panels.Keys) {
+  if ($want.Count -gt 0 -and $want -notcontains $id) { continue }
   $url = "$Grafana/render/d-solo/wms-measure/wms-measure?orgId=1&panelId=$id&from=$fromMs&to=$toMs" +
          "&width=$Width&height=$Height&tz=Asia%2FSeoul&var-DS=Prometheus"
   $file = Join-Path $out ("{0}-{1}-{2}.png" -f $Name, $id, $panels[$id])
