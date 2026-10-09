@@ -1,0 +1,25 @@
+{
+  "scenario": "carry",
+  "run": 1,
+  "vus": 20,
+  "a": {
+    "ok": 4,
+    "rejected": 16,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "b": {
+    "ok": 0,
+    "rejected": 0,
+    "busy": 0,
+    "bad": 0,
+    "failed": 0,
+    "neterr": 0
+  },
+  "p95_ms": 229,
+  "p99_ms": 240,
+  "max_ms": 243,
+  "at": "2026-10-09T06:14:41.128Z"
+}
