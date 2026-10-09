@@ -84,6 +84,72 @@
           "legendFormat": "5xx"
         }
       ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "적재 대기열 (쌓인 작업 / 실행 중 워커)",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "executor_queued_tasks{application=\"wms-core\", name=\"carryExecutor\"}",
+          "legendFormat": "대기열"
+        },
+        {
+          "refId": "B",
+          "expr": "executor_active_threads{application=\"wms-core\", name=\"carryExecutor\"}",
+          "legendFormat": "실행 중 워커"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "DB 연결 (1분 최대 사용 / 대기 최대 시간)",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max_over_time(hikaricp_connections_active{application=\"wms-core\"}[1m])",
+          "legendFormat": "최대 사용 연결"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_acquire_seconds_max{application=\"wms-core\"} * 1000",
+          "legendFormat": "연결 얻는 최대 시간(ms)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "응답 코드별 요청 수 (k6)",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (increase(k6_http_reqs_total[1m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "p99 응답 시간 (actuator 제외)",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"wms-core\", uri!~\"/actuator.*\"}[30s])))",
+          "legendFormat": "p99"
+        }
+      ]
     }
   ]
 }
