@@ -1,5 +1,5 @@
 global:
-  scrape_interval: 5s # 5초마다 수집 (부하 측정 중 변화를 보려고 짧게)
+  scrape_interval: 1s # 측정용. 0.3초짜리 동시 요청도 잡히게 짧게 (평소엔 5s)
 
 scrape_configs:
   - job_name: wms-core
