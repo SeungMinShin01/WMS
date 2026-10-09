@@ -1,0 +1,36 @@
+2026-10-09 12:49:08.865,,,,,INSPECT,documentItemId=14,qty=10,SUCCESS,,127.0.0.1,POST /wms/inspections,86
+2026-10-09 12:49:09.295,,,,,CARRY,detailId=14,locationId=12 mixLot=null force=null,SUCCESS,,127.0.0.1,PUT /wms/inspections,74
+2026-10-09 12:49:09.911,,,,,CARRY,detailId=14,locationId=12 mixLot=null force=null,SUCCESS,,127.0.0.1,PUT /wms/inspections,81
+2026-10-09 12:49:09.996,,,,,CARRY,detailId=15,locationId=13 mixLot=null force=null,SUCCESS,,127.0.0.1,PUT /wms/inspections,91
+2026-10-09 12:49:10.511,,,,,CARRY,detailId=21,locationId=12 mixLot=null force=null,FAIL,전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: CANCELED),127.0.0.1,PUT /wms/inspections,12
+2026-10-09 12:49:10.889,,,,,CARRY,detailId=14,locationId=12 mixLot=null force=null,SUCCESS,,127.0.0.1,PUT /wms/inspections,67
+2026-10-09 12:49:10.960,,,,,CARRY,detailId=14,locationId=13 mixLot=null force=null,FAIL,이미 적재된 검수 기록입니다,127.0.0.1,PUT /wms/inspections,10
+2026-10-09 12:49:11.373,,,,,CARRY,detailId=9999,locationId=12 mixLot=null force=null,FAIL,검수 기록이 없습니다.,127.0.0.1,PUT /wms/inspections,6
+2026-10-09 12:49:11.701,,,,,INSPECT,documentItemId=14,qty=null,FAIL,검수 수량은 1 이상이어야 합니다.,127.0.0.1,POST /wms/inspections,6
+2026-10-09 12:49:12.234,,,,,INSPECT,documentItemId=16,qty=10,FAIL,대기 상태 문서만 검수할 수 있습니다. (현재: CANCELED),127.0.0.1,POST /wms/inspections,11
+2026-10-09 12:49:12.590,,,,,INSPECT,documentItemId=21,qty=10,FAIL,입고 문서의 품목이 아닙니다.,127.0.0.1,POST /wms/inspections,7
+2026-10-09 12:49:13.040,,,,,INSPECT,documentItemId=14,qty=0,FAIL,검수 수량은 1 이상이어야 합니다.,127.0.0.1,POST /wms/inspections,3
+2026-10-09 12:49:13.441,,,,,CARRY,detailId=15,locationId=10 mixLot=null force=null,FAIL,미사용 로케이션입니다. (B-01-03),127.0.0.1,PUT /wms/inspections,11
+2026-10-09 12:49:13.769,,,,,CARRY,detailId=15,locationId=9999 mixLot=null force=null,FAIL,로케이션이 없습니다.,127.0.0.1,PUT /wms/inspections,11
+2026-10-09 12:49:14.140,,,,,INSPECT,documentItemId=9999,qty=10,FAIL,문서 품목이 없습니다.,127.0.0.1,POST /wms/inspections,8
+2026-10-09 12:49:14.527,,,,,CARRY,detailId=1,locationId=12 mixLot=null force=null,FAIL,전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: COMPLETED),127.0.0.1,PUT /wms/inspections,11
+2026-10-09 12:49:15.208,,,,,CARRY,detailId=16,locationId=12 mixLot=null force=null,FAIL,전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: WAITING),127.0.0.1,PUT /wms/inspections,7
+2026-10-09 12:49:15.535,,,,,INSPECT,documentItemId=1,qty=10,FAIL,대기 상태 문서만 검수할 수 있습니다. (현재: COMPLETED),127.0.0.1,POST /wms/inspections,14
+2026-10-09 12:49:16.090,,,,,ALLOCATE,documentId=10,,SUCCESS,,127.0.0.1,POST /wms/allocations/10/pickinglist,143
+2026-10-09 12:49:17.703,,,,,OUTBOUND_CANCEL,documentId=9,,SUCCESS,,127.0.0.1,PUT /wms/outbounds/9/cancel,61
+2026-10-09 12:49:18.507,,,,,ALLOCATE,documentId=15,,SUCCESS,,127.0.0.1,POST /wms/allocations/15/pickinglist,62
+2026-10-09 12:49:18.576,,,,,PICK,detailId=22,,SUCCESS,,127.0.0.1,PUT /wms/pickings/22,25
+2026-10-09 12:49:18.604,,,,,PICK,detailId=23,,SUCCESS,,127.0.0.1,PUT /wms/pickings/23,20
+2026-10-09 12:49:18.625,,,,,SHIP,documentId=15,,SUCCESS,,127.0.0.1,PUT /wms/outbounds/15/ship,45
+2026-10-09 12:49:19.760,,,,,ALLOCATE,documentId=10,,SUCCESS,,127.0.0.1,POST /wms/allocations/10/pickinglist,70
+2026-10-09 12:49:20.881,,,,,ALLOCATE,documentId=10,,FAIL,할당할 내용이 없습니다,127.0.0.1,POST /wms/allocations/10/pickinglist,5
+2026-10-09 12:49:21.364,,,,,ALLOCATE,documentId=8,,FAIL,대기·할당 상태에서만 할당할 수 있습니다. 현재 상태: SHIPPED,127.0.0.1,POST /wms/allocations/8/pickinglist,7
+2026-10-09 12:49:21.696,,,,,OUTBOUND_CANCEL,documentId=12,,FAIL,접수·할당 상태에서만 취소할 수 있습니다. 현재 상태: CANCELED,127.0.0.1,PUT /wms/outbounds/12/cancel,7
+2026-10-09 12:49:22.068,,,,,ALLOCATE,documentId=10,,FAIL,A-01-01 가용 수량을 넘습니다 · 입력 50 · 가용 30,127.0.0.1,POST /wms/allocations/10/pickinglist,13
+2026-10-09 12:49:22.683,,,,,SHIP,documentId=999,,FAIL,출고 문서가 없습니다: 999,127.0.0.1,PUT /wms/outbounds/999/ship,8
+2026-10-09 12:49:23.362,,,,,ALLOCATE,documentId=10,,FAIL,신라면 수량이 맞지 않습니다 · 요청 50 · 입력 30,127.0.0.1,POST /wms/allocations/10/pickinglist,14
+2026-10-09 12:49:27.468,,,,,OUTBOUND_CANCEL,documentId=8,,FAIL,접수·할당 상태에서만 취소할 수 있습니다. 현재 상태: SHIPPED,127.0.0.1,PUT /wms/outbounds/8/cancel,4
+2026-10-09 12:49:28.947,,,,,SHIP,documentId=8,,FAIL,이미 출고된 문서입니다,127.0.0.1,PUT /wms/outbounds/8/ship,5
+2026-10-09 12:49:30.230,,,,,SHIP,documentId=9,,FAIL,피킹 중인 문서만 출고확정할 수 있습니다. 현재 상태: ALLOCATED,127.0.0.1,PUT /wms/outbounds/9/ship,6
+2026-10-09 12:49:31.778,,,,,ALLOCATE,documentId=10,,FAIL,주문 품목과 다른 상품의 재고입니다 · 재고 8,127.0.0.1,POST /wms/allocations/10/pickinglist,10
+2026-10-09 12:49:32.613,,,,,CARRY,detailId=14,locationId=12 mixLot=null force=null,SUCCESS,,127.0.0.1,PUT /wms/inspections,42
