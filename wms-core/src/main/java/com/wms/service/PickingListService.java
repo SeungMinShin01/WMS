@@ -1,6 +1,8 @@
 package com.wms.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,45 +13,72 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.outbound.AllocationDto;
 import com.wms.model.dto.outbound.PickingListDto;
+import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentEntity;
+import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
 import com.wms.model.entity.DocumentStatus;
+import com.wms.model.entity.DocumentType;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.StockRepository;
 
+
 import jakarta.persistence.EntityNotFoundException;
 
 // ED-18 피킹리스트 생성 (실제 할당) + ED-19 피킹리스트 조회
-//   사용자가 미리보기를 보고 수정한 값을 받아서 → 다시 검증 → 저장 → 상태 전이
-//   미리보기와 확정 사이에 재고가 바뀌었을 수 있으므로 여기서 한 번 더 검사하는 게 진짜 방어선
-// 클래스 전체 @Transactional : 중간에 예외가 나면 저장한 것 전부 롤백
+//   사용자가 미리보기를 보고 수정한 값을 받아서 → 다시 검증 → 저장 → 상태 전이 , 미리보기와 확정 사이에 재고가 바뀌었을 수 있으므로 여기서 한 번 더 검사
+// 메서드 순서 (위 → 아래 = 실행 흐름)
+//   1. ED-18 피킹리스트 생성 : createPickingList
+//      └ 8번에서 호출 : getPickingList
+//   2. ED-19 피킹리스트 조회 : getPickingList (화면에서도 따로 호출)
+//   3. ED-52 피킹 확인(집음) : pickDetail (피킹리스트를 본 뒤 작업자가 호출)
 @Service
 @Transactional
 public class PickingListService {
 
+    // @Autowired : 스프링이 만들어 둔 객체(빈)를 이 변수에 자동으로 넣어줌 (new 로 직접 만들지 않음)
     @Autowired private AllocationPlanService allocationPlanService;   // 검증 메서드 재사용
     @Autowired private DocumentRepository documentRepository;
     @Autowired private DocumentItemRepository documentItemRepository;
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
     @Autowired private StockRepository stockRepository;
+    // 1. ED-18 피킹리스트 생성 (할당 확정)
 
     // ED-18 피킹리스트 생성 (할당 확정)
     // rows : 사용자가 최종 확정한 [ {documentItemId, stockId, qty}, ... ]
     public List<PickingListDto> createPickingList(Integer documentId, List<AllocationDto> rows) {
 
+        // 0. ED-72 문서 상태 선점 : 대기(WAITING)일 때만 할당(ALLOCATED)으로 바꾼다
+        // 반드시 이 트랜잭션의 첫 쿼리여야 함
+        //   → 같은 문서에 동시에 요청이 오면 두 번째 요청은 여기서 첫 번째가 커밋할 때까지 기다림
+        //   → 기다린 뒤 4-1 의 allocatedSum 이 첫 번째 요청이 저장한 내용을 보고 중복 할당을 막음
+        // 결과가 0 이어도 바로 409 를 던지지 않는다
+        //   → 이미 할당(ALLOCATED) 상태인 문서의 나머지 품목 할당(부분 할당)은 허용해야 하므로
+        //   → 없는 문서·출고 문서 아님·할당할 수 없는 상태는 바로 아래 1번 checkAllocatable 이 판단
+        documentRepository.changeStatus(documentId, DocumentStatus.WAITING, DocumentStatus.ALLOCATED);
+
         // 1. 문서 검사 (404 / 400 / 409 대기·할당 상태 아님)
         DocumentEntity documentEntity = allocationPlanService.checkAllocatable(documentId);
+        // getExpectedAt() 은 LocalDateTime(날짜+시간) → toLocalDate() 로 시간을 떼고 날짜만 남김
+        // 소비기한(LocalDate)과 날짜끼리 비교하기 위해
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate();
 
         // 2. 빈 요청 → 400
+        // null 검사를 먼저 해야 함 : rows 가 null 인데 rows.isEmpty() 를 부르면 NullPointerException(500)
+        // || 는 앞이 true 면 뒤를 실행하지 않아서 안전함
         if (rows == null || rows.isEmpty()) {
+            // throw : 메서드를 즉시 멈추고 예외를 호출한 쪽으로 던짐
+            //         → 컨트롤러까지 올라가 GlobalExceptionHandler 가 400 응답으로 바꿈
             throw new IllegalArgumentException("할당할 내용이 없습니다");
         }
 
         // 3. 줄마다 검사하면서 품목별·재고별 합계 모으기
+        // Map<키, 값> : 이름표(키)로 값을 찾아 쓰는 메모장 / HashMap : Map 의 실제 구현체
+        // itemMap·stockMap : 3번에서 조회한 엔티티를 저장해 두고 4·5·6번에서 다시 조회하지 않고 꺼내 씀
+        // itemSum·stockSum : 같은 품목 줄·같은 재고가 여러 줄로 나뉘어 와도 합계로 검사하기 위해
         Map<Integer, DocumentItemEntity> itemMap = new HashMap<>();   // documentItemId → 품목 줄
         Map<Integer, StockEntity> stockMap = new HashMap<>();         // stockId → 재고 행
         Map<Integer, Integer> itemSum = new HashMap<>();              // documentItemId → 보낸 수량 합
@@ -65,24 +94,39 @@ public class PickingListService {
             }
 
             // 3-2. 품목 줄 · 재고 조회 → 없으면 404
+            // findById : PK 로 한 건 조회 → 결과가 Optional(있을 수도 없을 수도 있는 상자)로 옴
+            // orElseThrow(() -> 예외) : 상자가 비어 있으면 그 예외를 던짐, 있으면 엔티티를 꺼내줌
             DocumentItemEntity item = documentItemRepository.findById(row.getDocumentItemId())
                     .orElseThrow(() -> new EntityNotFoundException("품목 줄이 없습니다: " + row.getDocumentItemId()));
             StockEntity stock = stockRepository.findById(row.getStockId())
                     .orElseThrow(() -> new EntityNotFoundException("재고가 없습니다: " + row.getStockId()));
 
             // 3-3. 이 문서의 품목 줄인지 → 400
+            // Integer 끼리는 == 대신 equals 로 비교 (== 는 값이 아니라 객체 주소 비교라 127 넘으면 틀릴 수 있음)
             if (!item.getDocumentEntity().getDocumentId().equals(documentId)) {
                 throw new IllegalArgumentException("이 문서의 품목 줄이 아닙니다: " + row.getDocumentItemId());
             }
 
+            // 3-3-1. [ED-61] 고른 재고의 화주가 문서의 화주와 다르면 → 409
+            if (!stock.getTenantEntity().getTenantId().equals(documentEntity.getTenantEntity().getTenantId())) {
+                throw new IllegalStateException("다른 화주의 재고입니다 · 재고 " + stock.getStockId());
+            }
+
             // 3-4. 출고 가능한 재고인지 (다른 상품 400 / 칸·소비기한 409)
+            // 통과하면 아무것도 안 돌려주고(void) 다음 줄로, 실패하면 그 안에서 예외가 던져짐
             allocationPlanService.checkShippable(item, stock, shipDate);
 
             // 3-5. 합계 모으기
+            // put(키, 값) : 키가 없으면 새로 적고, 있으면 새 값으로 덮어씀
+            // 같은 품목 줄이 두 번 와도 같은 엔티티라 덮어써도 문제없음
             itemMap.put(item.getDocumentItemId(), item);
             stockMap.put(stock.getStockId(), stock);
 
             // 품목 줄별 보낸 수량 합계 : 이미 있으면 기존 값에 더하고, 처음이면 0 에서 시작
+            // containsKey(키) : 키가 있으면 true / get(키) : 그 키의 값을 꺼냄
+            // 예) 품목 줄 21 이 [30개, 20개] 두 줄로 오면
+            //     첫 줄 : 키 없음 → itemBefore 0 → put(21, 30)
+            //     둘째 줄 : 키 있음 → itemBefore 30 → put(21, 50)
             int itemBefore = 0;
             if (itemSum.containsKey(item.getDocumentItemId())) {
                 itemBefore = itemSum.get(item.getDocumentItemId());
@@ -98,9 +142,11 @@ public class PickingListService {
         }
 
         // 4. 품목 줄별 검사
+        // keySet() : Map 에 적힌 키(이름표)들만 모아서 돌려줌 → 품목 줄 id 를 하나씩 꺼내 검사
         for (Integer itemId : itemSum.keySet()) {
             DocumentItemEntity item = itemMap.get(itemId);
-            // 4-1. 이미 할당된 줄 → 409 (더블클릭 방어 : 두 번째 요청은 여기서 막힘)
+            // 4-1. 이미 할당된 줄 → 409 (더블클릭 방어)
+            // ED-72 : 0번에서 같은 문서 요청이 줄을 서기 때문에, 두 번째 요청은 첫 번째가 저장한 내용을 보고 여기서 막힘
             if (allocationPlanService.allocatedSum(itemId) > 0) {
                 throw new IllegalStateException("이미 할당된 품목입니다: " + item.getProductEntity().getProductName());
             }
@@ -114,6 +160,8 @@ public class PickingListService {
         }
 
         // 5. 재고 행별 검사 : 보낸 합계가 가용수량(실물 − 선점)을 넘으면 409
+        // ED-72 : 화면에 칸 코드가 들어간 안내 문장을 주기 위한 1차 검사
+        //         동시에 들어온 다른 문서의 할당까지 막는 것은 6번의 allocate 가 담당
         for (Integer stockId : stockSum.keySet()) {
             StockEntity stock = stockMap.get(stockId);
             int available = stock.getQty() - stock.getAllocatedQty();
@@ -124,54 +172,118 @@ public class PickingListService {
             }
         }
 
-        // 6. 저장 : 할당 내역(detail) + 재고 선점수량 증가
-        for (AllocationDto row : rows) {
-            DocumentItemEntity item = itemMap.get(row.getDocumentItemId());
-            StockEntity stock = stockMap.get(row.getStockId());
-            documentItemDetailRepository.save(row.toEntity(item, stock));
-            stock.setAllocatedQty(stock.getAllocatedQty() + row.getQty());
-            stockRepository.save(stock);
+        // 6. ED-72 재고 선점 : 자바에서 계산해서 save 하지 않고 DB 가 계산하는 조건부 UPDATE
+        // stockId 오름차순으로 처리 → 모든 요청이 같은 순서로 재고 행을 잡아서 데드락을 줄임
+        // ArrayList 에 키들을 담고 Collections.sort 로 작은 번호부터 정렬
+        List<Integer> stockIds = new ArrayList<>(stockSum.keySet());
+        Collections.sort(stockIds);
+        for (Integer stockId : stockIds) {
+            // allocate : 가용(실물 − 선점)이 보낸 합계 이상일 때만 선점 += 합계, 바뀐 행 수를 돌려줌
+            int changed = stockRepository.allocate(stockId, stockSum.get(stockId));
+            // 0 이면 5번 검사 뒤에 다른 요청이 먼저 선점해서 가용이 부족해진 것 → 409
+            // throw 하면 @Transactional 이라 0번 상태 변경과 앞에서 선점한 재고까지 전부 롤백
+            if (changed == 0) {
+                throw new IllegalStateException("재고 " + stockId + " 가용 수량이 부족합니다 (다른 할당이 먼저 처리됨)");
+            }
         }
 
-        // 7. 문서 상태 정리 (일부 할당 → ALLOCATED / 전부 할당 → PICKING)
-        updateStatusAfterAllocation(documentEntity);
+        // 7. 할당 내역(detail) 저장
+        // 재고 UPDATE 가 전부 성공한 뒤에만 저장
+        // stock.setAllocatedQty + save 는 쓰지 않는다 (메모리의 옛 값으로 6번 결과를 덮어씀)
+        // 문서 상태는 0번에서 이미 바꿨으므로 예전의 updateStatusAfterAllocation 은 삭제
+        // allocate 의 clearAutomatically 로 영속성 컨텍스트가 비워져 itemMap·stockMap 의 엔티티는 detached 상태
+        // → detached 엔티티를 물고 저장하면 8번 조회(fetch join)에서 Hibernate NPE (data.entityHolder is null)
+        // → getReferenceById 로 다시 관리 상태의 참조를 받아서 연결 (SELECT 없이 id 만 가진 프록시)
+        for (AllocationDto row : rows) {
+            DocumentItemEntity item = documentItemRepository.getReferenceById(row.getDocumentItemId());
+            StockEntity stock = stockRepository.getReferenceById(row.getStockId());
+            documentItemDetailRepository.save(row.toEntity(item, stock)); // DTO → 엔티티로 바꿔서 detail 1줄 저장
+        }
 
         // 8. 결과로 피킹리스트 반환
         return getPickingList(documentId);
     }
 
-    // 할당 후 문서 상태 정리
-    //   일부 품목만 할당됨 → ALLOCATED (WAITING 이었으면 ALLOCATED 로)
-    //   전 품목 할당됨     → PICKING   (WAITING → ALLOCATED → PICKING, canGoTo 규칙상 ALLOCATED 를 거쳐야 함)
-    private void updateStatusAfterAllocation(DocumentEntity documentEntity) {
-        boolean allFilled = true;
-        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentEntity.getDocumentId())) {
-            if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
-                allFilled = false;   // 덜 채워진 줄이 하나라도 있음
-                break;
-            }
-        }
-        if (documentEntity.getStatus() == DocumentStatus.WAITING) {
-            documentEntity.moveTo(DocumentStatus.ALLOCATED);   // 하나라도 할당했으니 ALLOCATED
-        }
-        if (allFilled) {
-            documentEntity.moveTo(DocumentStatus.PICKING);     // 전부 채워졌으면 PICKING
-        }
-        documentRepository.save(documentEntity);
-    }
-
+    // 2. ED-19 피킹리스트 조회
     // ED-19 피킹 리스트 조회 (로케이션 코드순 = 피킹 동선 순서)
+    // createPickingList 8번에서도 부르고, 화면(피킹 페이지)에서도 따로 부름
+    // ED-73 전 : 상세 전체를 findAll 해서 stream filter 로 이 문서 것만 → 후 : 이 문서의 상세만 DB 에서 조회
     @Transactional(readOnly = true)
     public List<PickingListDto> getPickingList(Integer documentId) {
-        if (!documentRepository.existsById(documentId)) {
-            throw new EntityNotFoundException("출고 문서가 없습니다: " + documentId);
-        }
-        return documentItemDetailRepository.findAll().stream()
-                .filter((detail) -> detail.getDocumentItemEntity().getDocumentEntity().getDocumentId()
-                        .equals(documentId))
+        // 없는 문서면 404 (빈 목록 [] 이 200 으로 나가지 않게)
+        // findById : PK 로 한 건 조회 → Optional(있을 수도 없을 수도 있는 상자)로 옴
+        // orElseThrow : 상자가 비어 있으면 그 예외를 던짐
+        documentRepository.findById(documentId)
+                .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
+        // stream : 목록을 흐름으로 바꿔 단계별로 처리 (수업에서 배운 방식)
+        //   sorted((a, b)) : 정렬 → 로케이션 코드 글자 순 (compareTo : a 가 앞이면 음수, 같으면 0, 뒤면 양수)
+        //   map(변환)      : 엔티티 하나를 DTO 하나로 바꿈
+        //   toList()       : 결과를 다시 List 로 모음
+        // 이 문서 것만 조회해서 오므로 filter 는 필요 없어짐
+        return documentItemDetailRepository.findByDocumentId(documentId).stream()
                 .sorted((a, b) -> a.getLocationEntity().getLocationCode()
                         .compareTo(b.getLocationEntity().getLocationCode()))
                 .map((detail) -> PickingListDto.from(detail))
                 .toList();
     }
+
+    // 3. ED-52 피킹 확인 (집음)
+
+    // ED-52 피킹 확인 : 작업자가 피킹 줄 1개를 집었다고 표시한다
+    // 할당됨(ALLOCATED) 줄만 집음(PICKED) 으로 바꿀 수 있다 , 문서의 모든 품목이 할당된 뒤에만 집을 수 있다
+    // 문서에서 처음 집는 순간 문서도 할당(ALLOCATED) → 피킹중(PICKING)
+    // 상태가 두 종류인 이유
+    //   DocumentStatus : 문서 전체 상태 (WAITING → ALLOCATED → PICKING → SHIPPED)
+    //   DetailStatus   : 할당 줄 1개 상태 (ALLOCATED → PICKED → SHIPPED)
+    // ED-72 줄·문서 상태 변경을 조건부 UPDATE 로 바꾼다 (같은 줄 동시 집기 방어)
+    public PickingListDto pickDetail(Integer detailId) {
+
+        // 1. 피킹 줄(할당 실적 1줄) 찾기 → 없으면 404
+        DocumentItemDetailEntity detail = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 줄이 없습니다: " + detailId));
+
+        // 2. 이 줄이 속한 문서 (줄 → 품목 줄 → 문서) 가 출고 문서인지 → 아니면 400
+        DocumentEntity documentEntity = detail.getDocumentItemEntity().getDocumentEntity();
+        Integer documentId = documentEntity.getDocumentId();   // 아래 UPDATE 뒤에도 쓰려고 번호를 먼저 꺼내 둠
+        if (documentEntity.getType() != DocumentType.OUTBOUND) {
+            throw new IllegalArgumentException("출고 문서의 줄이 아닙니다: " + detailId);
+        }
+
+        // 2-1. [결정] 문서의 모든 품목이 할당됐는지 → 하나라도 덜 할당됐으면 409
+        //      일부만 할당한 채 피킹을 시작하면 남은 품목은 할당·취소를 못 하고 출고도 안 되기 때문
+        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentId)) {
+            if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
+                throw new IllegalStateException("할당이 끝나지 않은 품목이 있습니다: " + item.getProductEntity().getProductName());
+            }
+        }
+
+        // 3. 이미 집었거나 출고된 줄이면 409 (화면에 이유를 구분해서 알려주기 위한 1차 검사)
+        if (detail.getStatus() == DetailStatus.PICKED) {
+            throw new IllegalStateException("이미 집은 줄입니다: " + detailId);
+        }
+        if (detail.getStatus() == DetailStatus.SHIPPED) {
+            throw new IllegalStateException("이미 출고된 줄입니다: " + detailId);
+        }
+
+        // 4. ED-72 줄 상태 할당됨(ALLOCATED) → 집음(PICKED) 조건부 UPDATE
+        // 같은 줄을 동시에 집으면 하나만 1, 나머지는 0 → 409
+        // (3번은 둘 다 ALLOCATED 를 보고 통과할 수 있어서 진짜 방어는 여기서 함)
+        int picked = documentItemDetailRepository.changeStatus(detailId, DetailStatus.ALLOCATED, DetailStatus.PICKED);
+        if (picked == 0) {
+            throw new IllegalStateException("이미 처리된 줄입니다: " + detailId);
+        }
+
+        // 5. ED-72 문서에서 처음 집은 거면 문서 할당(ALLOCATED) → 피킹중(PICKING)
+        // 결과가 0 이면 이미 피킹중이라는 뜻 → 그대로 두고 넘어감 (에러 아님)
+        documentRepository.changeStatus(documentId, DocumentStatus.ALLOCATED, DocumentStatus.PICKING);
+
+        // 6. 바뀐 줄 리턴
+        // 4·5번 UPDATE 가 메모리를 비워서(clearAutomatically) 1번의 detail 은 옛 상태(ALLOCATED) 를 들고 있음
+        // → 번호로 다시 조회해서 바뀐 상태(PICKED) 로 응답
+        DocumentItemDetailEntity result = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 줄이 없습니다: " + detailId));
+        return PickingListDto.from(result);
+    }
+
+
 }

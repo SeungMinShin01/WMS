@@ -23,6 +23,7 @@ public class InspectionResultDto {
     private Integer qty;
     private String locationCode;
     private String remark;
+    private String status;  // detail 상태
 
     public static InspectionResultDto from(DocumentItemDetailEntity entity) {
         return InspectionResultDto.builder()
@@ -35,6 +36,7 @@ public class InspectionResultDto {
                 // 적재전이면 location null
                 .locationCode(entity.getLocationEntity() == null ? null : entity.getLocationEntity().getLocationCode())
                 .remark(entity.getRemark())
+                .status(entity.getStatus().name())
                 .build();
     }
 }

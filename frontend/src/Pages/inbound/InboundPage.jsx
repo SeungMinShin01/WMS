@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import InboundCreateForm from "./InboundCreateForm";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -27,6 +28,24 @@ export default function InboundPage(props) {
     documentNo: "",
     status: "",
   }); // 조회 조건
+
+  const [creating, setCreating] = useState(false); 
+
+  // 엑셀 일괄 등록: 파일을 고르면 바로 업로드 (한 줄이라도 틀리면 전체 취소)
+  const uploadExcel = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = ""; // 같은 파일을 다시 고를 수 있게 초기화
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const response = await axios.post("/wms/inbounds/upload", form);
+      alert(response.data);
+      getList();
+    } catch (error) {
+      alert(`엑셀 등록 실패 (전체 취소)\n${error.response?.data ?? "오류"}`);
+    }
+  };
 
   // ED-10 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const getList = async () => {
@@ -87,7 +106,15 @@ export default function InboundPage(props) {
     <>
       <PageTitle title="입고문서" path="홈 > 입고관리 > 입고문서" />
 
-      {detail === null ? (
+      {creating ? (
+        <InboundCreateForm
+          onCancel={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            getList();
+          }}
+        />
+      ) : detail === null ? (
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
@@ -109,14 +136,19 @@ export default function InboundPage(props) {
           </form>
 
           <GridTitle title="입고문서 목록" desc={`총 ${visibleList.length}건`}>
-            <button className="btn">신규</button>
+            <button className="btn" onClick={() => setCreating(true)}>신규</button>
+            <label className="btn">
+              엑셀 등록
+              <input type="file" accept=".xlsx" hidden onChange={uploadExcel} />
+            </label>
           </GridTitle>
           <table className="grid">
             <thead>
               <tr>
                 <th>No</th>
                 <th>입고번호</th>
-                <th>화주명</th>
+                <th>화주</th>
+                <th>공급사명</th>
                 <th>입고예정일</th>
                 <th>품목수</th>
                 <th>예정수량 합계</th>
@@ -134,6 +166,7 @@ export default function InboundPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
+                  <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
                   <td className="num">{inbound.itemCount}</td>

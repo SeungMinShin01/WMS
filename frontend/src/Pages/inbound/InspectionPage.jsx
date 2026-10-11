@@ -11,6 +11,10 @@ const STATUS_NAME = {
   COMPLETED: "입고완료",
   CANCELED: "취소",
 };
+const DETAIL_STATUS_NAME = {
+  INSPECTED: "검수 완료",
+  STORED: "적재 완료",
+};
 
 // 04 입고검수 — 담당: 조현우
 export default function InspectionPage(props) {
@@ -188,7 +192,8 @@ export default function InspectionPage(props) {
               <tr>
                 <th>No</th>
                 <th>입고번호</th>
-                <th>화주명</th>
+                <th>화주</th>
+                <th>공급사명</th>
                 <th>입고예정일</th>
                 <th>품목수</th>
                 <th>예정수량</th>
@@ -203,6 +208,7 @@ export default function InspectionPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
+                  <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
                   <td className="num">{inbound.itemCount}</td>
@@ -261,6 +267,7 @@ export default function InspectionPage(props) {
                 <th>예정수량</th>
                 <th>실제 입고수량</th>
                 <th>비고</th>
+                <th>상태</th>
               </tr>
             </thead>
             <tbody>
@@ -307,6 +314,11 @@ export default function InspectionPage(props) {
                           }
                         />
                       )}
+                    </td>
+                    <td>
+                      {done === undefined
+                        ? "검수 전"
+                        : DETAIL_STATUS_NAME[done.status]}
                     </td>
                   </tr>
                 );

@@ -14,6 +14,12 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// [ED-61] 문서 출처 영어 값 → 한글
+const SOURCE_NAME = {
+  WMS: "WMS",
+  PORTAL: "화주요청",
+};
+
 // 06 출고문서 — 담당: 김지환
 // 목록 줄 클릭 → 상세(헤더 + 주문 품목) → [출고지시] / [피킹리스트]로 이동
 export default function OutboundPage(props) {
@@ -136,10 +142,12 @@ export default function OutboundPage(props) {
               <tr>
                 <th>No</th>
                 <th>주문번호</th>
+                <th>화주</th>
                 <th>배송지명</th>
                 <th>배송지 주소</th>
                 <th>연락처</th>
                 <th>출고요청일</th>
+                <th>출처</th>
                 <th>품목수</th>
                 <th>총수량</th>
                 <th>상태</th>
@@ -156,10 +164,14 @@ export default function OutboundPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{outbound.documentNo}</td>
+                  {/* [ED-61] 화주 */}
+                  <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
                   <td></td>
                   <td></td>
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
+                  {/* [ED-61] 출처 (WMS 직접 등록 / 화주요청) */}
+                  <td>{SOURCE_NAME[outbound.source]}</td>
                   <td></td>
                   <td></td>
                   <td>{STATUS_NAME[outbound.status]}</td>

@@ -12,6 +12,12 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// 적치 줄(detail) 상태
+const DETAIL_STATUS_NAME = {
+  INSPECTED: "적재 대기",
+  STORED: "적재 완료",
+};
+
 // 05 물품적재 — 담당: 조현우
 export default function PutawayPage(props) {
   const { documentId } = useParams(); // 입고검수 상세에서 [적재하기]로 왔으면 문서 번호가 있음
@@ -102,12 +108,12 @@ export default function PutawayPage(props) {
       (filter.partnerName === "" || d.partnerName.includes(filter.partnerName)),
   );
 
-  const putawayCount = results.filter((r) => r.locationCode !== null).length;
+  const putawayCount = results.filter((r) => r.status === "STORED").length;
 
   // ED-16 적치 저장 — 로케이션을 고른 줄만 1건씩 PUT. 마지막 줄까지 적재되면 서버가 자동 입고완료 처리
   const savePutaway = async () => {
     const targets = results.filter(
-      (r) => r.locationCode === null && locations[r.detailId],
+      (r) => r.status === "INSPECTED" && locations[r.detailId],
     );
     if (targets.length === 0) {
       alert("적치 로케이션을 선택한 줄이 없습니다.");
@@ -158,7 +164,7 @@ export default function PutawayPage(props) {
       alert("적치 지정에서 줄을 먼저 선택하세요.");
       return;
     }
-    if (focusResult.locationCode !== null) {
+    if (focusResult.status === "STORED") {
       alert("이미 적재된 줄입니다.");
       return;
     }
@@ -197,7 +203,8 @@ export default function PutawayPage(props) {
               <tr>
                 <th>No</th>
                 <th>입고번호</th>
-                <th>화주명</th>
+                <th>화주</th>
+                <th>공급사명</th>
                 <th>입고예정일</th>
                 <th>품목수</th>
                 <th>예정수량</th>
@@ -213,6 +220,7 @@ export default function PutawayPage(props) {
                 >
                   <td>{index + 1}</td>
                   <td>{inbound.documentNo}</td>
+                  <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
                   <td className="num">{inbound.itemCount}</td>
@@ -261,13 +269,14 @@ export default function PutawayPage(props) {
                     <th>품목명</th>
                     <th>LOT</th>
                     <th>수량</th>
+                    <th>상태</th>
                     <th>적치 로케이션</th>
                   </tr>
                 </thead>
                 <tbody>
                   {results.length === 0 ? (
                     <tr>
-                      <td colSpan={4}>검수 결과가 없습니다.</td>
+                      <td colSpan={5}>검수 결과가 없습니다.</td>
                     </tr>
                   ) : (
                     results.map((r) => (
@@ -279,8 +288,9 @@ export default function PutawayPage(props) {
                         <td className="left">{r.productName}</td>
                         <td>{r.lotCode}</td>
                         <td className="num">{r.qty.toLocaleString()}</td>
+                        <td>{DETAIL_STATUS_NAME[r.status]}</td>
                         <td>
-                          {r.locationCode !== null ? (
+                          {r.status === "STORED" ? (
                             r.locationCode // 이미 적재됨
                           ) : (
                             <select

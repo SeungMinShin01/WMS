@@ -48,15 +48,21 @@ public class StockHistoryDto {
         int qty = detail.getQty();
         List<StockHistoryDto> rows = new ArrayList<>();
 
-        if(doc.getType()==DocumentType.INBOUND){
-            // 입고 적재: 실물 + (위치가 채워진 = 적재된 시각)
-            rows.add(of(detail, doc, "INBOUND", detail.getUpdatedAt(), qty, 0));
-        }else{
-            // 출고: 피킹리스트 생성 때 선점 +
-            rows.add(of(detail, doc, "ALLOCATE", detail.getCreatedAt(), 0, qty));
-            // 출고 완료면 실물 -, 선점 - 한줄 더
-            if(doc.getStatus() == DocumentStatus.SHIPPED)
+                // detail 상태로 이 줄이 어떤 재고 변동인지 정한다
+        switch (detail.getStatus()) {
+            case STORED:      // 입고 적재: 실물 +
+                rows.add(of(detail, doc, "INBOUND", detail.getUpdatedAt(), qty, 0));
+                break;
+            case ALLOCATED:   // 출고 선점 (피킹 전/후 모두 재고는 선점 상태)
+            case PICKED:
+                rows.add(of(detail, doc, "ALLOCATE", detail.getCreatedAt(), 0, qty));
+                break;
+            case SHIPPED:     // 출고 완료: 선점 + 줄, 출고 − 줄
+                rows.add(of(detail, doc, "ALLOCATE", detail.getCreatedAt(), 0, qty));
                 rows.add(of(detail, doc, "OUTBOUND", doc.getCompletedAt(), -qty, -qty));
+                break;
+            default:          // INSPECTED: 재고 변화 없음
+                break;
         }
         return rows;
     }

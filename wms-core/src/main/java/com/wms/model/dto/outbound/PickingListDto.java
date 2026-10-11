@@ -14,6 +14,7 @@ public class PickingListDto {
     private String productCode;
     private String productName;
     private String lotCode;
+    private String status;
     private Integer qty;
 
     public static PickingListDto from( DocumentItemDetailEntity Entity ){
@@ -24,6 +25,7 @@ public class PickingListDto {
             .productName(Entity.getDocumentItemEntity().getProductEntity().getProductName())
             .lotCode(Entity.getLotEntity().getLotCode())
             .qty(Entity.getQty())
+            .status(Entity.getStatus().name())
             .build();
     }
 

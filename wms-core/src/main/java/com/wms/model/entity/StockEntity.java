@@ -25,6 +25,12 @@ public class StockEntity extends BaseTime {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer stockId;
 
+    // 화주 (V4). 품목의 화주id를 의도적 중복으로 둔다 (lot → product.tenant 와 항상 같아야 함)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private TenantEntity tenantEntity;
+
     @JoinColumn(name = "lot_id")
     @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
