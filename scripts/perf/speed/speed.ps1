@@ -94,7 +94,7 @@ if (-not $NoPng) {
     if ($PngPanels -eq '') {
       powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep
     } else {
-      powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep -Panels $PngPanels
+      powershell -ExecutionPolicy Bypass -File (Join-Path $perf 'grafana-png.ps1') -ResultDir $out -S $ep -PanelIds $PngPanels
     }
   }
 }
