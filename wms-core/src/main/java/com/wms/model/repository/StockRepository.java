@@ -1,5 +1,7 @@
 package com.wms.model.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -28,4 +30,10 @@ public interface StockRepository
         @Query("update StockEntity s set s.allocatedQty = s.allocatedQty - :q "
                 + "where s.stockId = :id and s.allocatedQty >= :q")
         int release(@Param("id") Integer id, @Param("q") Integer q);
+
+        // ED-73 상품 1개의 재고만 조회 (전 : 재고 전체를 findAll 해서 상품별 Map 으로 나눔)
+        // 출고 가능 규칙(failReason)에서 쓰는 LOT·칸·화주를 한 번에 같이 가져옴
+        @Query("select s from StockEntity s join fetch s.lotEntity l join fetch s.locationEntity "
+                + "join fetch s.tenantEntity where l.productEntity.productId = :productId")
+        List<StockEntity> findByProductId(@Param("productId") Integer productId);
 }

@@ -202,9 +202,9 @@ public class PickingListService {
     }
 
     // 2. ED-19 피킹리스트 조회
-
     // ED-19 피킹 리스트 조회 (로케이션 코드순 = 피킹 동선 순서)
     // createPickingList 8번에서도 부르고, 화면(피킹 페이지)에서도 따로 부름
+    // ED-73 전 : 상세 전체를 findAll 해서 stream filter 로 이 문서 것만 → 후 : 이 문서의 상세만 DB 에서 조회
     @Transactional(readOnly = true)
     public List<PickingListDto> getPickingList(Integer documentId) {
         // 없는 문서면 404 (빈 목록 [] 이 200 으로 나가지 않게)
@@ -213,13 +213,11 @@ public class PickingListService {
         documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         // stream : 목록을 흐름으로 바꿔 단계별로 처리 (수업에서 배운 방식)
-        //   filter(조건)   : 조건이 true 인 것만 남김 → 이 문서의 할당 줄만
         //   sorted((a, b)) : 정렬 → 로케이션 코드 글자 순 (compareTo : a 가 앞이면 음수, 같으면 0, 뒤면 양수)
         //   map(변환)      : 엔티티 하나를 DTO 하나로 바꿈
         //   toList()       : 결과를 다시 List 로 모음
-        return documentItemDetailRepository.findAll().stream()
-                .filter((detail) -> detail.getDocumentItemEntity().getDocumentEntity().getDocumentId()
-                        .equals(documentId))
+        // 이 문서 것만 조회해서 오므로 filter 는 필요 없어짐
+        return documentItemDetailRepository.findByDocumentId(documentId).stream()
                 .sorted((a, b) -> a.getLocationEntity().getLocationCode()
                         .compareTo(b.getLocationEntity().getLocationCode()))
                 .map((detail) -> PickingListDto.from(detail))

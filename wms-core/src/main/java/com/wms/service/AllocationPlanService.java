@@ -144,14 +144,9 @@ public class AllocationPlanService {
 
     // 2-1. 이 문서의 품목 줄 전체 (document_item 중 document_id 가 같은 것)
     // 사용 : selectItems / PickingListService / OutboundService
+    // ED-73 전 : findAll 로 품목 줄 전체를 가져와 for 로 문서번호 비교 → 후 : 이 문서의 줄만 DB 에서 조회
     public List<DocumentItemEntity> itemsOf(Integer documentId) {
-        List<DocumentItemEntity> items = new ArrayList<>();
-        for (DocumentItemEntity item : documentItemRepository.findAll()) {
-            if (item.getDocumentEntity().getDocumentId().equals(documentId)) {
-                items.add(item);
-            }
-        }
-        return items;
+        return documentItemRepository.findByDocumentId(documentId);
     }
 
     // 2-2. 품목 줄 1개에 지금까지 할당된 수량 합계 (document_item_detail 의 qty 합)
@@ -159,17 +154,10 @@ public class AllocationPlanService {
     //   추천·피킹리스트 생성 : 0 보다 크면 이미 할당된 줄 → 409
     //   집음·문서 상태 정리  : 요청 수량보다 작으면 아직 덜 할당된 줄
     //   ED-17 출고 문서 상세 조회  : 화면의 "할당 수량"
+    // ED-73 전 : 상세 전체를 findAll 해서 for 로 더함 → 후 : DB 가 합계 숫자 하나만 돌려줌
+    // intValue() : Long 을 int 로 바꿈 (할당 수량은 int 범위 안)
     public int allocatedSum(Integer documentItemId) {
-        int sum = 0;
-        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) { // detail은 피킹 리스트 생성을 누를 때 처음 생성되서 그 전 (출고 예정 상태)에는 detail이 없음
-            if (d.getDocumentItemEntity().getDocumentItemId().equals(documentItemId)) {
-                // 한 품목 줄에 detail이 여러 줄일 수 있음
-                // detail 1줄 : 품목 줄 21, 재고 10, 60개
-                // detail 1줄 : 품목 줄 21, 재고 11, 10개
-                sum += d.getQty();
-            }
-        }
-        return sum;
+        return documentItemDetailRepository.sumQtyByDocumentItemId(documentItemId).intValue();
     }
 
     // ===== 3. 추천 계산 =====
@@ -177,12 +165,12 @@ public class AllocationPlanService {
         // [ED-출고 할당 추천(buildPlan) 알고리즘 리팩터링] buildPlan 구조 변경
     // 추천 계산 (DB 저장 X) : 품목 줄마다 어느 재고에서 몇 개 꺼낼지 정해 목록으로 돌려줌
     // 전 : 재고 전체를 품목마다 돌며 if 로 거르기 → lotTotal·lotFirstIn Map → 후보 전체를 비교 7단계로 sort → 앞에서부터 담기
-    // 후 : (가) 재고를 상품별로 한 번 묶기
-    //      (나) 품목 줄마다 그 상품 재고만 꺼내기
+    // 후 : (나) 품목 줄마다 그 상품 재고만 꺼내기
     //      (다) 규칙으로 거르기 + 가용 계산
     //      (라) 가용 부족 409
     //      (마) 꺼낼 재고·수량 계산은 allocationStrategy.plan() 에 맡기기 (FefoStrategy : LOT 큐 → 칸 큐)
     //      (바) 결과를 DTO 로 바꾸기
+    // ED-73 (가) 재고 전체를 findAll 해서 상품별 Map 으로 묶던 단계 삭제 → (나) 에서 그 상품 재고만 DB 에서 조회
     // 한 문서에 같은 상품 품목 줄은 1개만 있음 (등록 단계에서 막음)
     //   → 품목 줄마다 다른 상품의 재고를 쓰므로, 앞 줄이 쓴 수량을 따로 기록할 필요 없음
     // 우선순위 (FefoStrategy 안에서 그대로 유지)
@@ -191,30 +179,14 @@ public class AllocationPlanService {
     private List<AllocationPreviewDto> buildPlan(DocumentEntity documentEntity, List<DocumentItemEntity> items) {
         LocalDate shipDate = documentEntity.getExpectedAt().toLocalDate(); // 출고 예정일 (시간 떼고 날짜만)
 
-        // (가) 재고를 상품별로 묶기 (buildPlan 시작할 때 한 번만)
-        // 전 : allStocks(재고 전체)를 품목 줄마다 처음부터 끝까지 돌았음 → 품목 수 × 재고 수
-        // 후 : 상품id → 그 상품의 재고 목록 으로 한 번 묶어 두고, 품목 줄마다 자기 상품 재고만 꺼냄
-        //      (ED-17 OutboundService 의 stocksByProduct 와 같은 방식)
-        Map<Integer, List<StockEntity>> stocksByProduct = new HashMap<>();
-        for (StockEntity s : stockRepository.findAll()) {
-            Integer productId = s.getLotEntity().getProductEntity().getProductId(); // 재고 → LOT → 상품 id
-            if (!stocksByProduct.containsKey(productId)) {         // 처음 나온 상품이면
-                stocksByProduct.put(productId, new ArrayList<>()); // 빈 목록을 먼저 만들어 둠
-            }
-            stocksByProduct.get(productId).add(s);                 // 그 상품 목록에 재고 추가
-        }
-
         List<AllocationPreviewDto> plan = new ArrayList<>(); // 결과 (추천 1줄 = DTO 1개)
 
         for (DocumentItemEntity item : items) {
             int need = item.getExpectedQty(); // 이 품목 줄에서 채워야 할 수량
 
-            // (나) 이 품목 상품의 재고만 꺼내기 (없으면 빈 목록)
+            // (나) ED-73 이 품목 상품의 재고만 DB 에서 조회 (재고가 없으면 빈 목록)
             Integer productId = item.getProductEntity().getProductId();
-            List<StockEntity> productStocks = new ArrayList<>();
-            if (stocksByProduct.containsKey(productId)) {
-                productStocks = stocksByProduct.get(productId);
-            }
+            List<StockEntity> productStocks = stockRepository.findByProductId(productId);
 
             // (다) 후보 거르기 : 규칙 통과(3-1 isShippable) + 꺼낼 수량 있음(3-3 availableOf)
             // available : 재고번호 → 가용수량 (실물 − 선점)
