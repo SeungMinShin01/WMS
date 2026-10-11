@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,8 +45,10 @@ public class InboundRegisterController {
     }
 
     // 엑셀 일괄 등록 -> 201 + "입고문서 N건, 품목 M줄 등록"
+    // 감사: 파일명·크기. 실패하면 reason 에 "3행: …" 이 남음
+    @AuditLog(action = AuditAction.INBOUND_UPLOAD, fields = { "originalFilename", "size" })
     @PostMapping("/upload")
-    public ResponseEntity<String> upload(@RequestParam("file") MultipartFile file){
+    public ResponseEntity<String> upload(@RequestParam("file") MultipartFile file) {
         return ResponseEntity.status(HttpStatus.CREATED).body(inboundRegisterService.uploadExcel(file));
     }
 

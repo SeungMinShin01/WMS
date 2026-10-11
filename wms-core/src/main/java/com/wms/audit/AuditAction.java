@@ -12,6 +12,7 @@ public enum AuditAction {
     // 입고
     INBOUND_CREATE("입고 문서 등록"),
     INBOUND_ITEM_ADD("입고 품목 추가"),
+    INBOUND_UPLOAD("입고 엑셀 일괄 등록"),
     INSPECT("검수 등록"),
     CARRY("적재"),
 
@@ -32,7 +33,9 @@ public enum AuditAction {
     PRODUCT_UPDATE("품목 수정"),
 
     // 계정
-    WORKER_CREATE("작업자 계정 생성");
+    WORKER_CREATE("작업자 계정 생성"),
+
+    AUDIT_DOWNLOAD("감사 로그 다운로드");
 
     private final String label; // 한글 이름 (CSV detail 칸에 사용)
 
