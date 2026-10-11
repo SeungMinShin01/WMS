@@ -1,6 +1,8 @@
 package com.wms.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +32,6 @@ import jakarta.persistence.EntityNotFoundException;
 //   사용자가 미리보기를 보고 수정한 값을 받아서 → 다시 검증 → 저장 → 상태 전이 , 미리보기와 확정 사이에 재고가 바뀌었을 수 있으므로 여기서 한 번 더 검사
 // 메서드 순서 (위 → 아래 = 실행 흐름)
 //   1. ED-18 피킹리스트 생성 : createPickingList
-//      ├ 7번에서 호출 : updateStatusAfterAllocation
 //      └ 8번에서 호출 : getPickingList
 //   2. ED-19 피킹리스트 조회 : getPickingList (화면에서도 따로 호출)
 //   3. ED-52 피킹 확인(집음) : pickDetail (피킹리스트를 본 뒤 작업자가 호출)
@@ -49,6 +50,15 @@ public class PickingListService {
     // ED-18 피킹리스트 생성 (할당 확정)
     // rows : 사용자가 최종 확정한 [ {documentItemId, stockId, qty}, ... ]
     public List<PickingListDto> createPickingList(Integer documentId, List<AllocationDto> rows) {
+
+        // 0. ED-72 문서 상태 선점 : 대기(WAITING)일 때만 할당(ALLOCATED)으로 바꾼다
+        // 반드시 이 트랜잭션의 첫 쿼리여야 함
+        //   → 같은 문서에 동시에 요청이 오면 두 번째 요청은 여기서 첫 번째가 커밋할 때까지 기다림
+        //   → 기다린 뒤 4-1 의 allocatedSum 이 첫 번째 요청이 저장한 내용을 보고 중복 할당을 막음
+        // 결과가 0 이어도 바로 409 를 던지지 않는다
+        //   → 이미 할당(ALLOCATED) 상태인 문서의 나머지 품목 할당(부분 할당)은 허용해야 하므로
+        //   → 없는 문서·출고 문서 아님·할당할 수 없는 상태는 바로 아래 1번 checkAllocatable 이 판단
+        documentRepository.changeStatus(documentId, DocumentStatus.WAITING, DocumentStatus.ALLOCATED);
 
         // 1. 문서 검사 (404 / 400 / 409 대기·할당 상태 아님)
         DocumentEntity documentEntity = allocationPlanService.checkAllocatable(documentId);
@@ -135,7 +145,8 @@ public class PickingListService {
         // keySet() : Map 에 적힌 키(이름표)들만 모아서 돌려줌 → 품목 줄 id 를 하나씩 꺼내 검사
         for (Integer itemId : itemSum.keySet()) {
             DocumentItemEntity item = itemMap.get(itemId);
-            // 4-1. 이미 할당된 줄 → 409 (더블클릭 방어 : 두 번째 요청은 여기서 막힘)
+            // 4-1. 이미 할당된 줄 → 409 (더블클릭 방어)
+            // ED-72 : 0번에서 같은 문서 요청이 줄을 서기 때문에, 두 번째 요청은 첫 번째가 저장한 내용을 보고 여기서 막힘
             if (allocationPlanService.allocatedSum(itemId) > 0) {
                 throw new IllegalStateException("이미 할당된 품목입니다: " + item.getProductEntity().getProductName());
             }
@@ -149,6 +160,8 @@ public class PickingListService {
         }
 
         // 5. 재고 행별 검사 : 보낸 합계가 가용수량(실물 − 선점)을 넘으면 409
+        // ED-72 : 화면에 칸 코드가 들어간 안내 문장을 주기 위한 1차 검사
+        //         동시에 들어온 다른 문서의 할당까지 막는 것은 6번의 allocate 가 담당
         for (Integer stockId : stockSum.keySet()) {
             StockEntity stock = stockMap.get(stockId);
             int available = stock.getQty() - stock.getAllocatedQty();
@@ -159,36 +172,33 @@ public class PickingListService {
             }
         }
 
-        // 6. 저장 : 할당 내역(detail) + 재고 선점수량 증가
-        // 검사(3~5)를 전부 통과한 뒤에만 저장 → 검사 중 실패하면 DB 에 아무것도 안 들어감
+        // 6. ED-72 재고 선점 : 자바에서 계산해서 save 하지 않고 DB 가 계산하는 조건부 UPDATE
+        // stockId 오름차순으로 처리 → 모든 요청이 같은 순서로 재고 행을 잡아서 데드락을 줄임
+        // ArrayList 에 키들을 담고 Collections.sort 로 작은 번호부터 정렬
+        List<Integer> stockIds = new ArrayList<>(stockSum.keySet());
+        Collections.sort(stockIds);
+        for (Integer stockId : stockIds) {
+            // allocate : 가용(실물 − 선점)이 보낸 합계 이상일 때만 선점 += 합계, 바뀐 행 수를 돌려줌
+            int changed = stockRepository.allocate(stockId, stockSum.get(stockId));
+            // 0 이면 5번 검사 뒤에 다른 요청이 먼저 선점해서 가용이 부족해진 것 → 409
+            // throw 하면 @Transactional 이라 0번 상태 변경과 앞에서 선점한 재고까지 전부 롤백
+            if (changed == 0) {
+                throw new IllegalStateException("재고 " + stockId + " 가용 수량이 부족합니다 (다른 할당이 먼저 처리됨)");
+            }
+        }
+
+        // 7. 할당 내역(detail) 저장
+        // 재고 UPDATE 가 전부 성공한 뒤에만 저장
+        // stock.setAllocatedQty + save 는 쓰지 않는다 (메모리의 옛 값으로 6번 결과를 덮어씀)
+        // 문서 상태는 0번에서 이미 바꿨으므로 예전의 updateStatusAfterAllocation 은 삭제
         for (AllocationDto row : rows) {
             DocumentItemEntity item = itemMap.get(row.getDocumentItemId());
             StockEntity stock = stockMap.get(row.getStockId());
             documentItemDetailRepository.save(row.toEntity(item, stock)); // DTO → 엔티티로 바꿔서 detail 1줄 저장
-            stock.setAllocatedQty(stock.getAllocatedQty() + row.getQty()); // 선점수량 증가 (실물 qty 는 출고확정 때 줄어듦)
-            stockRepository.save(stock);
         }
-
-        // 7. 문서 상태 정리 (처음 할당하면 WAITING → ALLOCATED, 전부 할당해도 ALLOCATED 유지)
-        updateStatusAfterAllocation(documentEntity);
 
         // 8. 결과로 피킹리스트 반환
         return getPickingList(documentId);
-    }
-
-    // 할당 후 문서 상태 정리
-    // 처음 할당하면 접수(WAITING) → 할당(ALLOCATED) , 품목을 전부 할당해도 할당(ALLOCATED) 에 머문다
-    // 피킹중(PICKING) 은 피킹 확인 API 에서 작업자가 처음 집는 순간 바뀐다
-    // private : 이 클래스 안(createPickingList)에서만 부름
-    private void updateStatusAfterAllocation(DocumentEntity documentEntity) {
-        // enum 비교는 == 사용 (enum 값은 프로그램에 하나씩만 존재해서 주소 비교로 충분)
-        if (documentEntity.getStatus() == DocumentStatus.WAITING) {   // 아직 접수 상태면
-            // moveTo : 엔티티에 만든 상태 변경 메서드
-            //   안에서 canGoTo 로 "지금 상태 → 바꿀 상태" 가 허용된 이동인지 검사
-            //   허용 안 된 이동이면 예외(409), 허용되면 status 값을 바꿈
-            documentEntity.moveTo(DocumentStatus.ALLOCATED);         // 할당으로 바꾼다
-        }
-        documentRepository.save(documentEntity);                     // 바뀐 상태를 DB 에 저장
     }
 
     // 2. ED-19 피킹리스트 조회
