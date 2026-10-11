@@ -176,7 +176,7 @@ public class PickingListService {
         // stockId 오름차순으로 처리 → 모든 요청이 같은 순서로 재고 행을 잡아서 데드락을 줄임
         // ArrayList 에 키들을 담고 Collections.sort 로 작은 번호부터 정렬
         List<Integer> stockIds = new ArrayList<>(stockSum.keySet());
-        Collections.sort(stockIds);
+        Collections.sort(stockIds); // 오름차순(자연 정렬)
         for (Integer stockId : stockIds) {
             // allocate : 가용(실물 − 선점)이 보낸 합계 이상일 때만 선점 += 합계, 바뀐 행 수를 돌려줌
             int changed = stockRepository.allocate(stockId, stockSum.get(stockId));
