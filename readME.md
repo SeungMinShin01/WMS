@@ -1,4 +1,4 @@
-# 동시성 측정 (chore/perf-scenarios)
+# 동시성·속도 측정 (chore/perf-scenarios)
 
 develop 에 병합하지 않는 측정 전용 브랜치다. 측정 스크립트와 원본 결과를 보관한다.
 
@@ -237,3 +237,89 @@ develop 에 병합하지 않는 측정 전용 브랜치다. 측정 스크립트�
 | --- | --- |
 | 서버 (측정할 커밋의 worktree) | `$env:AUTH_ENABLED="false"; $env:LOGGING_LEVEL_ORG_HIBERNATE_SQL="warn"; .\gradlew :wms-core:bootRun` |
 | 측정 1회 | `powershell -ExecutionPolicy Bypass -File scripts/perf/run.ps1 -S carry -Run 1 -Database wms_db -Sample <sample2.sql 경로>` |
+
+## 8. 속도 측정 (Before)
+
+동시성과 별개로, 데이터가 늘면 API 가 얼마나 느려지는지 쟀다. 기준 코드는 develop (`v0.2-measure-1009`, 30913ed). 고치기 전 상태다.
+
+| 항목 | 1천 규모 | 1만 규모 |
+| --- | --- | --- |
+| 측정일 | 2026-10-09 | 2026-10-09 |
+| 재고 행 | 1,099 | 10,055 (9.1배) |
+| 처리 상세 행 | 1,107 | 10,063 |
+| 문서 / 칸 / LOT | 345 / 342 / 556 | 2,079 / 2,076 / 5,034 |
+| 동시 사용자 (VU) | 1 | 1 |
+| 예열 (버림) | 1회 × 3요청 | 1회 × 2요청 |
+| 본 측정 | 3회 × 10요청 | 3회 × 3요청 |
+| 대표값 | 회차별 p95 의 중앙값 | 같음 |
+| 실패 | 0 | 0 |
+| 걸린 시간 | 약 15분 | 약 22분 |
+
+처음에는 VU 5, 50요청으로 계획했지만 1천 규모에서도 요청 하나가 2~5초라 한 API 에 10분이 넘게 걸려 줄였다. 동시 접속이 아니라 요청 1건의 처리 시간을 보는 측정이다.
+
+### 결과 (p95, ms)
+
+| API | 설명 | 1천 | 1만 | 배율 | 응답 크기 (1만) |
+| --- | --- | --- | --- | --- | --- |
+| recommend | 적치 추천 | 1,731 | 19,367 | 11.2 | 1KB |
+| history | 재고 이력 | 4,870 | 19,592 | 4.0 | 5.4MB |
+| carry | 적재 | 2,709 | 10,932 | 4.0 | - |
+| picking | 피킹 리스트 | 2,242 | 10,447 | 4.7 | 1KB |
+| inspections | 검수 결과 목록 | 2,050 | 10,165 | 5.0 | 1KB |
+| alloc | 할당 | 2,307 | 9,999 | 4.3 | - |
+| ship | 출고확정 | 2,187 | 9,971 | 4.6 | - |
+| stocks | 재고 목록 | 2,907 | 9,367 | 3.2 | 2.6MB |
+| outbound_detail | 출고 상세 | 1,930 | 6,821 | 3.5 | 1KB |
+| preview | 할당 미리보기 | 1,498 | 5,555 | 3.7 | - |
+| inbounds | 입고 목록 | 192 | 619 | 3.2 | 284KB |
+| inbound_detail | 입고 상세 | 142 | 295 | 2.1 | 1KB |
+| outbounds | 출고 목록 | 105 | 116 | 1.1 | 293KB |
+| locations | 적재 칸 목록 | 59 | 50 | 0.9 | 98KB |
+
+1만 규모에서 14개 중 10개가 5초를 넘었다. 요구사항 NFR-05 (목록 조회 1초 이내) 를 재고 목록·이력 모두 못 지킨다.
+
+### 원인
+
+| 관찰 | 해석 |
+| --- | --- |
+| 응답이 1KB 인 API (검수 결과, 피킹 리스트, 출고 상세) 도 6~10초 | 응답 크기 문제가 아니다. 결과 몇 줄을 만들려고 표 전체를 읽는다 |
+| develop 서비스 코드에 `findAll()` 30곳 이상 | 문서 하나를 볼 때도 `documentItemRepository.findAll()` 로 전체를 가져와 자바에서 `documentId` 로 거른다. 연관 엔티티를 꺼낼 때마다 쿼리가 또 나간다 (N+1) |
+| 적치 추천만 11.2배 | `recommend` 가 칸 2,076개마다 재고 10,055행 전체를 돈다 (칸 × 재고). 데이터가 늘면 곱으로 느려진다 |
+| JVM 힙 100MB 안팎 (최대 4GB), GC 4ms 이하 | 메모리·GC 는 병목이 아니다 |
+| DB 연결 사용 1~2개 | 연결 풀도 병목이 아니다. 요청 하나가 쿼리를 아주 많이 보낸다 |
+| 재고 목록 2.6MB, 이력 5.4MB | 페이징 없이 전체를 내려준다. 화면도 이걸 다 그린다 |
+| 출고 목록·칸 목록은 그대로 | 이미 필요한 것만 조회하는 코드라 데이터가 늘어도 거의 같다 |
+
+### 고칠 내용
+
+| 대상 | 고칠 내용 | Jira |
+| --- | --- | --- |
+| 입고 (상세, 검수 결과, 적재, 추천) | `findAll()` 을 `findByDocumentId` 같은 조건 조회로. 추천은 칸별 재고를 한 번에 묶어 계산 | ED-71 |
+| 출고 (상세, 미리보기, 할당, 피킹, 출고확정) | 같은 방식 | ED-73 |
+| 재고 목록 | 공통 페이징 (`Pageable` + `PageResponse`) | ED-74 |
+| 재고 이력 | 이번 범위에서 제외 | - |
+
+After 측정은 같은 스크립트·같은 데이터로 다시 잰다 (10/13~14).
+
+### 그래프
+
+| 그림 | 파일 |
+| --- | --- |
+| 재고 목록 API p95 (1천) | ![](scripts/perf/result-speed-1000/png/result-speed-1000-stocks-9-api-p95.png) |
+| 재고 목록 API p95 (1만) | ![](scripts/perf/result-speed-10000/png/result-speed-10000-stocks-9-api-p95.png) |
+| 재고 이력 JVM 힙 (1만) | ![](scripts/perf/result-speed-10000/png/result-speed-10000-history-10-jvm-heap.png) |
+| 재고 이력 GC 멈춤 (1만) | ![](scripts/perf/result-speed-10000/png/result-speed-10000-history-11-gc-pause.png) |
+
+나머지 PNG 는 `result-speed-<규모>/png/` 에 있다. 1천은 14개 API × 11개 패널, 1만은 5개 API (stocks, history, outbound_detail, carry, alloc) × 5개 패널 (처리량, p95, API별 p95, JVM 힙, GC).
+
+### 실행
+
+| 순서 | 명령 (WMS 폴더, PowerShell) |
+| --- | --- |
+| 1 | 서버: `$env:AUTH_ENABLED="false"; $env:LOGGING_LEVEL_ORG_HIBERNATE_SQL="warn"; .\gradlew :wms-core:bootRun` |
+| 2 | `$env:WMS_DB_PWD = "<DB 비밀번호>"` |
+| 3 | 1천: `powershell -ExecutionPolicy Bypass -File scripts/perf/speed/speed.ps1 -Scale 1000 -Vus 1 -Warmup 1 -WarmIter 3 -Runs 3 -Iter 10` |
+| 4 | 1만: `... -Scale 10000 -Vus 1 -Warmup 1 -WarmIter 2 -Runs 3 -Iter 3` |
+| 5 | PNG 만 다시: `powershell -ExecutionPolicy Bypass -File scripts/perf/grafana-png.ps1 -ResultDir scripts/perf/result-speed-10000 -S stocks -PanelIds "2,3,9,10,11"` |
+
+결과는 `scripts/perf/result-speed-<규모>/` 에 회차별 JSON (`<API>-<회차>.json`), `data.txt` (만든 행 수), `png/` 로 남는다.
