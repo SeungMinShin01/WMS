@@ -12,12 +12,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.product.ProductDto;
 import com.wms.service.ProductService;
+import com.wms.security.AdminOnly;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 @RestController
 public class ProductController {
     @Autowired
     private ProductService productService;
 
+    @AdminOnly
+    @AuditLog(action = AuditAction.PRODUCT_CREATE, target = "productCode", fields = { "productName" })
     @PostMapping("/wms/product")
     public boolean 상품등록(
             @RequestBody ProductDto productDto) {
@@ -37,6 +42,8 @@ public class ProductController {
         return productService.상품개별조회(productid);
     }
 
+    @AdminOnly
+    @AuditLog(action = AuditAction.PRODUCT_UPDATE, target = "productId", fields = { "productCode", "productName" })
     @PutMapping("/wms/product")
     public boolean 상품수정(@RequestBody ProductDto productDto) {
         return productService.상품수정(productDto);

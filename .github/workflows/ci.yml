@@ -28,7 +28,7 @@ jobs:
           fi
 
 
-          PATTERN='^(feat|fix|refactor|perf|test|docs|chore|merge|release)(\((global|document|inbound|stock|outbound|product|partner|location|portal|frontend)\))?: .{1,50}( \(ED-[0-9]+\))?$'
+                    PATTERN='^(feat|fix|refactor|perf|test|docs|chore|merge|release)(\((global|auth|document|inbound|stock|outbound|product|partner|location|portal|frontend|deploy|mq)\))?: .{1,50}( \(ED-[0-9]+\))?$'
           FAIL=0
 
           SHAS=$(git rev-list --no-merges "$RANGE")

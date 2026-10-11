@@ -13,7 +13,7 @@ esac
 
 # type/scope 는 ci.yml 의 PATTERN 과 같게 유지한다.
 # 제목 50자 제한은 로케일(한글 바이트 수) 영향을 받아 로컬에서는 검사하지 않고 CI 에서만 검사한다.
-PATTERN='^(feat|fix|refactor|perf|test|docs|chore|merge|release)(\((global|document|inbound|stock|outbound|product|partner|location|portal|frontend)\))?: .+$'
+PATTERN='^(feat|fix|refactor|perf|test|docs|chore|merge|release)(\((global|auth|document|inbound|stock|outbound|product|partner|location|portal|frontend|deploy|mq)\))?: .+$'
 
 if ! printf '%s' "$msg" | grep -Eq "$PATTERN"; then
   echo ""
