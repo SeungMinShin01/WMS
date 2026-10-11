@@ -45,7 +45,6 @@ import com.wms.model.repository.TenantRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
-import lombok.val;
 
 // ED-60 입고문서 등록
 @Service 
@@ -57,6 +56,7 @@ public class InboundRegisterService {
     @Autowired private PartnerRepository partnerRepository;
     @Autowired private ProductRepository productRepository;
     @Autowired private LotRepository lotRepository;
+    @Autowired private DocumentNoGenerator documentNoGenerator;
 
     // 입고 문서 헤더 등록 -> 생성된 documentId 반환
     public Integer createDocument(InboundCreateDto dto){
@@ -79,24 +79,11 @@ public class InboundRegisterService {
     if(!"SUPPLIER".equals(partner.getPartnerType())){
         throw new IllegalArgumentException("입고 거래처는 공급사만 가능합니다.");
     }
-    String documentNo = nextDocumentNo(tenant, "IN");
+    String documentNo = documentNoGenerator.next(tenant, "IN");
     DocumentEntity saved = documentRepository.save(dto.toEntity(tenant, partner, documentNo));
     return saved.getDocumentId();
     }
 
-    // 문서번호 생성: 화주코드-IN-오늘날짜-순번 (ex: HTL-IN-20261003-001)
-    private String nextDocumentNo(TenantEntity tenant, String typeCode){
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String prefix = tenant.getTenantCode() + "-" + typeCode + "-" + today + "-";
-
-        Optional<DocumentEntity> last = documentRepository.findTopByDocumentNoStartingWithOrderByDocumentNoDesc(prefix);
-        int next = 1;
-        if(last.isPresent()){
-            String lastNo = last.get().getDocumentNo(); // // HLT-IN-20261003-005
-            next = Integer.parseInt(lastNo.substring(prefix.length()))+1;   // 005 -> 006
-        }
-        return prefix + String.format("%03d", next);    // 006
-    }
 
     // 입고 문서에 품목 1줄 등록 -> 생성된 documentItemId 반환
     public Integer createItem(Integer documentId, InboundItemCreateDto dto){
