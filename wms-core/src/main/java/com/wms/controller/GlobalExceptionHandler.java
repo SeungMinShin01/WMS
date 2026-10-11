@@ -2,8 +2,10 @@ package com.wms.controller;
 
 import java.util.concurrent.CompletionException;
 
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +19,9 @@ import jakarta.persistence.EntityNotFoundException;
 // 서비스에서 던진 예외가 여기로 온다.
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // ED-72 서버 로그에 원인을 남기기 위한 로거 (화면에는 고정 문장만 보냄)
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // 400 Bad Request - 클라이언트 요청 오류 (수량 0 이하, 필수값 없음, 형식 위반)
     @ExceptionHandler(IllegalArgumentException.class)
@@ -34,6 +39,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> conflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    }
+
+    // 409 Conflict - ED-72 DB 데드락 (두 요청이 서로 상대가 잡은 행을 기다리다 MySQL 이 한쪽을 실패시킴)
+    // 예전에는 500 으로 나갔음 → 사용자가 다시 누르면 되는 상황이라 409 로 안내
+    @ExceptionHandler(CannotAcquireLockException.class)
+    public ResponseEntity<String> lockConflict(CannotAcquireLockException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("다른 작업과 겹쳤습니다. 잠시 후 다시 시도하세요.");
     }
 
     // 401 Unauthorized - 로그인 필요 / 토큰 만료·위조 / 아이디·비밀번호 불일치
@@ -61,6 +73,8 @@ public class GlobalExceptionHandler {
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> serverError(Exception e){
+        // ED-72 log.error : 서버 콘솔에 에러 내용과 위치(스택)를 남김 → 500 원인을 나중에 찾을 수 있게
+        log.error("서버 오류", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
     }
 

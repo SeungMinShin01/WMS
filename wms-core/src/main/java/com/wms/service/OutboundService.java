@@ -141,24 +141,30 @@ public class OutboundService {
         return outboundDetailDto;
     }
 
-    // ED-20 출고확정 (문서 단위) : PICKING 문서의 피킹리스트 전체를 한 번에 출고
+        // ED-20 출고확정 (문서 단위) : PICKING 문서의 피킹리스트 전체를 한 번에 출고
     // ED-52 모든 피킹 줄이(PICKED) 이어야 출고확정 가능, 확정하면 줄도 출고됨(SHIPPED)
-    // 문서 상태가 "출고됨 표시" 역할을 한다 → 이미 SHIPPED 면 409 (더블클릭·새로고침 후 재클릭 방어)
+    // ED-72 문서 상태·재고·줄 상태를 전부 조건부 UPDATE 로 바꾼다 (동시 출고확정 방어)
     public String confirmShipment(Integer documentId) {
 
+        // 0. ED-72 문서 상태 선점 : 피킹중(PICKING)일 때만 출고완료(SHIPPED)로 바꾼다
+        // 반드시 이 트랜잭션의 첫 쿼리여야 함
+        //   → 같은 문서 출고확정이 동시에 오면 하나만 1, 나머지는 0 (더블클릭·새로고침 후 재클릭 방어)
+        // changed : 바뀐 행 수 (1 = 내가 바꿈, 0 = 상태가 PICKING 이 아니었음)
+        int changed = documentRepository.changeStatus(documentId, DocumentStatus.PICKING, DocumentStatus.SHIPPED);
+
         // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
+        // 0번의 clearAutomatically 로 메모리가 비워져서 findById 는 DB 의 최신 상태를 다시 읽음
         DocumentEntity documentEntity = documentRepository.findById(documentId)
                 .orElseThrow(() -> new EntityNotFoundException("출고 문서가 없습니다: " + documentId));
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
 
-        // 2. 상태 검사 : 이미 출고됨 409 / 피킹 중이 아님 409
-        // IllegalStateException : 요청 자체는 맞지만 지금 상태에서는 할 수 없을 때 → 409
-        if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
-            throw new IllegalStateException("이미 출고된 문서입니다");
-        }
-        if (documentEntity.getStatus() != DocumentStatus.PICKING) {
+        // 2. 0번에서 못 바꿨으면 409 : 이유를 지금 상태로 구분해서 알려줌
+        if (changed == 0) {
+            if (documentEntity.getStatus() == DocumentStatus.SHIPPED) {
+                throw new IllegalStateException("이미 출고된 문서입니다");
+            }
             throw new IllegalStateException("피킹 중인 문서만 출고확정할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
         }
 
@@ -172,37 +178,39 @@ public class OutboundService {
         }
 
         // 4. ED-52 피킹 검사 : 한 줄이라도 집음(PICKED) 이 아니면 409
-        //    재고를 빼기 전에 모든 줄을 먼저 검사한다 (몇 줄만 빼다가 중간에 멈추지 않게)
+        //    throw 하면 @Transactional 이라 0번 상태 변경도 롤백 → 문서는 PICKING 으로 돌아감
         for (DocumentItemDetailEntity detail : details) {
             if (detail.getStatus() != DetailStatus.PICKED) {
                 throw new IllegalStateException("피킹이 끝나지 않은 줄이 있습니다");
             }
         }
 
-        // 5. 줄마다 재고 차감 (실물 qty 와 선점 allocatedQty 를 같이 줄임) + 줄 상태 변경
-        for (DocumentItemDetailEntity detail : details) {
-            StockEntity stockEntity = detail.getStockEntity();   // 이 줄이 가리키는 재고 행 1개
-
-            // 재고 숫자가 이상하면 DB 제약(CHECK) 오류(500) 대신 409 로 원인을 알려줌
-            if (stockEntity.getAllocatedQty() < detail.getQty() || stockEntity.getQty() < detail.getQty()) {
-                throw new IllegalStateException("재고 수량이 맞지 않습니다: " + detail.getLocationEntity().getLocationCode()
-                        + " · 출고 " + detail.getQty() + " · 실물 " + stockEntity.getQty() + " · 선점 " + stockEntity.getAllocatedQty());
-            }
-            stockEntity.setQty(stockEntity.getQty() - detail.getQty());                     // 실물 차감
-            stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());   // 선점 해제
-            stockRepository.save(stockEntity);
-
-            // ED-52 줄 상태 집음(PICKED) → 출고됨(SHIPPED)
-            // moveTo : 엔티티에 만든 상태 변경 메서드 (허용된 이동인지 확인하고 status 값을 바꿈)
-            detail.moveTo(DetailStatus.SHIPPED);
-            documentItemDetailRepository.save(detail);
-        }
-
-        // 6. 문서 상태 PICKING → SHIPPED + 완료 시각 기록
-        // moveTo 안에서 canGoTo 로 PICKING → SHIPPED 가 허용된 이동인지 검사, 안 되면 409
-        documentEntity.moveTo(DocumentStatus.SHIPPED);
+        // 5. 출고 완료 시각 기록
+        // 문서 상태는 0번에서 이미 SHIPPED 로 바뀌어서 moveTo 는 쓰지 않음
+        // 여기서 바꾼 값은 6번 ship 실행 직전에 DB 로 먼저 보내짐 (flushAutomatically)
         documentEntity.setCompletedAt(LocalDateTime.now());   // LocalDateTime.now() : 지금 날짜+시간
         documentRepository.save(documentEntity);
+
+        // 6. 줄을 재고 번호(stockId) 작은 순으로 정렬 → 모든 요청이 같은 순서로 재고 행을 잡아 데드락을 줄임
+        details.sort((a, b) -> a.getStockEntity().getStockId().compareTo(b.getStockEntity().getStockId()));
+
+        // 7. 줄마다 재고 차감 + 줄 상태 변경 (전부 조건부 UPDATE)
+        for (DocumentItemDetailEntity detail : details) {
+            Integer stockId = detail.getStockEntity().getStockId();
+
+            // ship : 실물·선점이 둘 다 출고 수량 이상일 때만 실물 −, 선점 − (바뀐 행 수를 돌려줌)
+            // 0 이면 재고 숫자가 맞지 않는 것 → DB 제약 오류(500) 대신 409
+            int shipped = stockRepository.ship(stockId, detail.getQty());
+            if (shipped == 0) {
+                throw new IllegalStateException("재고 수량이 맞지 않습니다 · 재고 " + stockId + " · 출고 " + detail.getQty());
+            }
+
+            // 줄 상태 집음(PICKED) → 출고됨(SHIPPED) , 0 이면 이미 처리된 줄 → 409
+            int moved = documentItemDetailRepository.changeStatus(detail.getDetailId(), DetailStatus.PICKED, DetailStatus.SHIPPED);
+            if (moved == 0) {
+                throw new IllegalStateException("이미 출고된 줄입니다: " + detail.getDetailId());
+            }
+        }
 
         // name() : enum 값을 글자로 바꿈 (DocumentStatus.SHIPPED → "SHIPPED")
         return documentEntity.getStatus().name();
@@ -210,7 +218,16 @@ public class OutboundService {
 
     // 주문 취소 : 접수(WAITING) · 할당(ALLOCATED) 문서만 취소 가능 (피킹중 이후는 409)
     // 이 문서가 잡아둔 재고 선점을 할당 수량만큼 풀고, 할당 실적 줄을 삭제한 뒤 문서를 CANCELED 로 바꾼다
+    // ED-72 문서 상태 변경과 선점 해제를 조건부 UPDATE 로 바꾼다
     public String cancelOutbound(Integer documentId) {
+
+        // 0. ED-72 문서 상태 선점 : 할당(ALLOCATED) 또는 접수(WAITING) 일 때만 취소(CANCELED)
+        // 취소할 수 있는 상태가 두 개라 두 번 시도 : 먼저 할당 → 취소, 안 바뀌었으면 접수 → 취소
+        // 반드시 이 트랜잭션의 첫 쿼리여야 함 (같은 문서의 할당·취소 요청이 여기서 줄을 섬)
+        int changed = documentRepository.changeStatus(documentId, DocumentStatus.ALLOCATED, DocumentStatus.CANCELED);
+        if (changed == 0) {
+            changed = documentRepository.changeStatus(documentId, DocumentStatus.WAITING, DocumentStatus.CANCELED);
+        }
 
         // 1. 문서 검사 : 없음 404 / 출고 문서 아님 400
         DocumentEntity documentEntity = documentRepository.findById(documentId)
@@ -219,24 +236,33 @@ public class OutboundService {
             throw new IllegalArgumentException("출고 문서가 아닙니다: " + documentId);
         }
 
-        // 2. 상태 검사 : 접수·할당이 아니면 409 (피킹중이면 이미 집은 줄이 있음)
-        if (documentEntity.getStatus() != DocumentStatus.WAITING && documentEntity.getStatus() != DocumentStatus.ALLOCATED) {
+        // 2. 두 번 다 못 바꿨으면 409 (피킹중이면 이미 집은 줄이 있음)
+        if (changed == 0) {
             throw new IllegalStateException("접수·할당 상태에서만 취소할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
         }
 
-        // 3. 이 문서의 할당 실적마다 선점 해제 + 줄 삭제
+        // 3. 이 문서의 할당 실적만 모으고 재고 번호 작은 순으로 정렬 (데드락 방지)
+        List<DocumentItemDetailEntity> details = new ArrayList<>();
         for (DocumentItemDetailEntity detail : documentItemDetailRepository.findAll()) {
-            if (!detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) continue; // 다른 문서 건너뜀
-            StockEntity stockEntity = detail.getStockEntity();
-            stockEntity.setAllocatedQty(stockEntity.getAllocatedQty() - detail.getQty());   // 이 줄이 잡아둔 만큼만 선점 해제
-            stockRepository.save(stockEntity);
-            // delete : 엔티티에 해당하는 행을 DB 에서 삭제
-            documentItemDetailRepository.delete(detail);                                    // 할당 실적 줄 삭제
+            if (detail.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
+                details.add(detail);
+            }
         }
+        details.sort((a, b) -> a.getStockEntity().getStockId().compareTo(b.getStockEntity().getStockId()));
 
-        // 4. 문서 상태 → CANCELED
-        documentEntity.moveTo(DocumentStatus.CANCELED);
-        documentRepository.save(documentEntity);
+        // 4. 할당 실적마다 선점 해제 + 줄 삭제
+        for (DocumentItemDetailEntity detail : details) {
+            Integer stockId = detail.getStockEntity().getStockId();
+
+            // release : 선점이 해제할 수량 이상일 때만 선점 − (바뀐 행 수를 돌려줌), 0 이면 숫자가 안 맞음 → 409
+            int released = stockRepository.release(stockId, detail.getQty());
+            if (released == 0) {
+                throw new IllegalStateException("재고 선점 수량이 맞지 않습니다 · 재고 " + stockId + " · 해제 " + detail.getQty());
+            }
+
+            // deleteById : 번호로 행을 찾아서 삭제 (release 가 메모리를 비워서 엔티티 대신 번호로 삭제)
+            documentItemDetailRepository.deleteById(detail.getDetailId());
+        }
 
         return documentEntity.getStatus().name();
     }
