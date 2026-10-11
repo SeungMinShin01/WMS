@@ -121,7 +121,7 @@ public class AuditAspect {
                 if (arg.getClass().isRecord()) {
                     for (RecordComponent component : arg.getClass().getRecordComponents()) {
                         if (component.getName().equals(name)) {
-                            return String.valueOf(component.getAccessor().invoke(args));
+                            return String.valueOf(component.getAccessor().invoke(arg));
                         }
                     }
                     continue;
