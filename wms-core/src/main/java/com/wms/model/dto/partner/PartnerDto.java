@@ -1,11 +1,9 @@
 package com.wms.model.dto.partner;
 
-import java.security.PublicKey;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.wms.model.entity.PartnerEntity;
-import com.wms.model.entity.ProductEntity;
+import com.wms.model.entity.TenantEntity;   // [추가]
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,14 +12,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-@Getter
-@Setter
-@ToString
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter @ToString @Builder @NoArgsConstructor @AllArgsConstructor
 public class PartnerDto {
     private Integer partnerId;
+
+    // [추가] 화주 - 요청은 tenantId만, 응답은 셋 다
+    private Integer tenantId;
+    private String tenantCode;
+    private String tenantName;
+
     private String partnerCode;
     private String partnerName;
     private String partnerType;
@@ -30,9 +29,10 @@ public class PartnerDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // 1. DTO -> ENTITY
-    public PartnerEntity toEntity() {
+    // 1. DTO -> ENTITY [변경] 화주는 서비스가 찾아온 TenantEntity를 받는다
+    public PartnerEntity toEntity(TenantEntity tenantEntity) {
         return PartnerEntity.builder()
+                .tenantEntity(tenantEntity)
                 .partnerCode(this.partnerCode)
                 .partnerName(this.partnerName)
                 .partnerType(this.partnerType)
@@ -41,10 +41,13 @@ public class PartnerDto {
                 .build();
     }
 
-    // 2. ENTITY -> DTO
+    // 2. ENTITY -> DTO [변경] 화주 정보 3줄 추가
     public static PartnerDto from(PartnerEntity entity) {
         return PartnerDto.builder()
                 .partnerId(entity.getPartnerId())
+                .tenantId(entity.getTenantEntity().getTenantId())
+                .tenantCode(entity.getTenantEntity().getTenantCode())
+                .tenantName(entity.getTenantEntity().getTenantName())
                 .partnerCode(entity.getPartnerCode())
                 .partnerName(entity.getPartnerName())
                 .partnerType(entity.getPartnerType())
@@ -54,5 +57,4 @@ public class PartnerDto {
                 .updatedAt(entity.getUpdatedAt())
                 .build();
     }
-
 }

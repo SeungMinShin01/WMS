@@ -1,11 +1,5 @@
 package com.wms.controller;
 
-import java.util.concurrent.CompletionException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.task.TaskRejectedException;
-import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -41,47 +35,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
 
-    // 409 Conflict - ED-72 DB 데드락 (두 요청이 서로 상대가 잡은 행을 기다리다 MySQL 이 한쪽을 실패시킴)
-    // 예전에는 500 으로 나갔음 → 사용자가 다시 누르면 되는 상황이라 409 로 안내
-    @ExceptionHandler(CannotAcquireLockException.class)
-    public ResponseEntity<String> lockConflict(CannotAcquireLockException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body("다른 작업과 겹쳤습니다. 잠시 후 다시 시도하세요.");
-    }
-
-    // 401 Unauthorized - 로그인 필요 / 토큰 만료·위조 / 아이디·비밀번호 불일치
-    @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<String> unauthorized(UnauthorizedException e) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
-    }
-
-    // 403 Forbidden - 로그인은 했지만 권한 없음 (WORKER가 관리자 API 호출)
-    @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<String> forbidden(ForbiddenException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
-    // 비동기(@Async) 작업에서 난 예외는 CompletionException 포장지에 싸여서 온다 (ED-65)
-    // → 안의 진짜 예외를 꺼내 위의 400/404/409 처리에 그대로 넘긴다
-    @ExceptionHandler(CompletionException.class)
-    public ResponseEntity<String> completion(CompletionException e) {
-        Throwable cause = e.getCause();
-        if (cause instanceof IllegalArgumentException c) return badRequest(c);
-        if (cause instanceof EntityNotFoundException c) return NotFound(c);
-        if (cause instanceof IllegalStateException c) return conflict(c);
-        return serverError(e);
-    }
-
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> serverError(Exception e){
-        // ED-72 log.error : 서버 콘솔에 에러 내용과 위치(스택)를 남김 → 500 원인을 나중에 찾을 수 있게
-        log.error("서버 오류", e);
+    public ResponseEntity<String> serverError(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
-    }
-
-    // 503 Service Unavailable - 적재 대기열이 가득 차서 요청을 받을 수 없음 (ED-65)
-    @ExceptionHandler(TaskRejectedException.class)
-    public ResponseEntity<String> busy(TaskRejectedException e) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("요청이 많아 잠시 후 다시 시도하세요.");
     }
 
 }
