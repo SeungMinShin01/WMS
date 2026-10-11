@@ -234,6 +234,7 @@ public class PickingListService {
     // 상태가 두 종류인 이유
     //   DocumentStatus : 문서 전체 상태 (WAITING → ALLOCATED → PICKING → SHIPPED)
     //   DetailStatus   : 할당 줄 1개 상태 (ALLOCATED → PICKED → SHIPPED)
+    // ED-72 줄·문서 상태 변경을 조건부 UPDATE 로 바꾼다 (같은 줄 동시 집기 방어)
     public PickingListDto pickDetail(Integer detailId) {
 
         // 1. 피킹 줄(할당 실적 1줄) 찾기 → 없으면 404
@@ -242,19 +243,20 @@ public class PickingListService {
 
         // 2. 이 줄이 속한 문서 (줄 → 품목 줄 → 문서) 가 출고 문서인지 → 아니면 400
         DocumentEntity documentEntity = detail.getDocumentItemEntity().getDocumentEntity();
+        Integer documentId = documentEntity.getDocumentId();   // 아래 UPDATE 뒤에도 쓰려고 번호를 먼저 꺼내 둠
         if (documentEntity.getType() != DocumentType.OUTBOUND) {
             throw new IllegalArgumentException("출고 문서의 줄이 아닙니다: " + detailId);
         }
 
         // 2-1. [결정] 문서의 모든 품목이 할당됐는지 → 하나라도 덜 할당됐으면 409
         //      일부만 할당한 채 피킹을 시작하면 남은 품목은 할당·취소를 못 하고 출고도 안 되기 때문
-        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentEntity.getDocumentId())) {
+        for (DocumentItemEntity item : allocationPlanService.itemsOf(documentId)) {
             if (allocationPlanService.allocatedSum(item.getDocumentItemId()) < item.getExpectedQty()) {
                 throw new IllegalStateException("할당이 끝나지 않은 품목이 있습니다: " + item.getProductEntity().getProductName());
             }
         }
 
-        // 3. 이미 집었거나 출고된 줄이면 409 (같은 줄 두 번 집기 방지)
+        // 3. 이미 집었거나 출고된 줄이면 409 (화면에 이유를 구분해서 알려주기 위한 1차 검사)
         if (detail.getStatus() == DetailStatus.PICKED) {
             throw new IllegalStateException("이미 집은 줄입니다: " + detailId);
         }
@@ -262,20 +264,24 @@ public class PickingListService {
             throw new IllegalStateException("이미 출고된 줄입니다: " + detailId);
         }
 
-        // 4. 줄 상태 할당됨(ALLOCATED) → 집음(PICKED)
-        // moveTo : 줄 엔티티의 상태 변경 메서드 (문서의 moveTo 와 같은 방식)
-        detail.moveTo(DetailStatus.PICKED);
-        documentItemDetailRepository.save(detail);
-
-        // 5. 문서에서 처음 집은 거면 문서 할당(ALLOCATED) → 피킹중(PICKING)
-        // 이미 피킹중이면 그대로
-        if (documentEntity.getStatus() == DocumentStatus.ALLOCATED) {
-            documentEntity.moveTo(DocumentStatus.PICKING);
-            documentRepository.save(documentEntity);
+        // 4. ED-72 줄 상태 할당됨(ALLOCATED) → 집음(PICKED) 조건부 UPDATE
+        // 같은 줄을 동시에 집으면 하나만 1, 나머지는 0 → 409
+        // (3번은 둘 다 ALLOCATED 를 보고 통과할 수 있어서 진짜 방어는 여기서 함)
+        int picked = documentItemDetailRepository.changeStatus(detailId, DetailStatus.ALLOCATED, DetailStatus.PICKED);
+        if (picked == 0) {
+            throw new IllegalStateException("이미 처리된 줄입니다: " + detailId);
         }
 
+        // 5. ED-72 문서에서 처음 집은 거면 문서 할당(ALLOCATED) → 피킹중(PICKING)
+        // 결과가 0 이면 이미 피킹중이라는 뜻 → 그대로 두고 넘어감 (에러 아님)
+        documentRepository.changeStatus(documentId, DocumentStatus.ALLOCATED, DocumentStatus.PICKING);
+
         // 6. 바뀐 줄 리턴
-        return PickingListDto.from(detail);
+        // 4·5번 UPDATE 가 메모리를 비워서(clearAutomatically) 1번의 detail 은 옛 상태(ALLOCATED) 를 들고 있음
+        // → 번호로 다시 조회해서 바뀐 상태(PICKED) 로 응답
+        DocumentItemDetailEntity result = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 줄이 없습니다: " + detailId));
+        return PickingListDto.from(result);
     }
 
 
