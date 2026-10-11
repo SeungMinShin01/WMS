@@ -1,0 +1,19 @@
+{
+  "ep": "stocks",
+  "run": 3,
+  "iter": 3,
+  "vus": 1,
+  "offset": 0,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 8491,
+  "min_ms": 8214,
+  "med_ms": 8325,
+  "p95_ms": 8873,
+  "p99_ms": 8922,
+  "max_ms": 8934,
+  "rps": 0.12,
+  "avg_resp_kb": 2708,
+  "dur_ms": 25489,
+  "at": "2026-10-09T13:56:16.372Z"
+}

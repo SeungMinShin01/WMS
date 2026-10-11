@@ -1,0 +1,19 @@
+{
+  "ep": "recommend",
+  "run": 3,
+  "iter": 3,
+  "vus": 1,
+  "offset": 0,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 20256,
+  "min_ms": 19483,
+  "med_ms": 20476,
+  "p95_ms": 20776,
+  "p99_ms": 20803,
+  "max_ms": 20809,
+  "rps": 0.05,
+  "avg_resp_kb": 1,
+  "dur_ms": 60777,
+  "at": "2026-10-09T14:05:47.014Z"
+}

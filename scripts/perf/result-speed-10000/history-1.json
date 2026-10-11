@@ -1,0 +1,19 @@
+{
+  "ep": "history",
+  "run": 1,
+  "iter": 3,
+  "vus": 1,
+  "offset": 0,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 19552,
+  "min_ms": 19439,
+  "med_ms": 19539,
+  "p95_ms": 19664,
+  "p99_ms": 19675,
+  "max_ms": 19678,
+  "rps": 0.05,
+  "avg_resp_kb": 5573,
+  "dur_ms": 58661,
+  "at": "2026-10-09T13:58:06.577Z"
+}

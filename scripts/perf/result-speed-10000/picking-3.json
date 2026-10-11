@@ -1,0 +1,19 @@
+{
+  "ep": "picking",
+  "run": 3,
+  "iter": 3,
+  "vus": 1,
+  "offset": 0,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 9970,
+  "min_ms": 9922,
+  "med_ms": 9990,
+  "p95_ms": 9997,
+  "p99_ms": 9998,
+  "max_ms": 9998,
+  "rps": 0.1,
+  "avg_resp_kb": 1,
+  "dur_ms": 29916,
+  "at": "2026-10-09T14:10:02.072Z"
+}

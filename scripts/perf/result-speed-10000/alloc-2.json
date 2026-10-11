@@ -1,0 +1,19 @@
+{
+  "ep": "alloc",
+  "run": 2,
+  "iter": 3,
+  "vus": 1,
+  "offset": 5,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 9978,
+  "min_ms": 9953,
+  "med_ms": 9980,
+  "p95_ms": 9999,
+  "p99_ms": 10000,
+  "max_ms": 10001,
+  "rps": 0.1,
+  "avg_resp_kb": 0,
+  "dur_ms": 29939,
+  "at": "2026-10-09T14:13:23.750Z"
+}

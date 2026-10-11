@@ -1,0 +1,19 @@
+{
+  "ep": "inspections",
+  "run": 3,
+  "iter": 3,
+  "vus": 1,
+  "offset": 0,
+  "requests": 3,
+  "failed": 0,
+  "avg_ms": 9560,
+  "min_ms": 9309,
+  "med_ms": 9665,
+  "p95_ms": 9703,
+  "p99_ms": 9707,
+  "max_ms": 9707,
+  "rps": 0.1,
+  "avg_resp_kb": 1,
+  "dur_ms": 28688,
+  "at": "2026-10-09T14:02:11.686Z"
+}
