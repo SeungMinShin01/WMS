@@ -314,8 +314,6 @@ table.form.head td {
   overflow-x: auto;
 }
 
-
-
 /* ===== 로그인 · 회원가입 ===== */
 .auth-page {
   min-height: 100vh;
@@ -381,4 +379,13 @@ table.form.head td {
   border: 1px solid #8ea3c9;
   padding: 2px 8px;
   cursor: pointer;
+}
+
+table.grid.fixed {
+  table-layout: fixed;
+}
+table.grid.fixed td.wrap {
+  white-space: normal;
+  word-break: keep-all; /* 한글은 단어 단위로 */
+  overflow-wrap: anywhere; /* 공백 없는 긴 값(파일명·주소)은 어디서든 끊음 */
 }

@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import com.wms.security.ForbiddenException;
 import com.wms.security.UnauthorizedException;
@@ -28,6 +29,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> badRequest(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+    }
+
+    // 400 Bad Request - 요청 본문(JSON)을 읽을 수 없음 (형식 오류, 깨진 글자)
+    // 예전에는 500 으로 나갔음 → 클라이언트가 고쳐서 다시 보내야 하는 오류라 400
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<String> unreadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("요청 형식이 올바르지 않습니다.");
     }
 
     // 404 Not Found - 리소스 없음 (없는 문서 ID, 없는 재고 ID, 없는 로케이션)

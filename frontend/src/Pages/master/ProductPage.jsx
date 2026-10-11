@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import { useOutletContext } from "react-router-dom";
 
 const EMPTY = {
   productId: null,
@@ -17,6 +18,8 @@ const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // 01 품목 — 담당: 기준정보 담당
 export default function ProductPage(props) {
+  const { user } = useOutletContext(); // Layout 이 넘겨준 user 받기
+  const isAdmin = user?.role === "ADMIN";
   const [products, setProducts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [form, setForm] = useState(null);
@@ -50,7 +53,8 @@ export default function ProductPage(props) {
       setForm(res.data);
     } catch (err) {
       // [변경] 없는 품목(404)이면 서버 문구를 보여준다
-      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
       alert(msg || "품목 정보를 불러오지 못했습니다.");
     }
   };
@@ -74,8 +78,8 @@ export default function ProductPage(props) {
           (tenantId === "" || String(p.tenantId) === tenantId) && // [추가]
           (code === "" || code === "SKU-" || p.productCode?.includes(code)) &&
           (name === "" || p.productName?.includes(name)) &&
-          (unit === "" || p.unit === unit)
-      )
+          (unit === "" || p.unit === unit),
+      ),
     );
   };
 
@@ -88,7 +92,11 @@ export default function ProductPage(props) {
       alert("화주를 선택하세요.");
       return;
     }
-    if (!form.productCode.trim() || !form.productName.trim() || !form.spec.trim()) {
+    if (
+      !form.productCode.trim() ||
+      !form.productName.trim() ||
+      !form.spec.trim()
+    ) {
       alert("품목코드, 품목명, 규격은 필수입니다.");
       return;
     }
@@ -114,7 +122,8 @@ export default function ProductPage(props) {
       }
     } catch (err) {
       // 서버가 보낸 문구(400, 404, 409)가 있으면 그대로 보여준다
-      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
       alert(msg || "저장 중 오류가 발생했습니다.");
     }
   };
@@ -153,7 +162,11 @@ export default function ProductPage(props) {
       </form>
 
       <GridTitle title="품목 목록" desc={`총 ${filtered.length}건`}>
-        <button className="btn" onClick={신규}>신규</button>
+        {isAdmin && (
+          <button className="btn" onClick={신규}>
+            신규
+          </button>
+        )}
       </GridTitle>
       <table className="grid">
         <thead>
@@ -189,7 +202,11 @@ export default function ProductPage(props) {
       ) : (
         <>
           <GridTitle title={form.productId == null ? "품목 등록" : "품목 상세"}>
-            <button className="btn primary" onClick={저장}>저장</button>
+            {isAdmin && (
+              <button className="btn primary" onClick={저장}>
+                저장
+              </button>
+            )}
           </GridTitle>
           <div className="panel">
             {/* [추가] 화주: 신규는 선택, 수정은 바꿀 수 없다(표시만) */}
@@ -208,9 +225,17 @@ export default function ProductPage(props) {
               ))}
             </select>
             <label>품목코드</label>
-            <input name="productCode" value={form.productCode ?? ""} onChange={입력} />
+            <input
+              name="productCode"
+              value={form.productCode ?? ""}
+              onChange={입력}
+            />
             <label>품목명</label>
-            <input name="productName" value={form.productName ?? ""} onChange={입력} />
+            <input
+              name="productName"
+              value={form.productName ?? ""}
+              onChange={입력}
+            />
             <label>규격</label>
             <input name="spec" value={form.spec ?? ""} onChange={입력} />
             <label>단위</label>

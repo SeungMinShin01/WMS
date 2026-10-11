@@ -33,21 +33,30 @@ export default function LoginPage() {
               <tr>
                 <th>아이디</th>
                 <td>
-                  <input value={loginId} onChange={(e) => setLoginId(e.target.value)} autoFocus />
+                  <input
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    autoFocus
+                  />
                 </td>
               </tr>
               <tr>
                 <th>비밀번호</th>
                 <td>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
                 </td>
               </tr>
             </tbody>
           </table>
           <div className="auth-actions">
-            <button type="submit" className="btn primary">로그인</button>
+            <button type="submit" className="btn primary">
+              로그인
+            </button>
           </div>
-          <p className="hint">※ 개발용 계정: admin / 1234 (관리자)</p>
         </div>
       </form>
     </div>

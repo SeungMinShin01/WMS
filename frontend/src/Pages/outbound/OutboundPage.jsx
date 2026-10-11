@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import OutboundCreateForm from "./OutboundCreateForm";
 
 // 문서 상태 영어 값 → 화면에 보여줄 한글 (값에 없는 상태는 영어 그대로)
 const STATUS_NAME = {
@@ -33,6 +34,7 @@ export default function OutboundPage(props) {
     status: "",
   }); // 조회 조건
   const [detail, setDetail] = useState(null); // 선택한 문서 상세 (null = 목록 화면)
+  const [creating, setCreating] = useState(false);
 
   // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
   const getList = async () => {
@@ -112,7 +114,15 @@ export default function OutboundPage(props) {
     <>
       <PageTitle title="출고문서" path="홈 > 출고관리 > 출고문서" />
 
-      {detail === null ? (
+       {creating ? (
+        <OutboundCreateForm
+          onCancel={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            getList();
+          }}
+        />
+      ) : detail === null ? (
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
@@ -135,7 +145,7 @@ export default function OutboundPage(props) {
           </form>
 
           <GridTitle title="출고문서 목록" desc={`총 ${visibleList.length}건`}>
-            <button className="btn">신규</button>
+             <button className="btn" onClick={() => setCreating(true)}>신규</button>
           </GridTitle>
           <table className="grid">
             <thead>

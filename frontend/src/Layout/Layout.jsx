@@ -39,9 +39,13 @@ export default function Layout(props) {
         <span className="sep">|</span>
         <span className="sub">창고</span>
         <span className="wh">WH-01 물류센터</span>
-          <span className="right">
-          {user ? `${user.userName} (${user.role === "ADMIN" ? "관리자" : "작업자"})` : ""}
-          <button className="logout" onClick={logout}>로그아웃</button>
+        <span className="right">
+          {user
+            ? `${user.userName} (${user.role === "ADMIN" ? "관리자" : "작업자"})`
+            : ""}
+          <button className="logout" onClick={logout}>
+            로그아웃
+          </button>
         </span>
       </header>
 
@@ -49,14 +53,10 @@ export default function Layout(props) {
         <nav className="side">
           <div className="side-title">업무 메뉴</div>
 
-          {user?.role === "ADMIN" && (
-            <>
-              <div className="menu-group">기준정보</div>
-              <NavLink to="/master/products">품목</NavLink>
-              <NavLink to="/master/partners">거래처</NavLink>
-              <NavLink to="/master/locations">창고·로케이션</NavLink>
-            </>
-          )}
+          <div className="menu-group">기준정보</div>
+          <NavLink to="/master/products">품목</NavLink>
+          <NavLink to="/master/partners">거래처</NavLink>
+          <NavLink to="/master/locations">창고·로케이션</NavLink>
 
           <div className="menu-group">입고관리</div>
           <NavLink to="/inbounds" end>
@@ -82,14 +82,15 @@ export default function Layout(props) {
             <>
               <div className="menu-group">관리자</div>
               <NavLink to="/admin/workers">작업자 계정</NavLink>
+              <NavLink to="/admin/audit-logs">감사 로그</NavLink>
             </>
           )}
-          
+
           <div className="side-foot">WH-01 물류센터</div>
         </nav>
 
         <main className="content">
-          <Outlet />
+          <Outlet context={{ user }} />
         </main>
       </div>
     </>
