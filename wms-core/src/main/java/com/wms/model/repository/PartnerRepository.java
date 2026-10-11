@@ -8,7 +8,10 @@ import com.wms.model.entity.PartnerEntity;
 import com.wms.model.entity.TenantEntity;
 
 public interface PartnerRepository
-        extends JpaRepository<PartnerEntity, Integer> {
+                extends JpaRepository<PartnerEntity, Integer> {
         // 엑셀 업로드: 그 화주 안에서 거래처명으로 찾기
         List<PartnerEntity> findByTenantEntityAndPartnerName(TenantEntity tenantEntity, String partnerName);
+
+        // 출고 등록 화면: 그 화주의 납품처(CUSTOMER)만
+        List<PartnerEntity> findByTenantEntity_TenantIdAndPartnerType(Integer tenantId, String partnerType);
 }
