@@ -15,6 +15,7 @@ public enum AuditAction {
     INBOUND_UPLOAD("입고 엑셀 일괄 등록"),
     INSPECT("검수 등록"),
     CARRY("적재"),
+    INBOUND_CANCEL("입고 취소"),
 
     // 출고
     OUTBOUND_CREATE("출고 문서 등록"),
@@ -34,6 +35,7 @@ public enum AuditAction {
 
     // 계정
     WORKER_CREATE("작업자 계정 생성"),
+    WORKER_ACTIVE("작업자 계정 활성/비활성"),
 
     AUDIT_DOWNLOAD("감사 로그 다운로드");
 

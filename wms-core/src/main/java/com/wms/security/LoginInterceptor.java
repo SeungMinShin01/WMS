@@ -49,6 +49,10 @@ public class LoginInterceptor implements HandlerInterceptor {
         // 2-1. DB 에서 최신 사용자 정보 (삭제된 계정이면 401) // 팀장 변경
         UserEntity entity = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("계정을 찾을 수 없습니다. 다시 로그인 해주세요"));
+        // 2-2. 비활성 계정이면 401 - 토큰이 살아있어도 요청으로부터 막힘
+        if(!Boolean.TRUE.equals(entity.getIsActive()))
+            throw new UnauthorizedException("비활성된 계정입니다. 관리자에게 문의해주세요.");
+        
         LoginUser user = new LoginUser(entity.getUserId(), entity.getLoginId(),
                 entity.getUserName(), entity.getRole());
 

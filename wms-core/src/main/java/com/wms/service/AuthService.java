@@ -32,6 +32,10 @@ public class AuthService {
         if(!passwordEncoder.matches(dto.getPassword(), user.getPassword()))
             throw new UnauthorizedException(LOGIN_FAIL);
 
+        // 비밀번호까지 맞은 담에 검사 -> 틀린 비번으로는 비활성 계정인지조차 알 수 없게
+        if(!Boolean.TRUE.equals(user.getIsActive()))
+            throw new UnauthorizedException("비활성화된 계정입니다. 관리자에게 문의해주세요.");
+        
         return LoginResponseDto.builder()
                 .token(jwtProvider.createToken(user))
                 .loginId(user.getLoginId())

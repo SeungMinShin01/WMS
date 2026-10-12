@@ -28,4 +28,15 @@ public class CarryAsyncService {
         }
         return CompletableFuture.completedFuture(inboundService.carry(dto));
     }
+    
+    // 입고 취소도 적재와 같은 대기열 — "적재 0개 확인 → 취소" 사이에 적재가 끼어들지 못하게
+    @Async("carryExecutor")
+    public CompletableFuture<String> cancel(Integer documentId){
+        if(sync){
+            synchronized(lock){
+                return CompletableFuture.completedFuture(inboundService.cancel(documentId));
+            }
+        }
+        return CompletableFuture.completedFuture(inboundService.cancel(documentId));
+    }
 }

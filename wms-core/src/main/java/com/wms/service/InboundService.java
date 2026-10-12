@@ -163,9 +163,13 @@ public class InboundService {
         DocumentItemDetailEntity detailEntity = inspectionDto.toEntity(documentItemEntity);
         DocumentItemDetailEntity savedEntity = documentItemDetailRepository.save(detailEntity);
 
-        // 문서의 모든 품목이 검수됐으면 대기 -> 검수 완료
-        if (allItemsInspected(documentEntity.getDocumentId()))
-            documentEntity.moveTo(DocumentStatus.INSPECTED);
+        // 조건부 UPDATE: WAITING 일 때만 INSPECTED (그 사이 취소됐으면 0행 → 409, 검수 저장도 롤백)
+        if (allItemsInspected(documentEntity.getDocumentId())) {
+            int moved = documentRepository.changeStatus(documentEntity.getDocumentId(),
+                    DocumentStatus.WAITING, DocumentStatus.INSPECTED);
+            if (moved == 0)
+                throw new IllegalStateException("문서 상태가 바뀌었습니다. (취소 등) 새로고침 후 다시 시도하세요.");
+        }
         return savedEntity.getDetailId();
     }
 
@@ -248,6 +252,31 @@ public class InboundService {
             }
         }
         return true;
+    }
+
+    // 입고문서 취소- 적재 전(WAITING, INSPECTED)만 가능, 품목이 하나라도 적재됐으면 409
+    // 검수 기록은 지우지 않고 이력 남김
+    // CarryAsyncService 대기열에서 실행
+    public String cancel(Integer documentId){
+        DocumentEntity documentEntity = documentRepository.findById(documentId)
+                .orElseThrow(()->new EntityNotFoundException("문서를 찾을 수 없습니다."));
+        if(documentEntity.getType() != DocumentType.INBOUND)
+            throw new IllegalArgumentException("입고 문서가 아닙니다.");
+
+        // 1. 상태 검사: 입고완료-취소 문서는 불가
+        DocumentStatus before = documentEntity.getStatus();
+        if(before != DocumentStatus.WAITING && before != DocumentStatus.INSPECTED)
+            throw new IllegalStateException("취소할 수 없는 상태입니다.");
+
+        // 2. 적재된 품목이 하나라도 있으면 불가
+        if(documentItemDetailRepository.countByDocumentIdAndStatus(documentId, DetailStatus.STORED) > 0)
+            throw new IllegalStateException("적재된 품목이 있어 취소할 수 없습니다.");
+
+        // 3. 조건부 UPDATE: 읽었을 때 상태 그대로일때만 CANCELED
+        int changed = documentRepository.changeStatus(documentId, before, DocumentStatus.CANCELED);
+        if(changed == 0)
+            throw new IllegalStateException(" 문서 상태가 바뀌었습니다. 새로고침 후 다시 시도해주세요.");
+        return DocumentStatus.CANCELED.name();
     }
 
     // 적치 추천 (검수 기록 1건 기준) — 없는 검수 기록이면 404
