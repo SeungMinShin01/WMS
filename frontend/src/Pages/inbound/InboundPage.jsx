@@ -16,7 +16,7 @@ const STATUS_NAME = {
 };
 
 // 03 입고예정 — 담당: 조현우
-export default function InboundPage(props) {
+export default function InboundPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록

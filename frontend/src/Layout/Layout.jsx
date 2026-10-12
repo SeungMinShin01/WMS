@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 // 공통 틀: 상단 헤더 + 왼쪽 메뉴 + 오른쪽 내용(<Outlet />)
-export default function Layout(props) {
+export default function Layout() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null); // 화면 표시용 로그인 사용자
 
@@ -13,7 +13,7 @@ export default function Layout(props) {
     try {
       await axios.get("/auth/me");
       setUser(JSON.parse(localStorage.getItem("user")));
-    } catch (error) {
+    } catch {
       navigate("/login");
     }
   };

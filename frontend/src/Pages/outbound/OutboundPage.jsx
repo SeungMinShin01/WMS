@@ -23,7 +23,7 @@ const SOURCE_NAME = {
 
 // 06 출고문서 — 담당: 김지환
 // 목록 줄 클릭 → 상세(헤더 + 주문 품목) → [출고지시] / [피킹리스트]로 이동
-export default function OutboundPage(props) {
+export default function OutboundPage() {
   const navigate = useNavigate();
   const [outbounds, setOutbounds] = useState([]); // ED-12 출고 문서 전체
   const [filter, setFilter] = useState({

@@ -15,7 +15,7 @@ import LoginPage from "./Pages/LoginPage";
 import WorkerPage from "./Pages/admin/WorkerPage";
 import AuditLogPage from "./Pages/admin/AuditLogPage";
 
-export default function App(props) {
+export default function App() {
   return (
     <Routes>
       {/* Layout 안의 <Outlet /> 자리에 아래 자식 화면이 들어간다 */}
