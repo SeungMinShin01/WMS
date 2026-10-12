@@ -6,10 +6,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import com.wms.security.ForbiddenException;
 import com.wms.security.UnauthorizedException;
@@ -27,6 +29,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> badRequest(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+    }
+
+    // 400 Bad Request - 요청 본문(JSON)을 읽을 수 없음 (형식 오류, 깨진 글자)
+    // 예전에는 500 으로 나갔음 → 클라이언트가 고쳐서 다시 보내야 하는 오류라 400
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<String> unreadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("요청 형식이 올바르지 않습니다.");
     }
 
     // 404 Not Found - 리소스 없음 (없는 문서 ID, 없는 재고 ID, 없는 로케이션)
@@ -48,6 +57,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body("다른 작업과 겹쳤습니다. 잠시 후 다시 시도하세요.");
     }
 
+    // 409 Conflict - DB UNIQUE 위반 (동시에 같은 코드로 등록한 경우)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<String> duplicate(DataIntegrityViolationException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 등록된 코드입니다.");
+    }
+
     // 401 Unauthorized - 로그인 필요 / 토큰 만료·위조 / 아이디·비밀번호 불일치
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<String> unauthorized(UnauthorizedException e) {
@@ -59,20 +74,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> forbidden(ForbiddenException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
     }
+
     // 비동기(@Async) 작업에서 난 예외는 CompletionException 포장지에 싸여서 온다 (ED-65)
     // → 안의 진짜 예외를 꺼내 위의 400/404/409 처리에 그대로 넘긴다
     @ExceptionHandler(CompletionException.class)
     public ResponseEntity<String> completion(CompletionException e) {
         Throwable cause = e.getCause();
-        if (cause instanceof IllegalArgumentException c) return badRequest(c);
-        if (cause instanceof EntityNotFoundException c) return NotFound(c);
-        if (cause instanceof IllegalStateException c) return conflict(c);
+        if (cause instanceof IllegalArgumentException c)
+            return badRequest(c);
+        if (cause instanceof EntityNotFoundException c)
+            return NotFound(c);
+        if (cause instanceof IllegalStateException c)
+            return conflict(c);
         return serverError(e);
+    }
+
+    // 500 - 등록 실패를 세분화 (기준정보)
+    @ExceptionHandler(SaveException.class)
+    public ResponseEntity<String> saveError(SaveException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
     }
 
     // 500 Internal Server Error - 서버 오류 (원인은 로그로만, 화면엔 고정 문장)
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> serverError(Exception e){
+    public ResponseEntity<String> serverError(Exception e) {
         // ED-72 log.error : 서버 콘솔에 에러 내용과 위치(스택)를 남김 → 500 원인을 나중에 찾을 수 있게
         log.error("서버 오류", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("서버 오류가 발생했습니다.");
@@ -83,5 +108,4 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> busy(TaskRejectedException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("요청이 많아 잠시 후 다시 시도하세요.");
     }
-
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"; // [변경] useEffect, useState 추
 import axios from "axios"; // [추가] 서버 호출용
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import { useOutletContext } from "react-router-dom";
 
 // [추가] 신규 등록 시 빈 폼. locationId가 null이면 등록(POST), 값이 있으면 수정(PUT)
 const EMPTY = {
@@ -18,7 +19,9 @@ const parseCode = (code) => {
 };
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
-export default function LocationPage(props) {
+export default function LocationPage() {
+  const { user } = useOutletContext();
+  const isAdmin = user?.role === "ADMIN";
   // [추가] 상태값 3개
   const [locations, setLocations] = useState([]); // 서버 전체 목록
   const [filtered, setFiltered] = useState([]); // 화면에 보이는 목록
@@ -62,19 +65,19 @@ export default function LocationPage(props) {
   // (적치상태 occupied는 DTO에 값이 없어 아직 걸러지지 않음)
   const 조회 = (event) => {
     event.preventDefault();
-  // 여기부터 추가
-  const data = new FormData(event.target);
-  const zone = data.get("zone");
-  const code = data.get("locationCode").trim();
-  const active = data.get("isActive"); // "", "Y", "N"
+    // 여기부터 추가
+    const data = new FormData(event.target);
+    const zone = data.get("zone");
+    const code = data.get("locationCode").trim();
+    const active = data.get("isActive"); // "", "Y", "N"
 
-  setFiltered(
-    locations.filter(
-      (l) =>
-        (zone === "" || parseCode(l.locationCode).zone === zone) &&
-        (code === "" || code === "A-01-" || l.locationCode?.includes(code)) &&
-        (active === "" || (active === "Y") === l.isActive)
-      )
+    setFiltered(
+      locations.filter(
+        (l) =>
+          (zone === "" || parseCode(l.locationCode).zone === zone) &&
+          (code === "" || code === "A-01-" || l.locationCode?.includes(code)) &&
+          (active === "" || (active === "Y") === l.isActive),
+      ),
     );
   };
 
@@ -150,11 +153,14 @@ export default function LocationPage(props) {
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
-      
       {/* [변경] desc: "총 0건" -> 실제 건수 / 신규 버튼에 onClick 추가 */}
       {/* 그리드 제목줄 + 표. 줄(tr)은 나중에 useState 배열을 .map 으로 */}
       <GridTitle title="로케이션 목록" desc={`총 ${filtered.length}건`}>
-        <button className="btn">신규</button>
+        {isAdmin && (
+          <button className="btn" onClick={신규}>
+            신규
+          </button>
+        )}
       </GridTitle>
       <table className="grid">
         {/* thead: 초안 그대로 */}
@@ -202,19 +208,38 @@ export default function LocationPage(props) {
         <p className="empty">목록에서 로케이션을 클릭하면 상세가 나옵니다.</p>
       ) : (
         <>
-          <GridTitle title={form.locationId == null ? "로케이션 등록" : "로케이션 상세"}>
-            <button className="btn primary" onClick={저장}>저장</button>
+          <GridTitle
+            title={form.locationId == null ? "로케이션 등록" : "로케이션 상세"}
+          >
+            {isAdmin && (
+              <button className="btn primary" onClick={저장}>
+                저장
+              </button>
+            )}
           </GridTitle>
           <div className="panel">
             <label>로케이션코드</label>
-            <input name="locationCode" value={form.locationCode ?? ""} onChange={입력} />
+            <input
+              name="locationCode"
+              value={form.locationCode ?? ""}
+              onChange={입력}
+            />
             <label>사용여부</label>
-            <select name="isActive" value={String(form.isActive)} onChange={입력}>
+            <select
+              name="isActive"
+              value={String(form.isActive)}
+              onChange={입력}
+            >
               <option value="true">사용</option>
               <option value="false">미사용</option>
             </select>
             <label>적재 가능 수량</label>
-            <input type="number" name="capacity" value={form.capacity ?? ""} onChange={입력} />
+            <input
+              type="number"
+              name="capacity"
+              value={form.capacity ?? ""}
+              onChange={입력}
+            />
           </div>
         </>
       )}

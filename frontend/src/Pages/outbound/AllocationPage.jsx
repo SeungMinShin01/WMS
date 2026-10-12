@@ -17,7 +17,7 @@ const STATUS_NAME = {
 
 // 07 출고지시 — 담당: 김지환
 // 흐름 : 목록 → 주문 클릭(상세) → 품목 체크 → 추천 받기(미리보기) → 추천 수정 → 피킹리스트 생성
-export default function AllocationPage(props) {
+export default function AllocationPage() {
   // ─────────────── 1. 주소의 documentId (/outbounds/allocation/3) ───────────────
   const { documentId } = useParams(); // 목록 주소면 undefined
   const navigate = useNavigate();

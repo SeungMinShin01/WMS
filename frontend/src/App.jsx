@@ -13,8 +13,9 @@ import PartnerPage from "./Pages/master/PartnerPage";
 import LocationPage from "./Pages/master/LocationPage";
 import LoginPage from "./Pages/LoginPage";
 import WorkerPage from "./Pages/admin/WorkerPage";
+import AuditLogPage from "./Pages/admin/AuditLogPage";
 
-export default function App(props) {
+export default function App() {
   return (
     <Routes>
       {/* Layout 안의 <Outlet /> 자리에 아래 자식 화면이 들어간다 */}
@@ -42,6 +43,7 @@ export default function App(props) {
         <Route path="master/partners" element={<PartnerPage />} />
         <Route path="master/locations" element={<LocationPage />} />
         <Route path="admin/workers" element={<WorkerPage />} />
+        <Route path="admin/audit-logs" element={<AuditLogPage />} />
       </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<h2>없는 주소입니다</h2>} />

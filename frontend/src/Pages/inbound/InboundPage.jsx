@@ -16,7 +16,7 @@ const STATUS_NAME = {
 };
 
 // 03 입고예정 — 담당: 조현우
-export default function InboundPage(props) {
+export default function InboundPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록
@@ -30,6 +30,22 @@ export default function InboundPage(props) {
   }); // 조회 조건
 
   const [creating, setCreating] = useState(false); 
+
+  // 엑셀 일괄 등록: 파일을 고르면 바로 업로드 (한 줄이라도 틀리면 전체 취소)
+  const uploadExcel = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = ""; // 같은 파일을 다시 고를 수 있게 초기화
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const response = await axios.post("/wms/inbounds/upload", form);
+      alert(response.data);
+      getList();
+    } catch (error) {
+      alert(`엑셀 등록 실패 (전체 취소)\n${error.response?.data ?? "오류"}`);
+    }
+  };
 
   // ED-10 조회 버튼 — 새로고침만 막는다. 실제 조회는 [팀원 작성]
   const getList = async () => {
@@ -121,6 +137,10 @@ export default function InboundPage(props) {
 
           <GridTitle title="입고문서 목록" desc={`총 ${visibleList.length}건`}>
             <button className="btn" onClick={() => setCreating(true)}>신규</button>
+            <label className="btn">
+              엑셀 등록
+              <input type="file" accept=".xlsx" hidden onChange={uploadExcel} />
+            </label>
           </GridTitle>
           <table className="grid">
             <thead>

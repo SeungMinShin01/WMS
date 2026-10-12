@@ -17,7 +17,7 @@ const DETAIL_STATUS_NAME = {
 };
 
 // 04 입고검수 — 담당: 조현우
-export default function InspectionPage(props) {
+export default function InspectionPage() {
   const { documentId } = useParams(); // 입고문서 상세에서 [검수하기]로 왔으면 문서 번호가 있음
   const navigate = useNavigate();
 

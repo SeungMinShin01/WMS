@@ -48,3 +48,5 @@ claude_output/node_modules/
 frontend/dist/
 
 scripts/perf/result/
+### 감사 로그 ###
+logs/

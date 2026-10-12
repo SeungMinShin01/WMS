@@ -191,9 +191,12 @@ public class PickingListService {
         // 재고 UPDATE 가 전부 성공한 뒤에만 저장
         // stock.setAllocatedQty + save 는 쓰지 않는다 (메모리의 옛 값으로 6번 결과를 덮어씀)
         // 문서 상태는 0번에서 이미 바꿨으므로 예전의 updateStatusAfterAllocation 은 삭제
+        // allocate 의 clearAutomatically 로 영속성 컨텍스트가 비워져 itemMap·stockMap 의 엔티티는 detached 상태
+        // → detached 엔티티를 물고 저장하면 8번 조회(fetch join)에서 Hibernate NPE (data.entityHolder is null)
+        // → getReferenceById 로 다시 관리 상태의 참조를 받아서 연결 (SELECT 없이 id 만 가진 프록시)
         for (AllocationDto row : rows) {
-            DocumentItemEntity item = itemMap.get(row.getDocumentItemId());
-            StockEntity stock = stockMap.get(row.getStockId());
+            DocumentItemEntity item = documentItemRepository.getReferenceById(row.getDocumentItemId());
+            StockEntity stock = stockRepository.getReferenceById(row.getStockId());
             documentItemDetailRepository.save(row.toEntity(item, stock)); // DTO → 엔티티로 바꿔서 detail 1줄 저장
         }
 
