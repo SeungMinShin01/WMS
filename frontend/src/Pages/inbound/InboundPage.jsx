@@ -98,6 +98,19 @@ export default function InboundPage(props) {
     setDetail(null);
   };
 
+  // 입고 취소 — 적재 전만. 적재된 품목이 있으면 서버가 409 로 막음
+  const cancelInbound = async () => {
+    if (!window.confirm(`${detail.documentNo} 입고를 취소할까요?\n취소하면 되돌릴 수 없습니다.`)) return;
+    try {
+      await axios.put(`/wms/inbounds/${detail.documentId}/cancel`);
+      alert("입고를 취소했습니다.");
+      selectDocument(detail.documentId); // 상세 새로고침 (상태 = 취소)
+      getList();
+    } catch (error) {
+      alert(error.response?.data ?? "취소 실패");
+    }
+  };
+
   const goInspect = () => {
     navigate(`/inbounds/inspection/${detail.documentId}`);
   };
@@ -198,6 +211,11 @@ export default function InboundPage(props) {
             {detail.status === "WAITING" && (
               <button className="btn primary" onClick={goInspect}>
                 검수하기
+              </button>
+            )}
+            {(detail.status === "WAITING" || detail.status === "INSPECTED") && (
+              <button className="btn" onClick={cancelInbound}>
+                입고 취소
               </button>
             )}
           </div>
