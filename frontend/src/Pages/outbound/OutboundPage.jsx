@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+\import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
@@ -159,9 +159,8 @@ export default function OutboundPage() {
                 <th>출고요청일</th>
                 <th>출처</th>
                 <th>품목수</th>
-                <th>총수량</th>
+                <th>예정수량 합계</th>
                 <th>상태</th>
-                <th>출고지시번호</th>
                 <th>등록일시</th>
                 <th>관리</th>
               </tr>
@@ -182,11 +181,13 @@ export default function OutboundPage() {
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
                   {/* [ED-61] 출처 (WMS 직접 등록 / 화주요청) */}
                   <td>{SOURCE_NAME[outbound.source]}</td>
-                  <td></td>
-                  <td></td>
+                  {/* 품목수 · 예정수량 합계 (입고 목록과 같은 방식) */}
+                  <td className="num">{outbound.itemCount}</td>
+                  {/* toLocaleString : 1200 → "1,200" 처럼 천 단위 쉼표 */}
+                  <td className="num">{outbound.totalExpectedQty.toLocaleString()}</td>
                   <td>{STATUS_NAME[outbound.status]}</td>
-                  <td></td>
-                  <td></td>
+                  {/* 등록일시 : "2026-10-12T09:30:15" → T 를 공백으로 바꾸고 앞 16글자만 → "2026-10-12 09:30" */}
+                  <td>{outbound.createdAt.replace("T", " ").substring(0, 16)}</td>
                   <td>
                     {outbound.status === "WAITING" ||
                     outbound.status === "ALLOCATED" ? (

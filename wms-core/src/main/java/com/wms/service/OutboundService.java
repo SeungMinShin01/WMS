@@ -3,9 +3,7 @@ package com.wms.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -80,7 +78,15 @@ public class OutboundService {
         // DTO 변환 : 화면에 필요한 값만 보내고, 연관 엔티티가 줄줄이 따라가는 것을 막음
         List<OutboundListDto> documentDtos = new ArrayList<>();
         for (DocumentEntity documentEntity : documentEntities) {
-            documentDtos.add(OutboundListDto.from(documentEntity));
+            // 3-1. 이 문서의 품목 줄로 품목수 · 예정수량 합계 계산 (입고 목록과 같은 방식)
+            // findByDocumentId : 이 문서의 품목 줄만 조회 (ED-73 에서 만든 메서드)
+            int itemCount = 0;          // 품목 줄 개수
+            int totalExpectedQty = 0;   // 주문 수량 합계
+            for (DocumentItemEntity item : documentItemRepository.findByDocumentId(documentEntity.getDocumentId())) {
+                itemCount++;                               // 줄 하나마다 1 증가
+                totalExpectedQty += item.getExpectedQty(); // 그 줄의 주문 수량을 더함
+            }
+            documentDtos.add(OutboundListDto.from(documentEntity, itemCount, totalExpectedQty));
         }
         return documentDtos;
     }
