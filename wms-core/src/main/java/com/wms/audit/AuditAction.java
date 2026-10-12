@@ -25,6 +25,9 @@ public enum AuditAction {
     SHIP("출고 확정"),
     OUTBOUND_CANCEL("출고 취소"),
 
+    // 재고
+    STOCK_DISPOSE("재고 폐기"),
+
     // 기준정보
     LOCATION_CREATE("로케이션 등록"),
     LOCATION_UPDATE("로케이션 수정"),

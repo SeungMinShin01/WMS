@@ -38,6 +38,13 @@ public interface StockRepository
                 + "join fetch s.locationEntity join fetch s.tenantEntity where s.qty > 0")
         List<StockEntity> findAllForRecommend();
 
+        // 폐기 : 읽은 실물 그대로 선점이 0일때만 실물 0
+        @Modifying(flushAutomatically = true, clearAutomatically = true)
+        @Query("update StockEntity s set s.qty = 0"
+                + "where s.stockId = :id and s.qty = :q and s.allocatedQty = 0")
+        int dispose(@Param("id") Integer id, @Param("q") Integer q);
+
+
 
         // ED-72 할당 : 가용(실물 - 선점)이 q 이상일 때만 선점 + q
         // 반환값 = 바뀐 행 수 (0 이면 가용 부족 → 409)
