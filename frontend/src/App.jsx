@@ -14,6 +14,7 @@ import LocationPage from "./Pages/master/LocationPage";
 import LoginPage from "./Pages/LoginPage";
 import WorkerPage from "./Pages/admin/WorkerPage";
 import AuditLogPage from "./Pages/admin/AuditLogPage";
+import LabelPage from "./Pages/admin/LabelPage";
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="master/locations" element={<LocationPage />} />
         <Route path="admin/workers" element={<WorkerPage />} />
         <Route path="admin/audit-logs" element={<AuditLogPage />} />
+        <Route path="admin/labels" element={<LabelPage />} />
       </Route>
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
