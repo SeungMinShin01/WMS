@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useOutletContext } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 
-// 재고 상태: 임박(30일 이하) > 부족(가용 0) > 정상
-const STOCK_STATUS_NAME = { NORMAL: "정상", SHORT: "부족", NEAR: "임박" };
+// 재고 상태: 폐기(소비기한 지남) > 임박(30일 이하) > 부족(가용 0) > 정상
+// 소비기한 당일(남은 0일)까지 정상, 다음 날(-1일)부터 폐기
+const STOCK_STATUS_NAME = { NORMAL: "정상", SHORT: "부족", NEAR: "임박", DISPOSE: "폐기" };
 const getStockStatus = (s) => {
+  if (s.remainingDays !== null && s.remainingDays < 0) return "DISPOSE";
   if (s.remainingDays !== null && s.remainingDays <= 30) return "NEAR";
   if (s.availableQty <= 0) return "SHORT";
   return "NORMAL";
@@ -13,6 +16,8 @@ const getStockStatus = (s) => {
 
 // 07 재고현황 — 담당: 조현우
 export default function StockPage(props) {
+  const { user } = useOutletContext() ?? {}; // Layout 이 넘겨준 로그인 사용자
+  const isAdmin = user?.role === "ADMIN";
   const [stocks, setStocks] = useState([]); // ED-21 재고 전체 (FEFO 정렬)
   const [filter, setFilter] = useState({
     productCode: "",
@@ -42,6 +47,18 @@ export default function StockPage(props) {
   useEffect(() => {
     getList();
   }, []);
+
+  // 폐기 (관리자) — 소비기한 지난 LOT 재고를 칸 단위로 전량 폐기
+  const dispose = async (s) => {
+    if (!window.confirm(`${s.productName} / ${s.lotCode} / ${s.locationCode}\n실물 ${s.qty}개를 전량 폐기할까요?`)) return;
+    try {
+      await axios.put(`/wms/stocks/${s.stockId}/dispose`);
+      alert("폐기 처리했습니다.");
+      getList();
+    } catch (error) {
+      alert(error.response?.data ?? "폐기 실패");
+    }
+  };
 
   // 조회 조건에 맞는 재고만 (구역 = 로케이션 코드 첫 글자)
   const visibleList = stocks.filter(
@@ -76,6 +93,7 @@ export default function StockPage(props) {
           <option value="NORMAL">정상</option>
           <option value="SHORT">부족</option>
           <option value="NEAR">임박(30일 이하)</option>
+          <option value="DISPOSE">폐기(소비기한 경과)</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
       </form>
@@ -101,6 +119,7 @@ export default function StockPage(props) {
             <th>최단 소비기한</th>
             <th>남은일수</th>
             <th>상태</th>
+            <th>관리</th>
           </tr>
         </thead>
         <tbody>
@@ -122,6 +141,13 @@ export default function StockPage(props) {
                 {s.remainingDays === null ? "—" : `${s.remainingDays}일`}
               </td>
               <td>{STOCK_STATUS_NAME[getStockStatus(s)]}</td>
+              <td>
+                {isAdmin && getStockStatus(s) === "DISPOSE" && (
+                  <button className="btn danger plain" onClick={() => dispose(s)}>
+                    폐기
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
