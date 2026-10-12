@@ -21,7 +21,9 @@ import com.wms.model.entity.LotEntity;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.LocationRepository;
+import com.wms.model.repository.LotRepository;
 import com.wms.model.repository.StockRepository;
+import com.wms.model.repository.TenantRepository;
 
 @Service
 @Transactional
@@ -32,7 +34,10 @@ public class StockService {
     private LocationRepository locationRepository;
     @Autowired
     private DocumentItemDetailRepository detailRepository;
-
+    @Autowired 
+    private TenantRepository tenantRepository;
+    @Autowired 
+    private LotRepository lotRepository;
 
     // ED-21 재고 조회
     public List<StockDto> stockFindAll() {
@@ -58,48 +63,33 @@ public class StockService {
         return stockDtos;
     }
 
-    // 재고 증가 (ED-16 적재에서 호출) — 같은 LOT + 같은 칸 재고가 있으면 더하고, 없으면 새로 만든다
-    public StockEntity increase(LotEntity lotEntity, LocationEntity locationEntity, int qty) {
-        List<StockEntity> stockEntities = stockRepository.findAll();
-        for (StockEntity s : stockEntities) {
-            // 같은 LOT이면서 같은 칸 재고 줄 찾기
-            if (s.getLotEntity().getLotId().equals(lotEntity.getLotId())
-                    && s.getLocationEntity().getLocationId().equals(locationEntity.getLocationId())) {
-                s.setQty(s.getQty() + qty); // 있으면 수량 +
-                return s;
-            }
-        }
-        // 없으면 새 재고 생성
+    // 재고 증가(ED-16 적재) - ED-70읽어서 자바에서 더하지 않고 DB에 qty = qty+수량
+    // 같은 LOT + 같은 칸 줄이 있으면 UPDATE, 없으면 새 줄 INSERT
+    public StockEntity increase(Integer lotId, Integer locationId, Integer tenantId, int qty){
+        int changed = stockRepository.addQty(lotId, locationId, qty);
+        if(changed > 0)
+            return stockRepository.findByLotEntityLotIdAndLocationEntityLocationId(lotId, locationId)
+                    .orElseThrow(()->new IllegalStateException("재고 줄을 찾을 수 없습니다."));
+
+        // 칸에 그 LOT 줄이 없으면 새로 만든다
+        // 같은 칸 LOT 줄이 동시에 2개 생기는 경우는 적재 대기열(carryExecutor)이 줄 세워 막음
         StockEntity newStock = StockEntity.builder()
-                .tenantEntity(lotEntity.getProductEntity().getTenantEntity()) // 변경점 (develop)
-                .lotEntity(lotEntity)
-                .locationEntity(locationEntity)
-                .qty(qty)
-                .build();
+                    .tenantEntity(tenantRepository.getReferenceById(tenantId))
+                    .lotEntity(lotRepository.getReferenceById(lotId))
+                    .locationEntity(locationRepository.getReferenceById(locationId))
+                    .qty(qty)
+                    .build();
         return stockRepository.save(newStock);
+    } 
+
+    // 칸 하나의 현재 적재 수량 합계 (적재 capacity 검사용, ED-51) - ED-70 DB SUM 한번
+    public int locationTotal(Integer locationId){
+        return stockRepository.sumQtyByLocationId(locationId).intValue();
     }
 
-    // 칸 하나의 현재 적재 수량 합계 (적재 capacity 검사용, ED-51)
-    public int locationTotal(LocationEntity loc) {
-        int total = 0;
-        for (StockEntity s : stockRepository.findAll()) {
-            if (s.getLocationEntity().getLocationId().equals(loc.getLocationId()))
-                total += s.getQty();
-        }
-        return total;
-    }
-
-    // 칸에 다른 화주 재고가 있는지 (칸 단위 화주 검사) - 넣으려는 LOT의 품목화주 기준
-    public boolean hasOtherTenant(LocationEntity loc, LotEntity lot){
-        Integer myTenantId = lot.getProductEntity().getTenantEntity().getTenantId();
-        for(StockEntity s : stockRepository.findAll()){
-            // 다른 칸이거나 비어 있는 재고는 건너뜀
-            if(!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
-                continue;
-            if(!s.getTenantEntity().getTenantId().equals(myTenantId))
-                return true;
-        }
-        return false;
+    // 칸에 다른 화주 재고가 있는지 (칸 단위 화주 검사) - 넣으려는 LOT의 품목화주 기준 - ED-70 DB SUM 한번
+    public boolean hasOtherTenant(Integer locatonId, Integer tenantId){
+        return stockRepository.countOtherTenant(locatonId, tenantId) > 0;
     }
 
     // 칸 하나의 현재 상태 (적재하려는 LOT 기준), 이유: 결과값4개를 한번에 반환해야하는데 JAVA 메소드는 하나의 값만 돌려줘서
@@ -146,15 +136,25 @@ public class StockService {
     // 적치 추천 - 제외: 미사용·꽉 찬 칸·(OFF) 같은 품목 다른 LOT 칸 / 순위: 같은 LOT → 같은 품목 다른 LOT → 다른
     // 품목 잔량 → 빈 칸 / 같은 순위: Best Fit
     public List<LocationRecommendDto> recommend(LotEntity lot, int qty, boolean mixLot) {
-        List<StockEntity> stocks = stockRepository.findAll();
-        List<LocationEntity> locations = locationRepository.findAll();
+        // ED-71 사용 중인 칸만 + 수량 있는 재고만 쿼리 1번씩
+        // 전에는 칸-재고 findAll + 칸마다 재고 전체를 훑고 재고 줄마다 lot-품목 select(n+1)
+        List<LocationEntity> locations = locationRepository.findByIsActiveTrue();
+
+        // 칸Id -> 그 칸의 재고들
+        Map<Integer, List<StockEntity>> stocksByLocation = new HashMap<>();
+        for(StockEntity s : stockRepository.findAllForRecommend()){
+            Integer locationId = s.getLocationEntity().getLocationId();
+            if(!stocksByLocation.containsKey(locationId))
+                stocksByLocation.put(locationId, new ArrayList<>());
+            stocksByLocation.get(locationId).add(s);
+        }
+
         // 추천칸 빈 리스트
         List<LocationRecommendDto> candidates = new ArrayList<>();
 
-        for (LocationEntity loc : locations) {
-            if (!loc.getIsActive())
-                continue; // 미사용 칸 -> 탈락
-            LocationCheck c = check(loc, lot, stocks);
+        for(LocationEntity loc : locations){
+            // 재고가 없는 칸은 빈 리스트 -> 빈 칸으로 판단
+            LocationCheck c = check(loc, lot, stocksByLocation.getOrDefault(loc.getLocationId(), new ArrayList<>()));
             int free = freeQty(loc, c.total());
             if (free <= 0)
                 continue; // 꽉 찬 칸 -> 탈락
