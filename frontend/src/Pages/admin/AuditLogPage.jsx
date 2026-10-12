@@ -46,11 +46,16 @@ export default function AuditLogPage() {
     }
   };
 
-  // 날짜가 바뀌면 다시 조회 + 1페이지로
+  // 날짜가 바뀌면 다시 조회
   useEffect(() => {
     load(date);
-    setPage(0);
   }, [date]);
+
+  // 날짜를 바꾸면 1페이지로 (effect 안이 아니라 이벤트에서)
+  const changeDate = (e) => {
+    setDate(e.target.value);
+    setPage(0);
+  };
 
   // CSV 다운로드: 파일을 받아서 브라우저 저장 (페이징과 관계없이 그날 전체)
   const download = async () => {
@@ -104,11 +109,7 @@ export default function AuditLogPage() {
 
       <div className="search">
         <label>날짜</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
+        <input type="date" value={date} onChange={changeDate} />
         <label>작업</label>
         <select name="action" value={filter.action} onChange={changeFilter}>
           <option value="">전체</option>

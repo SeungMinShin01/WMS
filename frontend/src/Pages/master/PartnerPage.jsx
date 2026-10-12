@@ -19,7 +19,7 @@ const EMPTY = {
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // 01-2 거래처 — 담당: 기준정보 담당 (공급사 SUPPLIER / 납품처 CUSTOMER)
-export default function PartnerPage(props) {
+export default function PartnerPage() {
   const { user } = useOutletContext();
   const isAdmin = user?.role === "ADMIN";
   const [partners, setPartners] = useState([]);

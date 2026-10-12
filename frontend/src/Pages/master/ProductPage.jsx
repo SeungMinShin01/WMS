@@ -17,7 +17,7 @@ const EMPTY = {
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // 01 품목 — 담당: 기준정보 담당
-export default function ProductPage(props) {
+export default function ProductPage() {
   const { user } = useOutletContext(); // Layout 이 넘겨준 user 받기
   const isAdmin = user?.role === "ADMIN";
   const [products, setProducts] = useState([]);

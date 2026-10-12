@@ -19,7 +19,7 @@ const parseCode = (code) => {
 };
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
-export default function LocationPage(props) {
+export default function LocationPage() {
   const { user } = useOutletContext();
   const isAdmin = user?.role === "ADMIN";
   // [추가] 상태값 3개
