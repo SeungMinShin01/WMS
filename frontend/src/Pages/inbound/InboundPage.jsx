@@ -15,6 +15,12 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// 출처 코드 -> 화면 글자 (출고문서 화면과 동일)
+const SOURCE_NAME = {
+  WMS: "WMS",
+  PORTAL: "화주요청",
+};
+
 // 03 입고예정 — 담당: 조현우
 export default function InboundPage(props) {
   const navigate = useNavigate();
@@ -163,6 +169,7 @@ export default function InboundPage(props) {
                 <th>화주</th>
                 <th>공급사명</th>
                 <th>입고예정일</th>
+                <th>출처</th>
                 <th>품목수</th>
                 <th>예정수량 합계</th>
                 <th>상태</th>
@@ -182,6 +189,7 @@ export default function InboundPage(props) {
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
+                  <td>{SOURCE_NAME[inbound.source]}</td>
                   <td className="num">{inbound.itemCount}</td>
                   <td className="num">
                     {inbound.totalExpectedQty.toLocaleString()}
