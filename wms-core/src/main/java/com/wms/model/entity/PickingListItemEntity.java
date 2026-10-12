@@ -18,12 +18,7 @@ import lombok.ToString;
 
 // ED-75 피킹 리스트 품목 줄 : 할당 줄(document_item_detail) 1개 = 품목 줄 1개
 // 작업자가 스캔할 때마다 pickedQty 가 쌓이고, 할당 수량(detail.qty)만큼 차면 그 줄은 다 집은 것
-@Entity
-@Table(name = "picking_list_item")
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
-@Builder
+@Entity @Table(name = "picking_list_item") @NoArgsConstructor @AllArgsConstructor @Data @Builder
 public class PickingListItemEntity extends BaseTime {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -26,6 +26,7 @@ public enum AuditAction {
     // qr
     PICKING_CREATE("피킹 리스트 생성"),
     PICKING_ASSIGN("피킹 작업자 배정"),
+    PICKING_SCAN("피킹 스캔"),
 
     // 기준정보
     LOCATION_CREATE("로케이션 등록"),

@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.wms.model.dto.outbound.PickingAssignDto;
 import com.wms.model.dto.outbound.PickingCreateDto;
+import com.wms.model.dto.outbound.PickingDetailDto;
 import com.wms.model.dto.outbound.PickingDto;
+import com.wms.model.dto.outbound.PickingItemDto;
+import com.wms.model.dto.outbound.PickingScanDto;
 import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentEntity;
 import com.wms.model.entity.DocumentItemDetailEntity;
@@ -30,6 +33,7 @@ import com.wms.model.repository.DocumentRepository;
 import com.wms.model.repository.PickingListItemRepository;
 import com.wms.model.repository.PickingListRepository;
 import com.wms.model.repository.UserRepository;
+import com.wms.security.ForbiddenException;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -38,11 +42,17 @@ import jakarta.persistence.EntityNotFoundException;
 //   1. ED-75 피킹 리스트 생성 : createPicking  (관리자)
 //      └ 번호 만들기 : nextPickingNo
 //   2. ED-75 작업자 배정     : assignWorker   (관리자)
+//   3. ED-76 내 피킹 리스트  : getMyPickings  (작업자)
+//   4. ED-76 전체 피킹 리스트 : getAllPickings (관리자)
+//   5. ED-76 피킹 리스트 상세 : getPickingDetail (작업자 본인 것 · 관리자)
+//   6. ED-77 스캔(집음)      : scan (작업자 본인 것 · 관리자)
+//      └ 본인 리스트인지 검사 : checkWorker (5·6 에서 사용)
 @Service
 @Transactional
 public class QrPickingService {
 
     @Autowired private AllocationPlanService allocationPlanService;   // 문서 품목 줄·할당 합계 재사용
+    @Autowired private PickingListService pickingListService;         // ED-52 pickDetail 재사용 (할당 줄 PICKED)
     @Autowired private DocumentRepository documentRepository;
     @Autowired private DocumentItemDetailRepository documentItemDetailRepository;
     @Autowired private PickingListRepository pickingListRepository;
@@ -199,7 +209,167 @@ public class QrPickingService {
         //      → 번호로 다시 조회해서 바뀐 작업자·상태로 응답
         PickingListEntity result = pickingListRepository.findById(pickingListId)
                 .orElseThrow(() -> new EntityNotFoundException("피킹 리스트가 없습니다: " + pickingListId));
-        int itemCount = pickingListItemRepository.findByPickingListId(pickingListId).size();
+        int itemCount = pickingListItemRepository.countByPickingListId(pickingListId);
         return PickingDto.from(result, itemCount);
+    }
+
+    // 3. ED-76 내 피킹 리스트 (작업자 화면 첫 화면)
+    // 로그인한 작업자에게 배정된 것 중 아직 할 일이 남은 것만 : 배정됨(ASSIGNED) · 피킹중(PICKING)
+    // 다 끝난(DONE) · 취소된(CANCELED) 리스트는 작업자 화면에 띄우지 않음
+    @Transactional(readOnly = true)
+    public List<PickingDto> getMyPickings(Integer loginUserId) {
+        List<PickingStatus> statusList = new ArrayList<>();
+        statusList.add(PickingStatus.ASSIGNED);
+        statusList.add(PickingStatus.PICKING);
+
+        List<PickingListEntity> lists = pickingListRepository.findByWorkerId(loginUserId, statusList);
+
+        // 리스트마다 품목 줄 수를 세서 DTO 로 바꿈
+        List<PickingDto> result = new ArrayList<>();
+        for (PickingListEntity pickingList : lists) {
+            int itemCount = pickingListItemRepository.countByPickingListId(pickingList.getPickingListId());
+            result.add(PickingDto.from(pickingList, itemCount));
+        }
+        return result;
+    }
+
+    // 4. ED-76 전체 피킹 리스트 (관리자 화면)
+    // 상태 상관없이 전부, 최근 것부터 → 배정 전(CREATED) 리스트를 찾아서 배정 버튼을 누르는 화면
+    @Transactional(readOnly = true)
+    public List<PickingDto> getAllPickings() {
+        List<PickingListEntity> lists = pickingListRepository.findAllWithDocument();
+
+        List<PickingDto> result = new ArrayList<>();
+        for (PickingListEntity pickingList : lists) {
+            int itemCount = pickingListItemRepository.countByPickingListId(pickingList.getPickingListId());
+            result.add(PickingDto.from(pickingList, itemCount));
+        }
+        return result;
+    }
+
+    // 5. ED-76 피킹 리스트 상세 (머리 정보 + 품목 줄 목록)
+    // 작업자는 본인에게 배정된 리스트만, 관리자는 전부 볼 수 있음
+    @Transactional(readOnly = true)
+    public PickingDetailDto getPickingDetail(Integer pickingListId, Integer loginUserId) {
+
+        // 5-1. 피킹 리스트 조회 → 없으면 404
+        PickingListEntity pickingList = pickingListRepository.findById(pickingListId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 리스트가 없습니다: " + pickingListId));
+
+        // 5-2. 본인 리스트인지 검사 → 아니면 403
+        checkWorker(pickingList, loginUserId);
+
+        // 5-3. 품목 줄 목록 (집는 순서대로, 칸·상품·LOT 를 한 번에 가져옴)
+        List<PickingListItemEntity> items = pickingListItemRepository.findByPickingListId(pickingListId);
+
+        // 5-4. 품목 줄 엔티티 → DTO (getPickingList 와 같은 stream 방식)
+        List<PickingItemDto> itemDtos = items.stream()
+                .map((item) -> PickingItemDto.from(item))
+                .toList();
+
+        // 5-5. 머리 정보 + 줄 목록을 묶어서 리턴
+        return PickingDetailDto.builder()
+                .picking(PickingDto.from(pickingList, items.size()))
+                .items(itemDtos)
+                .build();
+    }
+
+    // 6. ED-77 스캔 (집음)
+    // 작업자가 칸에 가서 물건의 LOT QR 을 찍고 수량을 보냄 → 그 줄의 집은 수량(pickedQty)을 올림
+    // 한 줄이 다 차면 할당 줄도 집음(PICKED), 모든 줄이 다 차면 리스트 완료(DONE)
+    public PickingItemDto scan(Integer pickingListId, PickingScanDto dto, Integer loginUserId) {
+
+        // 6-1. 값 검사 → 400
+        if (dto.getPickingListItemId() == null || dto.getLotCode() == null) {
+            throw new IllegalArgumentException("품목 줄과 LOT 를 모두 스캔해야 합니다");
+        }
+        if (dto.getQty() == null || dto.getQty() <= 0) {
+            throw new IllegalArgumentException("수량은 1 이상이어야 합니다");
+        }
+        Integer itemId = dto.getPickingListItemId();
+
+        // 6-2. 피킹 리스트 조회 → 없으면 404 / 본인 리스트가 아니면 403
+        PickingListEntity pickingList = pickingListRepository.findById(pickingListId)
+                .orElseThrow(() -> new EntityNotFoundException("피킹 리스트가 없습니다: " + pickingListId));
+        checkWorker(pickingList, loginUserId);
+
+        // 6-3. 배정됨(ASSIGNED) · 피킹중(PICKING) 일 때만 스캔 가능 → 아니면 409
+        //      CREATED : 아직 배정 전 / DONE : 이미 다 집음 / CANCELED : 출고 취소됨
+        if (pickingList.getStatus() != PickingStatus.ASSIGNED && pickingList.getStatus() != PickingStatus.PICKING) {
+            throw new IllegalStateException("스캔할 수 없는 피킹 리스트입니다 · 현재 상태 " + pickingList.getStatus());
+        }
+
+        // 6-4. 품목 줄 조회 → 없으면 404 / 이 리스트의 줄이 아니면 400
+        PickingListItemEntity item = pickingListItemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("품목 줄이 없습니다: " + itemId));
+        if (!item.getPickingListEntity().getPickingListId().equals(pickingListId)) {
+            throw new IllegalArgumentException("이 피킹 리스트의 줄이 아닙니다: " + itemId);
+        }
+
+        // 6-5. 찍은 LOT 가 집어야 할 LOT 와 같은지 → 다르면 400 (다른 물건을 집은 것)
+        //      아래 UPDATE 들이 메모리를 비우므로(clearAutomatically) 필요한 값은 지금 꺼내 둠
+        DocumentItemDetailEntity detail = item.getDetailEntity();
+        Integer detailId = detail.getDetailId();
+        int maxQty = detail.getQty();                                       // 이 줄에서 집어야 할 수량
+        Integer documentId = pickingList.getDocumentEntity().getDocumentId();
+        String lotCode = detail.getLotEntity().getLotCode();
+        if (!lotCode.equals(dto.getLotCode())) {
+            throw new IllegalArgumentException("다른 LOT 입니다 · 집어야 할 LOT " + lotCode + " · 찍은 LOT " + dto.getLotCode());
+        }
+
+        // 6-6. 첫 스캔이면 리스트 배정됨(ASSIGNED) → 피킹중(PICKING) + 시작 시각
+        //      문서도 할당(ALLOCATED) → 피킹중(PICKING) : 이때부터 주문 취소가 막힘
+        //      둘 다 결과가 0 이면 이미 바뀐 것 → 에러 아님, 그대로 진행
+        if (pickingList.getStatus() == PickingStatus.ASSIGNED) {
+            pickingListRepository.start(pickingListId, PickingStatus.ASSIGNED, PickingStatus.PICKING);
+            documentRepository.changeStatus(documentId, DocumentStatus.ALLOCATED, DocumentStatus.PICKING);
+        }
+
+        // 6-7. 집은 수량 더하기 (조건부 UPDATE)
+        //      더한 값이 할당 수량을 넘으면 0 → 409
+        //      같은 줄을 두 사람이 동시에 찍어도 DB 가 한 줄씩 처리해서 할당 수량을 넘지 않음
+        int added = pickingListItemRepository.addPickedQty(itemId, dto.getQty(), maxQty);
+        if (added == 0) {
+            throw new IllegalStateException("집어야 할 수량을 넘습니다 · 할당 수량 " + maxQty);
+        }
+
+        // 6-8. 다시 조회해서 이 줄이 다 찼는지 확인
+        //      다 찼으면 → 다 집은 시각 기록 + 할당 줄 할당됨(ALLOCATED) → 집음(PICKED) (ED-52 pickDetail 재사용)
+        PickingListItemEntity updated = pickingListItemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("품목 줄이 없습니다: " + itemId));
+        int picked = updated.getPickedQty();
+        if (picked == maxQty) {
+            pickingListItemRepository.markPicked(itemId);
+            pickingListService.pickDetail(detailId);
+        }
+
+        // 6-9. 아직 덜 집은 줄이 하나도 없으면 → 리스트 피킹중(PICKING) → 완료(DONE) + 완료 시각
+        //      이후 관리자가 기존 출고확정(ED-20)을 누르면 출고 끝
+        if (pickingListItemRepository.countNotDone(pickingListId) == 0) {
+            pickingListRepository.complete(pickingListId, PickingStatus.PICKING, PickingStatus.DONE);
+        }
+
+        // 6-10. 바뀐 줄 리턴 (6-8 이후 UPDATE 가 또 메모리를 비웠으므로 다시 조회)
+        PickingListItemEntity result = pickingListItemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("품목 줄이 없습니다: " + itemId));
+        return PickingItemDto.from(result);
+    }
+
+    // 5-2 · 6-2 에서 호출 : 로그인한 사람이 이 리스트를 볼 수 있는지
+    // 관리자(ADMIN) → 통과 / 작업자 → 배정된 작업자 본인일 때만 통과, 아니면 403
+    private void checkWorker(PickingListEntity pickingList, Integer loginUserId) {
+        // 로그인한 계정의 역할을 DB 에서 확인
+        UserEntity loginUser = userRepository.findById(loginUserId)
+                .orElseThrow(() -> new EntityNotFoundException("계정이 없습니다: " + loginUserId));
+        if (loginUser.getRole() == UserRole.ADMIN) {
+            return;   // 관리자는 검사 없이 통과
+        }
+
+        // 아직 배정 전(작업자 null)이거나, 배정된 작업자 번호가 내 번호와 다르면 → 403
+        // Integer 끼리는 == 대신 equals 로 비교
+        if (pickingList.getWorkerEntity() == null
+                || !pickingList.getWorkerEntity().getUserId().equals(loginUserId)) {
+            throw new ForbiddenException("본인에게 배정된 피킹 리스트가 아닙니다: " + pickingList.getPickingNo());
+        }
     }
 }

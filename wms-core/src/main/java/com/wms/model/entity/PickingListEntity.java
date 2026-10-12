@@ -5,12 +5,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "picking_list")
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
-@Builder
+@Entity @Table(name = "picking_list") @NoArgsConstructor @AllArgsConstructor @Data @Builder
 public class PickingListEntity extends BaseTime {
 
     @Id
