@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./Layout/Layout";
 import InboundPage from "./Pages/inbound/InboundPage";
 import InspectionPage from "./Pages/inbound/InspectionPage";
@@ -15,6 +15,8 @@ import LoginPage from "./Pages/LoginPage";
 import WorkerPage from "./Pages/admin/WorkerPage";
 import AuditLogPage from "./Pages/admin/AuditLogPage";
 import LabelPage from "./Pages/admin/LabelPage";
+import MobileLayout from "./Mobile/MobileLayout";
+import MobileLoginPage from "./Mobile/MobileLoginPage";
 
 export default function App() {
   return (
@@ -48,6 +50,11 @@ export default function App() {
         <Route path="admin/labels" element={<LabelPage />} />
       </Route>
       <Route path="/login" element={<LoginPage />} />
+
+      <Route path="/m/login" element={<MobileLoginPage />} />
+      <Route path="/m" element={<MobileLayout />}>
+        <Route index element={<Navigate to="pickings" replace />} />
+      </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
   );
