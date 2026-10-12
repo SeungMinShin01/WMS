@@ -170,72 +170,82 @@ public class InboundService {
     }
 
     // ED-15 검수 결과 조회
-    public List<InspectionResultDto> inspectionFindAll(Integer documentId) {
-        // 검수 기록 모두 조회
-        List<DocumentItemDetailEntity> detailEntities = documentItemDetailRepository.findAll();
-        // 검수 기록 -> 문서 품목 -> 문서까지 가서 ID 비교
+    public List<InspectionResultDto> inspectionFindAll(Integer documentId){
+        // ED-71 이 문서의 상세만 + 품목-LOT-칸을 한번에 
         List<InspectionResultDto> inspectionResultDtos = new ArrayList<>();
-        detailEntities.forEach((detailEntity) -> {
-            if (detailEntity.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)) {
-                inspectionResultDtos.add(InspectionResultDto.from(detailEntity));
-            }
-        });
+        for(DocumentItemDetailEntity d : documentItemDetailRepository.findByDocumentId(documentId)){
+            inspectionResultDtos.add(InspectionResultDto.from(d));
+        }
         return inspectionResultDtos;
     }
 
-    // 문서의 모든 검수 기록이 적재됐는가 why? 문서 하나의 모든 품목이 검수 완료 기록이 있어야 적치로 넘어가게해놨기때문
-    private boolean allDetailsCarried(Integer documentId) {
-        for (DocumentItemDetailEntity d : documentItemDetailRepository.findAll()) {
-            if(d.getDocumentItemEntity().getDocumentEntity().getDocumentId().equals(documentId)
-                    && d.getStatus() != DetailStatus.STORED)
-                return false;
-        }
-        return true;
+    // 문서의 모든 검수 기록이 적재됐나
+    private boolean allDetailsCarried(Integer documentId){
+        // ED-71 아직 STORED가 아닌 줄 수를 DB에서 셈
+        return documentItemDetailRepository.countByDocumentIdAndStatusNot(documentId, DetailStatus.STORED) == 0;
     }
 
-    // ED-16 적재 1건
-    public boolean carry(CarryingDto carryingDto) {
-        // 검수 결과 조회
+    // ED-16 적재 1건 — ED-70 검수 상세 조건부 UPDATE + 재고 수량 DB 계산
+    public boolean carry(CarryingDto carryingDto){
+        // 1. 검수기록 조회
         DocumentItemDetailEntity detailEntity = documentItemDetailRepository.findById(carryingDto.getDetailId())
-                .orElseThrow(() -> new EntityNotFoundException("검수 기록이 없습니다."));
-
+                .orElseThrow(()->new EntityNotFoundException("검수 기록이 없습니다."));
+            
         DocumentEntity documentEntity = detailEntity.getDocumentItemEntity().getDocumentEntity();
-        // 적재는 검수 완료(INSPECTED) 문서만 — 대기·취소·완료 문서는 거부
-        if (documentEntity.getStatus() != DocumentStatus.INSPECTED)
-            throw new IllegalStateException("전 품목 검수가 끝난 문서만 적재할 수 있습니다 (현재: " + documentEntity.getStatus() + ")");
+        // 적재는 검수 완료 문서만 
+        if(documentEntity.getStatus() != DocumentStatus.INSPECTED)
+            throw new IllegalStateException("전 품목 검수가 끝난 문서만 적재할 수 있습니다.");
 
-        // 중복 적재 방지(ED-51): 검수됨(INSPECTED) 상태만 적재 가능
+        // 빠른 실패: 이미 적재된 기록이면 409(동시 요청 방어는 조건부 update)
         if(detailEntity.getStatus() != DetailStatus.INSPECTED)
-            throw new IllegalStateException("이미 적재된 검수 기록입니다");
+            throw new IllegalStateException("이미 적재된 검수 기록입니다.");
 
-        // 적재할 칸 조회
+        // 2. 적재할 칸 조회
         LocationEntity locationEntity = locationRepository.findById(carryingDto.getLocationId())
-                .orElseThrow(() -> new EntityNotFoundException("로케이션이 없습니다."));
-        if (!locationEntity.getIsActive())
+                .orElseThrow(()->new EntityNotFoundException("로케이션이 없습니다."));
+        if(!locationEntity.getIsActive())
             throw new IllegalStateException("미사용 로케이션입니다. (" + locationEntity.getLocationCode() + ")");
 
-        // 칸 단위 화주 검사(ED-60): 다른 화주 재고가 있는 칸에는 적재 불가
-        if(stockService.hasOtherTenant(locationEntity, detailEntity.getLotEntity()))
+        // 3. 4번 조건부 update가 메모리를 비우므로 필요한 값 미리 꺼내기 (ED-70)
+        Integer detailId = detailEntity.getDetailId();
+        Integer documentId = documentEntity.getDocumentId();
+        Integer locationId = locationEntity.getLocationId();
+        Integer lotId = detailEntity.getLotEntity().getLotId();
+        Integer tenantId = detailEntity.getLotEntity().getProductEntity().getTenantEntity().getTenantId();
+        int qty = detailEntity.getQty();
+
+        // 칸 단위 화주 검사(ED-60): 다른 화주 재고가 있는 칸에는 적재 불가 — ED-71 COUNT 쿼리
+        if (stockService.hasOtherTenant(locationId, tenantId))
             throw new IllegalStateException("다른 화주의 재고가 있는 칸입니다.");
 
-        // 적재 capacity 검사 (ED-51): 칸 현재 수량 + 넣을 수량 > 최대 -> 409(capacity null = 제한 없음)
-        if(locationEntity.getCapacity() != null){
-            int total = stockService.locationTotal(locationEntity);
-            if(total + detailEntity.getQty() > locationEntity.getCapacity())
-                throw new IllegalStateException("적재 가능 수량을 넘었습니다.");
-        }
+        // 용량 검사(ED-51): 여러 재고 줄의 합이라 조건부 UPDATE 한 줄로 못 막음 → 적재 대기열이 줄 세움 — ED-71 SUM 쿼리
+        if (locationEntity.getCapacity() != null
+                && stockService.locationTotal(locationId) + qty > locationEntity.getCapacity())
+            throw new IllegalStateException("적재 가능 수량을 넘었습니다.");
 
-        // 재고 증가는 StockService에 맡긴다
-        StockEntity stockEntity = stockService.increase(detailEntity.getLotEntity(), locationEntity,
-                detailEntity.getQty());
+        // 4. ED-70 검수 상세 조건부 UPDATE: INSPECTED 일때만 STORED
+        // 0행 = 다른 요청이 먼저 적재함 -> 409 (재고가 2번 늘어나는거 막기)
+        int changed = documentItemDetailRepository.changeStatus(detailId, DetailStatus.INSPECTED, DetailStatus.STORED);
+        if(changed == 0)
+            throw new IllegalStateException("이미 적재된 검수 기록입니다.");
 
-        // 검수 결과에 적재 위치와 재고 연결
-        detailEntity.setLocationEntity(locationEntity);
-        detailEntity.setStockEntity(stockEntity);
-        detailEntity.moveTo(DetailStatus.STORED);   // 검수됨 -> 적재됨(ED-51)
-        if (allDetailsCarried(documentEntity.getDocumentId())) {
-            documentEntity.moveTo(DocumentStatus.COMPLETED);
-            documentEntity.setCompletedAt(LocalDateTime.now());
+        // 5. ED-70 재고 수량은 DB에서 계산
+        StockEntity stockEntity = stockService.increase(lotId, locationId, tenantId, qty);
+
+        // 6. 검수 기록을 다시 조회해 칸-재고 연결
+        DocumentItemDetailEntity stored = documentItemDetailRepository.findById(detailId)
+                .orElseThrow(()-> new EntityNotFoundException("검수 기록이 없습니다."));
+        stored.setLocationEntity(locationRepository.getReferenceById(locationId));
+        stored.setStockEntity(stockEntity);
+
+        // 7. 문서의 모든 기록이 적재됐으면 inspected -> completed (ED-70 문서도 조건부 UPDATE)
+        if(allDetailsCarried(documentId)){
+            int done = documentRepository.changeStatus(documentId, DocumentStatus.INSPECTED, DocumentStatus.COMPLETED);
+            if(done == 1){
+                DocumentEntity completed = documentRepository.findById(documentId)
+                        .orElseThrow(()-> new EntityNotFoundException("문서를 찾을 수 없습니다."));
+                completed.setCompletedAt(LocalDateTime.now());
+            }
         }
         return true;
     }

@@ -52,6 +52,11 @@ public class DocumentEntity extends BaseTime {
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
 
+    // 배송지·연락처 (V7) — 출고 문서만 사용, 입고는 NULL
+    // 거래처 값을 복사해 둠(스냅샷): 거래처 주소가 나중에 바뀌어도 이 문서는 그대로
+    private String shipAddress;
+    private String shipContact;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private DocumentStatus status = DocumentStatus.WAITING;

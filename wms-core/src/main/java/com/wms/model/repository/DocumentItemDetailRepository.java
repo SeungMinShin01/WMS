@@ -13,6 +13,11 @@ import com.wms.model.entity.DocumentItemDetailEntity;
 public interface DocumentItemDetailRepository
         extends JpaRepository<DocumentItemDetailEntity, Integer> {
 
+        // ED-71 이 문서에서 status 가 아닌 상세 줄 수 (입고 완료 판단) — 전 : 상세 findAll 후 for
+        @Query("select count(d) from DocumentItemDetailEntity d "
+                + "where d.documentItemEntity.documentEntity.documentId = :documentId and d.status <> :status")
+        long countByDocumentIdAndStatusNot(@Param("documentId") Integer documentId, @Param("status") DetailStatus status);
+
         // ED-72 상세(피킹 1줄) 상태가 from 일 때만 to 로 변경 (피킹 확인용)
         // 반환값 0 = 이미 처리된 줄 → 409
         @Modifying(flushAutomatically = true, clearAutomatically = true)
