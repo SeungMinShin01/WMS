@@ -17,9 +17,9 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class InboundItemCreateDto {
-    // 입고 문서 품목 1줄 등록 요청 — LOT 번호·소비기한은 공급사가 정해서 온 값
+    // 입고 문서 품목 1줄 등록 요청 — LOT 번호는 서버가 제조일자·공급사코드로 자동 생성
     private Integer productId;
-    private String lotCode;
+    private LocalDate manufactureDate;   // 제조일자: LOT 번호 만들 때만 사용 (DB에 저장 안 함)
     private LocalDate expiryDate;
     private Integer expectedQty;
 

@@ -1,0 +1,12 @@
+{
+  "scenario": "alloc",
+  "run": 3,
+  "vus": 20,
+  "ok": 2,
+  "rejected": 8,
+  "bad": 0,
+  "failed": 10,
+  "neterr": 0,
+  "p95_ms": 305,
+  "at": "2026-10-07T03:14:03.616Z"
+}

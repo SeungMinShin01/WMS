@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.partner.PartnerDto;
 import com.wms.service.PartnerService;
+import com.wms.security.AdminOnly;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 @RestController
 public class PartnerController {
@@ -21,6 +24,8 @@ public class PartnerController {
 
     // 거래처 등록 — 새 거래처 번호를 돌려준다
     // [변경] boolean → ResponseEntity<Integer>, System.out.println 삭제
+    @AdminOnly
+    @AuditLog(action = AuditAction.PARTNER_CREATE, target = "partnerCode", fields = { "partnerName", "partnerType" })
     @PostMapping("/wms/partner")
     public ResponseEntity<Integer> 거래처등록(@RequestBody PartnerDto partnerDto) {
         return ResponseEntity.ok(partnerService.거래처등록(partnerDto));
@@ -41,6 +46,8 @@ public class PartnerController {
     }
 
     // [변경] boolean → ResponseEntity<Boolean>
+    @AdminOnly
+    @AuditLog(action = AuditAction.PARTNER_UPDATE, target = "partnerId", fields = { "partnerCode", "partnerName" })
     @PutMapping("/wms/partner")
     public ResponseEntity<Boolean> 거래처수정(@RequestBody PartnerDto partnerDto) {
         return ResponseEntity.ok(partnerService.거래처수정(partnerDto));

@@ -12,7 +12,7 @@ const getStockStatus = (s) => {
 };
 
 // 07 재고현황 — 담당: 조현우
-export default function StockPage(props) {
+export default function StockPage() {
   const [stocks, setStocks] = useState([]); // ED-21 재고 전체 (FEFO 정렬)
   const [filter, setFilter] = useState({
     productCode: "",

@@ -13,15 +13,19 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.product.ProductDto;
 import com.wms.service.ProductService;
+import com.wms.security.AdminOnly;
+import com.wms.audit.AuditAction;
+import com.wms.audit.AuditLog;
 
 @RestController
 public class ProductController {
     @Autowired
     private ProductService productService;
 
-
     // 품목 등록 — 새 품목 번호를 돌려준다
     // [변경] 반환 boolean → ResponseEntity<Integer> (새 PK 번호), System.out.println 삭제
+    @AdminOnly
+    @AuditLog(action = AuditAction.PRODUCT_CREATE, target = "productCode", fields = { "productName" })
     @PostMapping("/wms/product")
     public ResponseEntity<Integer> 상품등록(@RequestBody ProductDto productDto) {
         return ResponseEntity.ok(productService.상품등록(productDto));
@@ -43,6 +47,8 @@ public class ProductController {
     }
 
     // [변경] 반환 boolean → ResponseEntity<Boolean>
+    @AdminOnly
+    @AuditLog(action = AuditAction.PRODUCT_UPDATE, target = "productId", fields = { "productCode", "productName" })
     @PutMapping("/wms/product")
     public ResponseEntity<Boolean> 상품수정(@RequestBody ProductDto productDto) {
         return ResponseEntity.ok(productService.상품수정(productDto));

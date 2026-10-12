@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import { useOutletContext } from "react-router-dom";
 
 const TYPE_LABEL = { SUPPLIER: "공급사", CUSTOMER: "납품처" };
 
@@ -18,7 +19,9 @@ const EMPTY = {
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // 01-2 거래처 — 담당: 기준정보 담당 (공급사 SUPPLIER / 납품처 CUSTOMER)
-export default function PartnerPage(props) {
+export default function PartnerPage() {
+  const { user } = useOutletContext();
+  const isAdmin = user?.role === "ADMIN";
   const [partners, setPartners] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [form, setForm] = useState(null);
@@ -52,7 +55,8 @@ export default function PartnerPage(props) {
       setForm(res.data);
     } catch (err) {
       // [변경] 없는 거래처(404)면 서버 문구를 보여준다
-      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
       alert(msg || "거래처 정보를 불러오지 못했습니다.");
     }
   };
@@ -76,8 +80,8 @@ export default function PartnerPage(props) {
           (tenantId === "" || String(p.tenantId) === tenantId) && // [추가]
           (code === "" || code === "PT-" || p.partnerCode?.includes(code)) &&
           (name === "" || p.partnerName?.includes(name)) &&
-          (type === "" || p.partnerType === type)
-      )
+          (type === "" || p.partnerType === type),
+      ),
     );
   };
 
@@ -112,7 +116,8 @@ export default function PartnerPage(props) {
       }
     } catch (err) {
       // 서버가 보낸 문구(400, 404, 409)가 있으면 그대로 보여준다
-      const msg = typeof err.response?.data === "string" ? err.response.data : null;
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
       alert(msg || "저장 중 오류가 발생했습니다.");
     }
   };
@@ -146,7 +151,11 @@ export default function PartnerPage(props) {
       </form>
 
       <GridTitle title="거래처 목록" desc={`총 ${filtered.length}건`}>
-        <button className="btn" onClick={신규}>신규</button>
+        {isAdmin && (
+          <button className="btn" onClick={신규}>
+            신규
+          </button>
+        )}
       </GridTitle>
       <table className="grid">
         <thead>
@@ -179,8 +188,14 @@ export default function PartnerPage(props) {
         <p className="empty">목록에서 거래처를 클릭하면 상세가 나옵니다.</p>
       ) : (
         <>
-          <GridTitle title={form.partnerId == null ? "거래처 등록" : "거래처 상세"}>
-            <button className="btn primary" onClick={저장}>저장</button>
+          <GridTitle
+            title={form.partnerId == null ? "거래처 등록" : "거래처 상세"}
+          >
+            {isAdmin && (
+              <button className="btn primary" onClick={저장}>
+                저장
+              </button>
+            )}
           </GridTitle>
           <div className="panel">
             {/* [추가] 화주: 신규는 선택, 수정은 바꿀 수 없다(표시만) */}
@@ -199,11 +214,23 @@ export default function PartnerPage(props) {
               ))}
             </select>
             <label>거래처코드</label>
-            <input name="partnerCode" value={form.partnerCode ?? ""} onChange={입력} />
+            <input
+              name="partnerCode"
+              value={form.partnerCode ?? ""}
+              onChange={입력}
+            />
             <label>거래처명</label>
-            <input name="partnerName" value={form.partnerName ?? ""} onChange={입력} />
+            <input
+              name="partnerName"
+              value={form.partnerName ?? ""}
+              onChange={입력}
+            />
             <label>구분</label>
-            <select name="partnerType" value={form.partnerType ?? "SUPPLIER"} onChange={입력}>
+            <select
+              name="partnerType"
+              value={form.partnerType ?? "SUPPLIER"}
+              onChange={입력}
+            >
               <option value="SUPPLIER">공급사</option>
               <option value="CUSTOMER">납품처</option>
             </select>

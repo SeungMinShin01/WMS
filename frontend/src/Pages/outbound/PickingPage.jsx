@@ -7,17 +7,17 @@ import GridTitle from "../../Layout/GridTitle";
 // 피킹리스트 — 담당: 김지환
 // 흐름 : 문서 선택 → 줄마다 [집음] → 전 줄 집음 → 출고확정
 // 전 품목이 할당된 문서만 집을 수 있다 (ED-52 결정)
-export default function PickingPage(props) {
+export default function PickingPage() {
   // 주소의 documentId (/outbounds/picking/66) — 목록 주소(/outbounds/picking)면 undefined
   const { documentId } = useParams();
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState([]);       // 피킹할 수 있는 문서 목록 (할당 · 피킹중)
-  const [tenants, setTenants] = useState([]);     // [ED-61] 화주 선택 목록 [{tenantId, tenantName}]
-  const [tenantId, setTenantId] = useState("");   // [ED-61] 고른 화주 ("" = 전체)
-  const [detail, setDetail] = useState(null);     // 선택한 출고 문서 정보
-  const [pickings, setPickings] = useState([]);   // 피킹 줄 목록
-  const [loading, setLoading] = useState(false);  // 요청 중이면 true → 버튼 잠금
+  const [orders, setOrders] = useState([]); // 피킹할 수 있는 문서 목록 (할당 · 피킹중)
+  const [tenants, setTenants] = useState([]); // [ED-61] 화주 선택 목록 [{tenantId, tenantName}]
+  const [tenantId, setTenantId] = useState(""); // [ED-61] 고른 화주 ("" = 전체)
+  const [detail, setDetail] = useState(null); // 선택한 출고 문서 정보
+  const [pickings, setPickings] = useState([]); // 피킹 줄 목록
+  const [loading, setLoading] = useState(false); // 요청 중이면 true → 버튼 잠금
 
   // 문서 상태 한글 (AllocationPage 와 같은 이름)
   const 문서상태 = (status) => {
@@ -28,7 +28,6 @@ export default function PickingPage(props) {
     if (status === "CANCELED") return "취소";
     return status;
   };
-
 
   // 줄 상태 한글
   const 줄상태 = (status) => {
@@ -161,8 +160,8 @@ export default function PickingPage(props) {
     try {
       setLoading(true);
       await axios.put("/wms/pickings/" + detailId);
-      getPickings();  // 줄 상태 새로고침
-      getDetail();    // 처음 집으면 문서가 재고피킹으로 바뀌니까 문서도 새로고침
+      getPickings(); // 줄 상태 새로고침
+      getDetail(); // 처음 집으면 문서가 재고피킹으로 바뀌니까 문서도 새로고침
     } catch (error) {
       에러알림(error);
     } finally {
@@ -196,11 +195,16 @@ export default function PickingPage(props) {
       return;
     }
     if (!전품목할당) {
-      alert("할당이 끝나지 않은 품목이 있어 출고확정할 수 없습니다: " + 덜할당품목.join(", "));
+      alert(
+        "할당이 끝나지 않은 품목이 있어 출고확정할 수 없습니다: " +
+          덜할당품목.join(", "),
+      );
       return;
     }
     if (pickings.length === 0 || 남은줄 > 0) {
-      alert("모든 줄을 집어야 출고확정할 수 있습니다 (남은 줄 " + 남은줄 + "개)");
+      alert(
+        "모든 줄을 집어야 출고확정할 수 있습니다 (남은 줄 " + 남은줄 + "개)",
+      );
       return;
     }
     if (!confirm("출고확정 하시겠습니까?")) return;
@@ -236,7 +240,10 @@ export default function PickingPage(props) {
           </select>
         </form>
 
-        <GridTitle title="피킹할 출고 문서" desc={"총 " + orders.length + "건"} />
+        <GridTitle
+          title="피킹할 출고 문서"
+          desc={"총 " + orders.length + "건"}
+        />
         <table className="grid">
           <thead>
             <tr>
@@ -245,25 +252,29 @@ export default function PickingPage(props) {
               <th>배송지명</th>
               <th>출고요청일</th>
               <th>상태</th>
-              <th>선택</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 && (
               <tr>
-                <td colSpan="7">피킹할 문서가 없습니다 (출고지시에서 피킹리스트를 먼저 생성하세요)</td>
+                <td colSpan="5">
+                  피킹할 문서가 없습니다 (출고지시에서 피킹리스트를 먼저
+                  생성하세요)
+                </td>
               </tr>
             )}
             {orders.map((row) => (
-              <tr key={row.documentId}>
+              <tr
+                key={row.documentId}
+                onClick={() => navigate(`/outbounds/picking/${row.documentId}`)}
+              >
                 <td>{row.documentNo}</td>
                 <td>{row.tenantName}</td>
                 <td>{row.partnerName}</td>
-                <td>{row.expectedAt ? row.expectedAt.replace("T", " ") : "-"}</td>
-                <td>{문서상태(row.status)}</td>
                 <td>
-                  <button className="btn" onClick={() => navigate(`/outbounds/picking/${row.documentId}`)}>선택</button>
+                  {row.expectedAt ? row.expectedAt.replace("T", " ") : "-"}
                 </td>
+                <td>{문서상태(row.status)}</td>
               </tr>
             ))}
           </tbody>
@@ -292,11 +303,17 @@ export default function PickingPage(props) {
             </tr>
             <tr>
               <th>출고요청일</th>
-              <td>{detail.expectedAt ? detail.expectedAt.replace("T", " ") : "-"}</td>
+              <td>
+                {detail.expectedAt ? detail.expectedAt.replace("T", " ") : "-"}
+              </td>
               <th>품목수</th>
               <td>{detail.items.length}</td>
               <th>출고확정일시</th>
-              <td>{detail.completedAt ? detail.completedAt.replace("T", " ") : "-"}</td>
+              <td>
+                {detail.completedAt
+                  ? detail.completedAt.replace("T", " ")
+                  : "-"}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -304,21 +321,34 @@ export default function PickingPage(props) {
 
       <div style={{ textAlign: "right", margin: "8px 0" }}>
         {/* 번호 없는 주소로 가서 문서 선택 목록으로 돌아감 */}
-        <button className="btn" onClick={() => navigate("/outbounds/picking")}>목록</button>
+        <button className="btn" onClick={() => navigate("/outbounds/picking")}>
+          목록
+        </button>
       </div>
 
       {/* 덜 할당된 문서 안내 */}
       {detail && detail.status !== "SHIPPED" && !전품목할당 && (
         <p style={{ color: "red", margin: "8px 0" }}>
-          할당이 끝나지 않은 품목이 있어 피킹을 시작할 수 없습니다 ({덜할당품목.join(", ")}).
-          출고지시에서 나머지 품목을 먼저 할당하세요.
+          할당이 끝나지 않은 품목이 있어 피킹을 시작할 수 없습니다 (
+          {덜할당품목.join(", ")}). 출고지시에서 나머지 품목을 먼저 할당하세요.
         </p>
       )}
 
       {/* 피킹리스트 */}
-      <GridTitle title="피킹리스트 (로케이션순)" desc={"총 " + pickings.length + "건"}>
-        <button className="btn" onClick={전체집음} disabled={loading || !집기가능}>전체 집음</button>{" "}
-        <button className="btn primary" onClick={출고확정} disabled={loading}>출고확정</button>
+      <GridTitle
+        title="피킹리스트 (로케이션순)"
+        desc={"총 " + pickings.length + "건"}
+      >
+        <button
+          className="btn"
+          onClick={전체집음}
+          disabled={loading || !집기가능}
+        >
+          전체 집음
+        </button>{" "}
+        <button className="btn primary" onClick={출고확정} disabled={loading}>
+          출고확정
+        </button>
       </GridTitle>
       <table className="grid">
         <thead>
@@ -350,7 +380,13 @@ export default function PickingPage(props) {
               <td>{줄상태(row.status)}</td>
               <td>
                 {row.status === "ALLOCATED" && 집기가능 ? (
-                  <button className="btn" onClick={() => 집음(row.detailId)} disabled={loading}>집음</button>
+                  <button
+                    className="btn"
+                    onClick={() => 집음(row.detailId)}
+                    disabled={loading}
+                  >
+                    집음
+                  </button>
                 ) : (
                   "-"
                 )}

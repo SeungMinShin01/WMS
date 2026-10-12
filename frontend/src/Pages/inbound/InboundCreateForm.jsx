@@ -3,7 +3,7 @@ import axios from "axios";
 import GridTitle from "../../Layout/GridTitle";
 
 // 품목 줄 1개의 빈 값
-const EMPTY_ITEM = { productId: "", lotCode: "", expiryDate: "", expectedQty: "" };
+const EMPTY_ITEM = { productId: "", manufactureDate: "", expiryDate: "", expectedQty: "" };
 
 // 입고문서 신규 등록 (ED-60) — 문서 헤더 POST → 받은 documentId로 품목을 1줄씩 POST
 export default function InboundCreateForm(props) {
@@ -59,17 +59,19 @@ export default function InboundCreateForm(props) {
     for (const item of items) {
       if (
         item.productId === "" ||
-        item.lotCode.trim() === "" ||
+        item.manufactureDate === "" ||
         item.expiryDate === "" ||
         !(Number(item.expectedQty) > 0)
       )
-        return "모든 품목 줄의 품목, LOT 번호, 소비기한, 수량(1 이상)을 입력하세요.";
+        return "모든 품목 줄의 품목, 제조일자, 소비기한, 수량(1 이상)을 입력하세요.";
+      if (item.manufactureDate > item.expiryDate)
+        return "제조일자가 소비기한보다 늦은 줄이 있습니다.";
     }
-    // 같은 품목 + 같은 LOT가 두 줄이면 서버에서 두 번째 줄이 409 → 미리 막기
+    // 같은 품목 + 같은 제조일자 = 같은 LOT → 두 줄이면 서버에서 409 → 미리 막기
     const keys = new Set();
     for (const item of items) {
-      const key = item.productId + "-" + item.lotCode.trim();
-      if (keys.has(key)) return "같은 품목·LOT 번호가 두 줄 있습니다.";
+      const key = item.productId + "-" + item.manufactureDate;
+      if (keys.has(key)) return "같은 품목·제조일자가 두 줄 있습니다. 수량을 합쳐 한 줄로 입력하세요.";
       keys.add(key);
     }
     return null;
@@ -104,14 +106,14 @@ export default function InboundCreateForm(props) {
       try {
         await axios.post(`/wms/inbounds/${documentId}/items`, {
           productId: Number(item.productId),
-          lotCode: item.lotCode.trim(),
+          manufactureDate: item.manufactureDate,
           expiryDate: item.expiryDate,
           expectedQty: Number(item.expectedQty),
         });
       } catch (error) {
         const product = products.find((p) => p.id === Number(item.productId));
         failMessages.push(
-          `${product ? product.name : "품목"} / ${item.lotCode}: ${error.response?.data ?? "오류"}`,
+          `${product ? product.name : "품목"}: ${error.response?.data ?? "오류"}`,
         );
       }
     }
@@ -185,7 +187,7 @@ export default function InboundCreateForm(props) {
           <tr>
             <th>No</th>
             <th>품목</th>
-            <th>LOT 번호</th>
+            <th>제조일자</th>
             <th>소비기한</th>
             <th>예정수량</th>
             <th></th>
@@ -211,10 +213,9 @@ export default function InboundCreateForm(props) {
               </td>
               <td>
                 <input
-                  type="text"
-                  placeholder="공급사 LOT 번호"
-                  value={item.lotCode}
-                  onChange={(e) => changeItem(index, "lotCode", e.target.value)}
+                  type="date"
+                  value={item.manufactureDate}
+                  onChange={(e) => changeItem(index, "manufactureDate", e.target.value)}
                 />
               </td>
               <td>
@@ -245,8 +246,8 @@ export default function InboundCreateForm(props) {
         </tbody>
       </table>
       <p className="hint">
-        ※ LOT 번호·소비기한은 공급사가 보낸 값을 그대로 입력합니다. 이미 있는 LOT 번호면 기존 LOT를
-        재사용하고, 소비기한이 다르면 등록이 거부됩니다. 문서번호는 화주코드-IN-날짜-순번으로
+        ※ LOT 번호는 LOT-제조일자-공급사코드-순번으로 자동 생성됩니다. 같은 품목·제조일자·공급사면
+        기존 LOT를 재사용하고, 소비기한이 다르면 등록이 거부됩니다. 문서번호는 화주코드-IN-날짜-순번으로
         자동 생성됩니다.
       </p>
     </>
