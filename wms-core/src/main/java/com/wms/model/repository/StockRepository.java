@@ -40,7 +40,7 @@ public interface StockRepository
 
         // 폐기 : 읽은 실물 그대로 선점이 0일때만 실물 0
         @Modifying(flushAutomatically = true, clearAutomatically = true)
-        @Query("update StockEntity s set s.qty = 0"
+        @Query("update StockEntity s set s.qty = 0 "
                 + "where s.stockId = :id and s.qty = :q and s.allocatedQty = 0")
         int dispose(@Param("id") Integer id, @Param("q") Integer q);
 
