@@ -24,6 +24,10 @@ public enum AuditAction {
     PICK("피킹 확인"),
     SHIP("출고 확정"),
     OUTBOUND_CANCEL("출고 취소"),
+    // qr
+    PICKING_CREATE("피킹 리스트 생성"),
+    PICKING_ASSIGN("피킹 작업자 배정"),
+    PICKING_SCAN("피킹 스캔"),
 
     // 재고
     STOCK_DISPOSE("재고 폐기"),

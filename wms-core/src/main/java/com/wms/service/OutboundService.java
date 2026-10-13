@@ -3,9 +3,8 @@ package com.wms.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,10 +19,14 @@ import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentItemEntity;
 import com.wms.model.entity.DocumentStatus;
 import com.wms.model.entity.DocumentType;
+import com.wms.model.entity.PickingListEntity;
+import com.wms.model.entity.PickingStatus;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.DocumentItemRepository;
 import com.wms.model.repository.DocumentRepository;
+import com.wms.model.repository.PickingListItemRepository;
+import com.wms.model.repository.PickingListRepository;
 import com.wms.model.repository.StockRepository;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -49,6 +52,12 @@ public class OutboundService {
 
     @Autowired
     private AllocationPlanService allocationPlanService;
+
+    @Autowired
+    private PickingListRepository pickingListRepository;          // ED-77 주문 취소 시 QR 피킹 리스트도 취소
+
+    @Autowired
+    private PickingListItemRepository pickingListItemRepository;  // ED-77 주문 취소 시 피킹 품목 줄 삭제
 
     // ED-12 출고 문서 목록 조회
     // ED-61 tenantId 가 있으면 그 화주의 문서만, 없으면(null) 전체
@@ -80,7 +89,15 @@ public class OutboundService {
         // DTO 변환 : 화면에 필요한 값만 보내고, 연관 엔티티가 줄줄이 따라가는 것을 막음
         List<OutboundListDto> documentDtos = new ArrayList<>();
         for (DocumentEntity documentEntity : documentEntities) {
-            documentDtos.add(OutboundListDto.from(documentEntity));
+            // 3-1. 이 문서의 품목 줄로 품목수 · 예정수량 합계 계산 (입고 목록과 같은 방식)
+            // findByDocumentId : 이 문서의 품목 줄만 조회 (ED-73 에서 만든 메서드)
+            int itemCount = 0;          // 품목 줄 개수
+            int totalExpectedQty = 0;   // 주문 수량 합계
+            for (DocumentItemEntity item : documentItemRepository.findByDocumentId(documentEntity.getDocumentId())) {
+                itemCount++;                               // 줄 하나마다 1 증가
+                totalExpectedQty += item.getExpectedQty(); // 그 줄의 주문 수량을 더함
+            }
+            documentDtos.add(OutboundListDto.from(documentEntity, itemCount, totalExpectedQty));
         }
         return documentDtos;
     }
@@ -198,6 +215,7 @@ public class OutboundService {
     // 주문 취소 : 접수(WAITING) · 할당(ALLOCATED) 문서만 취소 가능 (피킹중 이후는 409)
     // 이 문서가 잡아둔 재고 선점을 할당 수량만큼 풀고, 할당 실적 줄을 삭제한 뒤 문서를 CANCELED 로 바꾼다
     // ED-72 문서 상태 변경과 선점 해제를 조건부 UPDATE 로 바꾼다
+    // ED-77 QR 피킹 리스트가 있으면 품목 줄을 지우고 리스트도 CANCELED 로 바꾼다
     public String cancelOutbound(Integer documentId) {
 
         // 0. ED-72 문서 상태 선점 : 할당(ALLOCATED) 또는 접수(WAITING) 일 때만 취소(CANCELED)
@@ -218,6 +236,24 @@ public class OutboundService {
         // 2. 두 번 다 못 바꿨으면 409 (피킹중이면 이미 집은 줄이 있음)
         if (changed == 0) {
             throw new IllegalStateException("접수·할당 상태에서만 취소할 수 있습니다. 현재 상태: " + documentEntity.getStatus());
+        }
+
+        // 2-1. ED-77 이 문서로 만든 QR 피킹 리스트가 있으면 같이 취소
+        //      리스트가 생성됨(CREATED) · 배정됨(ASSIGNED) 일 때만 취소 (먼저 생성됨 → 취소, 안 바뀌었으면 배정됨 → 취소)
+        //      첫 스캔을 하면 문서도 피킹중(PICKING)이 돼서 0번에서 이미 막히므로, 여기서 0 이면 숫자가 안 맞는 것 → 409
+        //      품목 줄은 할당 줄(detail)을 FK 로 물고 있어서 4번에서 할당 줄을 지우기 전에 먼저 지움
+        //      리스트(번호·작업자)는 지우지 않고 CANCELED 로 남김 → 누구에게 배정됐다가 취소됐는지 기록이 남음
+        Optional<PickingListEntity> picking = pickingListRepository.findByDocumentId(documentId);
+        if (picking.isPresent()) {
+            Integer pickingListId = picking.get().getPickingListId();
+            int canceled = pickingListRepository.changeStatus(pickingListId, PickingStatus.CREATED, PickingStatus.CANCELED);
+            if (canceled == 0) {
+                canceled = pickingListRepository.changeStatus(pickingListId, PickingStatus.ASSIGNED, PickingStatus.CANCELED);
+            }
+            if (canceled == 0) {
+                throw new IllegalStateException("피킹을 시작한 문서는 취소할 수 없습니다: " + documentEntity.getDocumentNo());
+            }
+            pickingListItemRepository.deleteByPickingListId(pickingListId);
         }
 
         // 3. 이 문서의 할당 실적만 모으고 재고 번호 작은 순으로 정렬 (데드락 방지)

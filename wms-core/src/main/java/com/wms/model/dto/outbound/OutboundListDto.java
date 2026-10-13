@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class OutboundListDto {
     private Integer documentId;
-    private String documentNo; // IN-20261001-001
+    private String documentNo; // OUT-20261001-001
     private String type; // INBOUND / OUTBOUND
     private Integer tenantId;     // 화주 번호 (ED-61 추가)
     private String tenantName;    // 화주 이름 (ED-61 추가)
@@ -25,8 +25,11 @@ public class OutboundListDto {
     private LocalDateTime completedAt;
     private String status;
     private LocalDateTime createdAt;
+    private Integer itemCount;          // 품목수 (이 문서의 품목 줄 개수)
+    private Integer totalExpectedQty;   // 예정수량 합계 (품목 줄의 주문 수량을 모두 더한 값)
 
-    public static OutboundListDto from(DocumentEntity entity) {
+    // itemCount, totalExpectedQty 는 문서에 없는 값이라 서비스에서 계산해서 넘겨받음 (입고 InboundListDto 와 같은 방식)
+    public static OutboundListDto from(DocumentEntity entity, int itemCount, int totalExpectedQty) {
         return OutboundListDto.builder()
                 .documentId(entity.getDocumentId())
                 .documentNo(entity.getDocumentNo())
@@ -39,6 +42,8 @@ public class OutboundListDto {
                 .completedAt(entity.getCompletedAt())
                 .status(entity.getStatus().name())
                 .createdAt(entity.getCreatedAt())
+                .itemCount(itemCount)
+                .totalExpectedQty(totalExpectedQty)
                 .build();
     }
 }
