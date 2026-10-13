@@ -17,6 +17,7 @@ import AuditLogPage from "./Pages/admin/AuditLogPage";
 import LabelPage from "./Pages/admin/LabelPage";
 import MobileLayout from "./Mobile/MobileLayout";
 import MobileLoginPage from "./Mobile/MobileLoginPage";
+import MobilePickingListPage from "./Mobile/MobilePickingListPage";
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
       <Route path="/m/login" element={<MobileLoginPage />} />
       <Route path="/m" element={<MobileLayout />}>
         <Route index element={<Navigate to="pickings" replace />} />
+        <Route path="pickings" element={<MobilePickingListPage />} />
       </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
