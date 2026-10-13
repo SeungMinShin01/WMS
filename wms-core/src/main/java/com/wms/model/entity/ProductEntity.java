@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Data
 @Builder
+
 public class ProductEntity extends BaseTime {
     // 유린님
     @Id
@@ -39,5 +40,9 @@ public class ProductEntity extends BaseTime {
 
     @Builder.Default
     private Integer minShipDays = 0;
+
+    // 사용 여부 (V10) — false = 삭제(미사용). 실제 DELETE 대신 사용 여부로 막음
+    @Builder.Default
+    private Boolean isActive = true;
 
 }

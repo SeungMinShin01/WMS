@@ -37,4 +37,8 @@ public class PartnerEntity extends BaseTime {
     private String partnerType; // SUPPLIER / CUSTOMER
     private String contact;
     private String address; // 추가
+
+    // 사용 여부 (V10) — false = 삭제(미사용). 실제 DELETE 대신 사용 여부로 막음
+    @Builder.Default
+    private Boolean isActive = true;
 }
