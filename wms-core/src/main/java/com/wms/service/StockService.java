@@ -18,12 +18,17 @@ import com.wms.model.entity.DetailStatus;
 import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.LocationEntity;
 import com.wms.model.entity.LotEntity;
+import com.wms.model.entity.StockDisposalEntity;
 import com.wms.model.entity.StockEntity;
 import com.wms.model.repository.DocumentItemDetailRepository;
 import com.wms.model.repository.LocationRepository;
 import com.wms.model.repository.LotRepository;
+import com.wms.model.repository.StockDisposalRepository;
 import com.wms.model.repository.StockRepository;
 import com.wms.model.repository.TenantRepository;
+import com.wms.model.repository.UserRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @Transactional
@@ -38,10 +43,16 @@ public class StockService {
     private TenantRepository tenantRepository;
     @Autowired 
     private LotRepository lotRepository;
+    @Autowired 
+    private StockDisposalRepository stockDisposalRepository;
+    @Autowired 
+    private UserRepository userRepository;
 
     // ED-21 재고 조회
     public List<StockDto> stockFindAll() {
         List<StockEntity> stockEntities = stockRepository.findAll();
+        // 폐기·출고로 실물 0 이 된 줄은 재고현황에서 숨김 (줄 자체는 이력 때문에 남아 있음)
+        stockEntities.removeIf(s -> s.getQty() == 0);
         // FEFO정렬: 소비기한 빠른 순 -> 소비기한 없는 LOT는 맨 뒤 -> 같으면 stockId순으로 
         stockEntities.sort((a,b) -> {
             LocalDate expiryA = a.getLotEntity().getExpiryDate();
@@ -231,6 +242,10 @@ public class StockService {
             historyDtos.addAll(StockHistoryDto.from(detail));
         }
 
+        // 1-2. 폐기 기록도 이력 줄로 (문서가 없어서 stock_disposal 에서 읽음)
+        for (StockDisposalEntity d : stockDisposalRepository.findAllForHistory())
+            historyDtos.add(StockHistoryDto.fromDisposal(d));
+
         historyDtos.sort((a,b)->{
             LocalDateTime timeA = a.getOccurredAt();
             LocalDateTime timeB = b.getOccurredAt();
@@ -244,9 +259,12 @@ public class StockService {
                 return timeB.compareTo(timeA);
 
             // 3. 같으면 detailId가 큰 것 (나중에 생긴 기록)이 앞으로
+            // 폐기 줄은 앞으로
+            if(a.getDetailId() == null || b.getDetailId() == null){
+                if(a.getDetailId() == null && b.getDetailId() == null) return 0;
+                return a.getDetailId() == null ? -1 : 1;
+            }
             return b.getDetailId().compareTo(a.getDetailId());
-
-
         });
 
         // 3. 변경 후 수량: 재고 줄마다 현재 수량에서 시작해 최신 -> 과거로 증감을 빼며 되돌리기
@@ -262,5 +280,41 @@ public class StockService {
             now[1] -= h.getAllocatedChange();
         }
         return historyDtos;
+    }
+
+    // 재고 폐기 - 관리자 전용
+    // 소비기한 당일까지 정상, 다음 날부터 폐기 대상 / 칸 단위 LOT 재고 전량
+    // 재고 줄은 지우지 않고 실물 0 + 폐기 기록 1줄 (예전 입고·출고 기록이 이 재고 줄을 가리킴)
+    public Integer dispose(Integer stockId, Integer userId){
+        StockEntity stock = stockRepository.findById(stockId)
+                .orElseThrow(()-> new EntityNotFoundException("재고가 없습니다."));
+
+        // 1. 소비기한 검사 : 오늘이 소비기한보다 뒤여야 폐기 가능
+        LocalDate expiry = stock.getLotEntity().getExpiryDate();
+        if(expiry == null || !expiry.isBefore(LocalDate.now()))
+            throw new IllegalStateException("소비기한이 지난 재고만 폐기할 수 있습니다.");
+
+        // 2. 출고 할당된 수량이 있으면 불가 (출고예정 물건이 사라지는거 방지)
+        if(stock.getAllocatedQty() > 0)
+            throw new IllegalStateException("출고 할당된 수량이 있어 폐기할 수 없습니다. 출고 취소 후 폐기해주세요.");
+
+        int qty = stock.getQty();
+        if(qty <= 0)
+            throw new IllegalStateException("이미 폐기되었거나 수량이 없는 재고입니다.");
+
+        // 3. 조건부 update: 
+        int changed = stockRepository.dispose(stockId, qty);
+        if(changed == 0)
+            throw new IllegalStateException("재고가 그 사이 변경되었습니다. 새로고침 후 다시 시도해주세요.");
+
+        // 4. 폐기기록 
+        StockDisposalEntity saved = stockDisposalRepository.save(StockDisposalEntity.builder()
+                    .stockEntity(stockRepository.getReferenceById(stockId))
+                    .qty(qty)
+                    .reason("소비기한 경과")
+                    .userEntity(userRepository.getReferenceById(userId))
+                    .disposedAt(LocalDateTime.now())
+                    .build());
+        return saved.getDisposalId();
     }
 }

@@ -3,7 +3,7 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고" };
+const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고", DISPOSE: "폐기" };
 const 증감 = (n) => (n === 0 ? "—" : n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString());
 
 // 08 입출고이력 — 담당: 조현우
@@ -61,6 +61,7 @@ export default function HistoryPage() {
           <option value="INBOUND">입고</option>
           <option value="ALLOCATE">선점</option>
           <option value="OUTBOUND">출고</option>
+          <option value="DISPOSE">폐기</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
       </form>

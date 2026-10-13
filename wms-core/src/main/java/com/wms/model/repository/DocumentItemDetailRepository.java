@@ -18,6 +18,15 @@ public interface DocumentItemDetailRepository
                 + "where d.documentItemEntity.documentEntity.documentId = :documentId and d.status <> :status")
         long countByDocumentIdAndStatusNot(@Param("documentId") Integer documentId, @Param("status") DetailStatus status);
 
+        // 입고 취소 검사: 문서에 특정 상태(STORED)인 상세 줄이 몇개인지
+        @Query("select count(d) from DocumentItemDetailEntity d "
+                + "where d.documentItemEntity.documentEntity.documentId = :documentId and d.status = :status")
+        long countByDocumentIdAndStatus(@Param("documentId") Integer documentId, @Param("status") DetailStatus status);
+
+        // ED-71 이 품목 줄에 검수 기록이 있나
+        // 메소드 이름 쿼리: documentItemEntity.documentItemId 로 찾아서 있으면 true
+        boolean existsByDocumentItemEntity_DocumentItemId(Integer documentItemId);
+
         // ED-72 상세(피킹 1줄) 상태가 from 일 때만 to 로 변경 (피킹 확인용)
         // 반환값 0 = 이미 처리된 줄 → 409
         @Modifying(flushAutomatically = true, clearAutomatically = true)

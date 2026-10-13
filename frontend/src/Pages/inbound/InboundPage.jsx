@@ -15,6 +15,12 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// 출처 코드 -> 화면 글자 (출고문서 화면과 동일)
+const SOURCE_NAME = {
+  WMS: "WMS",
+  PORTAL: "화주요청",
+};
+
 // 03 입고예정 — 담당: 조현우
 export default function InboundPage() {
   const navigate = useNavigate();
@@ -98,6 +104,19 @@ export default function InboundPage() {
     setDetail(null);
   };
 
+  // 입고 취소 — 적재 전만. 적재된 품목이 있으면 서버가 409 로 막음
+  const cancelInbound = async () => {
+    if (!window.confirm(`${detail.documentNo} 입고를 취소할까요?\n취소하면 되돌릴 수 없습니다.`)) return;
+    try {
+      await axios.put(`/wms/inbounds/${detail.documentId}/cancel`);
+      alert("입고를 취소했습니다.");
+      selectDocument(detail.documentId); // 상세 새로고침 (상태 = 취소)
+      getList();
+    } catch (error) {
+      alert(error.response?.data ?? "취소 실패");
+    }
+  };
+
   const goInspect = () => {
     navigate(`/inbounds/inspection/${detail.documentId}`);
   };
@@ -150,6 +169,7 @@ export default function InboundPage() {
                 <th>화주</th>
                 <th>공급사명</th>
                 <th>입고예정일</th>
+                <th>출처</th>
                 <th>품목수</th>
                 <th>예정수량 합계</th>
                 <th>상태</th>
@@ -169,6 +189,7 @@ export default function InboundPage() {
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
+                  <td>{SOURCE_NAME[inbound.source]}</td>
                   <td className="num">{inbound.itemCount}</td>
                   <td className="num">
                     {inbound.totalExpectedQty.toLocaleString()}
@@ -198,6 +219,11 @@ export default function InboundPage() {
             {detail.status === "WAITING" && (
               <button className="btn primary" onClick={goInspect}>
                 검수하기
+              </button>
+            )}
+            {(detail.status === "WAITING" || detail.status === "INSPECTED") && (
+              <button className="btn" onClick={cancelInbound}>
+                입고 취소
               </button>
             )}
           </div>

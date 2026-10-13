@@ -15,6 +15,8 @@ import com.wms.model.entity.UserEntity;
 import com.wms.model.entity.UserRole;
 import com.wms.model.repository.UserRepository;
 
+import jakarta.persistence.EntityNotFoundException;
+
 @Service
 @Transactional(readOnly = true)
 public class WorkerService {
@@ -56,5 +58,20 @@ public class WorkerService {
             // 2차: 동시에 같은 아이디로 두 번 요청 → 둘 다 1차를 통과해도 DB UNIQUE가 막음
             throw new IllegalStateException("이미 사용 중인 아이디입니다.");
         }
+    }
+
+    // 작업자 계정 활성/비활성화 (관리자 전용)
+    // 두번 눌러도 결과가 같음 (멱등)
+    @Transactional
+    public Boolean changeActive(Integer userId, Boolean active){
+        if(active == null)
+            throw new IllegalArgumentException("활성 여부를 보내주세요.");
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(()-> new EntityNotFoundException("계정을 찾을 수 없습니다."));
+        // 관리자 계정은 막을 수 없음 -> 관리자가 자기 자신 막기 금지
+        if(user.getRole() != UserRole.WORKER)
+            throw new IllegalStateException("관리자 계정은 비활성화할 수 없습니다.");
+        user.setIsActive(active);   // 트랜잭션 끝날 때 UPDATE
+        return active;
     }
 }

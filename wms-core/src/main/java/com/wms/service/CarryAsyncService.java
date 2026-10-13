@@ -14,18 +14,15 @@ import com.wms.model.dto.inbound.CarryingDto;
 @Service 
 public class CarryAsyncService {
     @Autowired private InboundService inboundService;
-    @Value("${carry.sync}") private boolean sync;   // true면 동기화로 한명씩
-
-    private final Object lock = new Object();   // 동기화에 쓸 자물쇠
 
     @Async ("carryExecutor")
     public CompletableFuture<Boolean> carry(CarryingDto dto){
-        if(sync){
-            // 이 메소드는 트랜젝션 밖이여서 락 안에서 inboundservice.carry의 커밋까지 끝남
-            synchronized(lock){
-                return CompletableFuture.completedFuture(inboundService.carry(dto));
-            }
-        }
         return CompletableFuture.completedFuture(inboundService.carry(dto));
+    }
+
+    // 입고 취소도 적재와 같은 대기열 — "적재 0개 확인 → 취소" 사이에 적재가 끼어들지 못하게
+    @Async("carryExecutor")
+    public CompletableFuture<String> cancel(Integer documentId){
+        return CompletableFuture.completedFuture(inboundService.cancel(documentId));
     }
 }
