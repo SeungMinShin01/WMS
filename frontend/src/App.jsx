@@ -18,6 +18,7 @@ import LabelPage from "./Pages/admin/LabelPage";
 import MobileLayout from "./Mobile/MobileLayout";
 import MobileLoginPage from "./Mobile/MobileLoginPage";
 import MobilePickingListPage from "./Mobile/MobilePickingListPage";
+import MobilePickingPage from "./Mobile/MobilePickingPage";
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="/m" element={<MobileLayout />}>
         <Route index element={<Navigate to="pickings" replace />} />
         <Route path="pickings" element={<MobilePickingListPage />} />
+        <Route path="pickings/:pickingListId" element={<MobilePickingPage />} />
       </Route>
       <Route path="*" element={<h2>없는 주소입니다</h2>} />
     </Routes>
