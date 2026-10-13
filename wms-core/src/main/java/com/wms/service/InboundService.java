@@ -105,24 +105,9 @@ public class InboundService {
     }
 
     // 문서의 모든 품목 줄에 검수 기록이 있는가 why? 문서 하나에 모든 품목이 검수가 다 완료되어야 상태를 검수 완료로 넘겨야하기때문
-    private boolean allItemsInspected(Integer documentId) {
-        // 검수 기록 가져오기
-        List<DocumentItemDetailEntity> details = documentItemDetailRepository.findAll();
-        // 품목 하나씩 보기
-        for (DocumentItemEntity item : documentItemRepository.findAll()) {
-            if (!item.getDocumentEntity().getDocumentId().equals(documentId))
-                continue;
-            boolean inspected = false;
-            for (DocumentItemDetailEntity d : details) {
-                if (d.getDocumentItemEntity().getDocumentItemId().equals(item.getDocumentItemId())) {
-                    inspected = true;
-                    break;
-                }
-            }
-            if (!inspected)
-                return false;
-        }
-        return true;
+    private boolean allItemsInspected(Integer documentId){
+        // ED-71 검수 기록이 없는 품목 줄 수를 DB에서 셈
+        return documentItemRepository.countUninspectedItems(documentId) == 0;
     }
 
     // ED-14 검수 결과 1건 등록
@@ -145,10 +130,8 @@ public class InboundService {
             throw new IllegalStateException("대기 상태 문서만 검수할 수 있습니다. (현재: " + documentEntity.getStatus() + ")");
 
         // 중복 검수 차단(ED-51): 한 품목 줄은 검수 1번만
-        for(DocumentItemDetailEntity d : documentItemDetailRepository.findAll()){
-            if(d.getDocumentItemEntity().getDocumentItemId().equals(documentItemEntity.getDocumentItemId()))
-                throw new IllegalStateException("이미 검수된 품목입니다.");
-        }
+        if(documentItemDetailRepository.existsByDocumentItemEntity_DocumentItemId(documentItemEntity.getDocumentItemId()))
+            throw new IllegalStateException("이미 검수된 품목입니다.");
 
         // 유통기한 입고 검사: 남은일수가 출고 허용 잔여일보다 적으면 출고불가하니 -> 입고 거부
         LocalDate expiryDate = documentItemEntity.getLotEntity().getExpiryDate();
