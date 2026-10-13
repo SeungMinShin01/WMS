@@ -19,7 +19,7 @@ const DETAIL_STATUS_NAME = {
 };
 
 // 05 물품적재 — 담당: 조현우
-export default function PutawayPage(props) {
+export default function PutawayPage() {
   const { documentId } = useParams(); // 입고검수 상세에서 [적재하기]로 왔으면 문서 번호가 있음
   const navigate = useNavigate();
 
@@ -151,7 +151,7 @@ export default function PutawayPage(props) {
         { params: { mixLot: mix } },
       );
       setRecommend(response.data);
-    } catch (error) {
+    } catch {
       setRecommend([]); // 추천 실패해도 드롭다운으로 적치 가능
     }
   };

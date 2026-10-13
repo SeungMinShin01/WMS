@@ -7,7 +7,7 @@ const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출�
 const 증감 = (n) => (n === 0 ? "—" : n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString());
 
 // 08 입출고이력 — 담당: 조현우
-export default function HistoryPage(props) {
+export default function HistoryPage() {
   const [histories, setHistories] = useState([]);
   const [조건, set조건] = useState({ from: "", to: "", product: "", locationCode: "", txType: "" });
 

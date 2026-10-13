@@ -7,7 +7,7 @@ import GridTitle from "../../Layout/GridTitle";
 // 피킹리스트 — 담당: 김지환
 // 흐름 : 문서 선택 → 줄마다 [집음] → 전 줄 집음 → 출고확정
 // 전 품목이 할당된 문서만 집을 수 있다 (ED-52 결정)
-export default function PickingPage(props) {
+export default function PickingPage() {
   // 주소의 documentId (/outbounds/picking/66) — 목록 주소(/outbounds/picking)면 undefined
   const { documentId } = useParams();
   const navigate = useNavigate();
