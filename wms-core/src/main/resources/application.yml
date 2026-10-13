@@ -34,7 +34,6 @@ carry:
     core: 1
     max: 1
     queue: 100
-  sync: false
 
 jwt:
   # 서명 키: 운영에서는 환경변수 JWT_SECRET 으로 주입. 없으면 아래 개발용 값 (32바이트 이상 필수)
