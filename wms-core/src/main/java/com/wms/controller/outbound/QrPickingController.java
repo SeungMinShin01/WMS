@@ -20,7 +20,6 @@ import com.wms.model.dto.outbound.PickingDetailDto;
 import com.wms.model.dto.outbound.PickingDto;
 import com.wms.model.dto.outbound.PickingItemDto;
 import com.wms.model.dto.outbound.PickingScanDto;
-import com.wms.security.AdminOnly;
 import com.wms.security.LoginInterceptor;
 import com.wms.security.LoginUser;
 import com.wms.service.QrPickingService;
@@ -38,9 +37,8 @@ public class QrPickingController {
 
     // ED-75 피킹 리스트 생성 → 201 + 만든 리스트
     // 본문 : {"documentId": 67}
-    // 관리자만 (@AdminOnly) : 작업자가 리스트를 마음대로 만들지 못하게
+    // 피킹리스트 화면에서 [배정]을 누를 때 아직 리스트가 없으면 화면이 먼저 부름 (관리자·작업자 모두 가능)
     // 새로 만드는 것이라 POST + 201(CREATED)
-    @AdminOnly
     @AuditLog(action = AuditAction.PICKING_CREATE, target = "documentId")
     @PostMapping("/wms/pickings")
     public ResponseEntity<PickingDto> createPicking(@RequestBody PickingCreateDto dto) {
@@ -50,9 +48,9 @@ public class QrPickingController {
 
     // ED-75 작업자 배정 → 200 + 배정된 리스트
     // 예 : PUT /wms/pickings/5/assign  본문 : {"workerId": 3}
+    // 관리자·작업자 모두 배정 가능 (작업자가 다른 작업자에게 배정도 가능), 누가 배정했는지는 감사 로그에 남음
     // 이미 있는 리스트의 작업자·상태를 바꾸는 수정이라 PUT
     // 같은 리스트를 다른 작업자로 다시 배정하는 것도 이 API (CREATED · ASSIGNED 일 때만)
-    @AdminOnly
     @AuditLog(action = AuditAction.PICKING_ASSIGN, target = "pickingListId", fields = { "workerId" })
     @PutMapping("/wms/pickings/{pickingListId}/assign")
     public ResponseEntity<PickingDto> assignWorker(
@@ -69,8 +67,8 @@ public class QrPickingController {
         return ResponseEntity.ok(qrPickingService.getMyPickings(loginUserId(request)));
     }
 
-    // ED-76 전체 피킹 리스트 (관리자 화면) → 200
-    @AdminOnly
+    // ED-76 전체 피킹 리스트 → 200
+    // 피킹리스트 화면에서 문서마다 담당자 이름을 보여주려고 부름 (관리자·작업자 모두 가능)
     @GetMapping("/wms/pickings")
     public ResponseEntity<List<PickingDto>> getAllPickings() {
         return ResponseEntity.ok(qrPickingService.getAllPickings());
@@ -87,9 +85,10 @@ public class QrPickingController {
     }
 
     // ED-77 스캔 (집음) → 200 + 바뀐 줄 1개
-    // 예 : PUT /wms/pickings/5/scan  본문 : {"pickingListItemId": 12, "lotCode": "L-20261001-001", "qty": 3}
-    // 집은 수량을 바꾸는 수정이라 PUT / 작업자가 쓰는 API 라서 @AdminOnly 없음 (본인 리스트 검사는 서비스에서)
-    @AuditLog(action = AuditAction.PICKING_SCAN, target = "pickingListId", fields = { "pickingListItemId", "lotCode", "qty" })
+    // 예 : PUT /wms/pickings/5/scan
+    //      본문 : {"pickingListItemId": 12, "locationCode": "A-01-08", "lotCode": "L-20261001-001", "qty": 3}
+    // 집은 수량을 바꾸는 수정이라 PUT / 작업자가 쓰는 API (본인 리스트 검사는 서비스에서)
+    @AuditLog(action = AuditAction.PICKING_SCAN, target = "pickingListId", fields = { "pickingListItemId", "locationCode", "lotCode", "qty" })
     @PutMapping("/wms/pickings/{pickingListId}/scan")
     public ResponseEntity<PickingItemDto> scan(
             @PathVariable(name = "pickingListId") Integer pickingListId,

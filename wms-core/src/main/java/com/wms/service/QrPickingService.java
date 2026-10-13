@@ -275,13 +275,13 @@ public class QrPickingService {
     }
 
     // 6. ED-77 스캔 (집음)
-    // 작업자가 칸에 가서 물건의 LOT QR 을 찍고 수량을 보냄 → 그 줄의 집은 수량(pickedQty)을 올림
+    // 작업자가 칸에 가서 칸 QR · 물건의 LOT QR 을 찍고 수량을 보냄 → 그 줄의 집은 수량(pickedQty)을 올림
     // 한 줄이 다 차면 할당 줄도 집음(PICKED), 모든 줄이 다 차면 리스트 완료(DONE)
     public PickingItemDto scan(Integer pickingListId, PickingScanDto dto, Integer loginUserId) {
 
         // 6-1. 값 검사 → 400
-        if (dto.getPickingListItemId() == null || dto.getLotCode() == null) {
-            throw new IllegalArgumentException("품목 줄과 LOT 를 모두 스캔해야 합니다");
+        if (dto.getPickingListItemId() == null || dto.getLocationCode() == null || dto.getLotCode() == null) {
+            throw new IllegalArgumentException("품목 줄, 칸, LOT 를 모두 스캔해야 합니다");
         }
         if (dto.getQty() == null || dto.getQty() <= 0) {
             throw new IllegalArgumentException("수량은 1 이상이어야 합니다");
@@ -306,12 +306,17 @@ public class QrPickingService {
             throw new IllegalArgumentException("이 피킹 리스트의 줄이 아닙니다: " + itemId);
         }
 
-        // 6-5. 찍은 LOT 가 집어야 할 LOT 와 같은지 → 다르면 400 (다른 물건을 집은 것)
+        // 6-5. 찍은 칸 · LOT 가 집어야 할 칸 · LOT 와 같은지 → 다르면 400
+        //      칸이 다름 : 다른 자리에 감 / LOT 가 다름 : 다른 물건을 집음
         //      아래 UPDATE 들이 메모리를 비우므로(clearAutomatically) 필요한 값은 지금 꺼내 둠
         DocumentItemDetailEntity detail = item.getDetailEntity();
         Integer detailId = detail.getDetailId();
         int maxQty = detail.getQty();                                       // 이 줄에서 집어야 할 수량
         Integer documentId = pickingList.getDocumentEntity().getDocumentId();
+        String locationCode = detail.getLocationEntity().getLocationCode();
+        if (!locationCode.equals(dto.getLocationCode())) {
+            throw new IllegalArgumentException("다른 칸입니다 · 가야 할 칸 " + locationCode + " · 찍은 칸 " + dto.getLocationCode());
+        }
         String lotCode = detail.getLotEntity().getLotCode();
         if (!lotCode.equals(dto.getLotCode())) {
             throw new IllegalArgumentException("다른 LOT 입니다 · 집어야 할 LOT " + lotCode + " · 찍은 LOT " + dto.getLotCode());
