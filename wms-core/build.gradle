@@ -41,6 +41,8 @@ dependencies {
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
 	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+
+	
 	// 로그인 (JWT) + 비밀번호 BCrypt (Security 본체 없이 암호화 모듈만)
 	implementation 'org.springframework.security:spring-security-crypto'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
@@ -49,6 +51,7 @@ dependencies {
 
 	// 엑셀 업로드 (.xlsx 읽기)
 	implementation 'org.apache.poi:poi-ooxml:5.4.1'
+	
 }
 
 tasks.named('test') {
