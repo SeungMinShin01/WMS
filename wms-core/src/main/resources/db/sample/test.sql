@@ -1,0 +1,1 @@
+SELECT product_code, is_active FROM product;
