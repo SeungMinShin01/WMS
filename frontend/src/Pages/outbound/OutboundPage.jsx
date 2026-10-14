@@ -26,7 +26,9 @@ const SOURCE_NAME = {
 export default function OutboundPage() {
   const navigate = useNavigate();
   const [outbounds, setOutbounds] = useState([]); // ED-12 출고 문서 전체
+  const [tenants, setTenants] = useState([]); // 화주 선택 목록 [{tenantId, tenantName}]
   const [filter, setFilter] = useState({
+    tenantId: "", // "" = 전체
     from: "",
     to: "",
     partnerName: "",
@@ -41,9 +43,22 @@ export default function OutboundPage() {
   const [sortAsc, setSortAsc] = useState(true);
 
   // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
+  // 화주 선택 목록도 같은 응답으로 만든다 : 출고 문서에 들어 있는 화주를 중복 없이 모음 (출고지시 화면과 같은 방식)
   const getList = async () => {
     const response = await axios.get("/wms/outbounds");
     setOutbounds(response.data);
+    let result = [];
+    for (let i = 0; i < response.data.length; i++) {
+      const doc = response.data[i];
+      let exists = false;
+      for (let j = 0; j < result.length; j++) {
+        if (result[j].tenantId === doc.tenantId) exists = true;
+      }
+      if (!exists) {
+        result.push({ tenantId: doc.tenantId, tenantName: doc.tenantName });
+      }
+    }
+    setTenants(result);
   };
 
   // 엑셀 일괄 등록: 파일을 고르면 바로 업로드 (한 줄이라도 틀리면 전체 취소)
@@ -102,6 +117,7 @@ export default function OutboundPage() {
   const handleSearch = (event) => {
     event.preventDefault();
     setFilter({
+      tenantId: event.target.tenantId.value,
       from: event.target.from.value,
       to: event.target.to.value,
       partnerName: event.target.partnerName.value.trim(),
@@ -111,9 +127,27 @@ export default function OutboundPage() {
     getList();
   };
 
+  // 초기화 버튼 - 입력칸을 처음 값으로 되돌리고 조건 없이 다시 조회
+  // event.target.form : 버튼이 들어 있는 form / reset() : 입력칸을 defaultValue 로 되돌림
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      tenantId: "",
+      from: "",
+      to: "",
+      partnerName: "",
+      documentNo: "",
+      status: "",
+    });
+    getList();
+  };
+
   // 조회 조건에 맞는 문서만 (빈 조건은 통과)
   const visibleList = outbounds.filter((outbound) => {
     const day = outbound.expectedAt.substring(0, 10); // "2026-10-07T15:00:00" → "2026-10-07"
+    // 화주 : select 값은 글자("2"), 응답의 tenantId 는 숫자(2) → String 으로 맞춰서 비교
+    if (filter.tenantId !== "" && String(outbound.tenantId) !== filter.tenantId)
+      return false;
     if (filter.status !== "" && outbound.status !== filter.status) return false;
     if (filter.from !== "" && day < filter.from) return false;
     if (filter.to !== "" && day > filter.to) return false;
@@ -181,6 +215,15 @@ export default function OutboundPage() {
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
+            <label>화주</label>
+            <select name="tenantId" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.tenantId} value={t.tenantId}>
+                  {t.tenantName}
+                </option>
+              ))}
+            </select>
             <label>출고요청일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>배송지명</label>
@@ -197,6 +240,9 @@ export default function OutboundPage() {
               <option value="CANCELED">취소</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle title="출고문서 목록" desc={`총 ${visibleList.length}건`}>
