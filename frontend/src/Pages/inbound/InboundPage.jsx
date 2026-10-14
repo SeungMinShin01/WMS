@@ -6,6 +6,7 @@ import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import InboundCreateForm from "./InboundCreateForm";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -27,11 +28,12 @@ export default function InboundPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록
+  const [tenants, setTenants] = useState([]); // 화주 드롭다운 선택지 [{id, code, name}]
   const [detail, setDetail] = useState(null); // ED-13 클릭한 문서 상세
   const [filter, setFilter] = useState({
     from: "",
     to: "",
-    partnerName: "",
+    tenantName: "",
     documentNo: "",
     status: "",
   }); // 조회 조건
@@ -73,9 +75,22 @@ export default function InboundPage() {
     setFilter({
       from: form.get("from"),
       to: form.get("to"),
-      partnerName: form.get("partnerName").trim(),
+      tenantName: form.get("tenantName"),
       documentNo: form.get("documentNo").trim(),
       status: form.get("status"),
+    });
+    getList();
+  };
+
+  // 초기화 — 입력칸을 처음 모습으로 + 조회 조건도 처음 값으로 (출고지시와 같은 방식)
+  const handleReset = (event) => {
+    event.target.form.reset(); // 버튼이 속한 form 의 입력칸을 defaultValue 로 되돌림
+    setFilter({
+      from: "",
+      to: "",
+      tenantName: "",
+      documentNo: "",
+      status: "",
     });
     getList();
   };
@@ -85,13 +100,14 @@ export default function InboundPage() {
     getList();
   }, []);
 
+  axios.get("/wms/inbounds/tenants").then((res) => setTenants(res.data)); // 화주 드롭다운 선택지
+
   // 조회 조건에 맞는 문서만 (빈 조건은 통과)
   const visibleList = inbounds.filter(
     (d) =>
       (filter.from === "" || d.expectedAt >= filter.from) &&
       (filter.to === "" || d.expectedAt <= filter.to) &&
-      (filter.partnerName === "" ||
-        d.partnerName.includes(filter.partnerName)) &&
+      (filter.tenantName === "" || d.tenantName === filter.tenantName) &&
       (filter.documentNo === "" || d.documentNo.includes(filter.documentNo)) &&
       (filter.status === "" || d.status === filter.status),
   );
@@ -124,7 +140,7 @@ export default function InboundPage() {
 
   // 칸 제목 클릭 정렬 (조회 조건으로 거른 목록을 정렬)
   const { sorted, th } = useSort(visibleList);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   // 목록 [관리] 칸 취소 — 출고문서 목록과 같은 방식
   const cancelFromList = async (event, inbound) => {
     event.stopPropagation(); // 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게
@@ -154,10 +170,17 @@ export default function InboundPage() {
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
+            <label>화주명</label>
+            <select name="tenantName" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
-            <label>화주명</label>
-            <input type="text" name="partnerName" />
             <label>입고번호</label>
             <input type="text" name="documentNo" defaultValue="IN-2026" />
             <label>상태</label>
@@ -169,6 +192,9 @@ export default function InboundPage() {
               <option value="CANCELED">취소</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle title="입고문서 목록" desc={`총 ${visibleList.length}건`}>
@@ -197,12 +223,12 @@ export default function InboundPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((inbound, index) => (
+              {paged.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{startNo + index}</td>
                   <td>{inbound.documentNo}</td>
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
@@ -233,6 +259,7 @@ export default function InboundPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>

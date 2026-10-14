@@ -217,7 +217,7 @@ public class StockService {
             if(!a.getPriority().equals(b.getPriority()))
                 return a.getPriority().compareTo(b.getPriority());
 
-            // 3. 여유 비교 (제한없음 null은 가장 큰 여유칸으로 취급하기 )
+            // 3. 여유: 들어가는 칸끼리는 작은 순(Best Fit), 부족한 칸끼리는 큰 순
             int freeA = a.getFreeQty() == null ? Integer.MAX_VALUE : a.getFreeQty();
             int freeB = b.getFreeQty() == null ? Integer.MAX_VALUE : b.getFreeQty();
             if(freeA != freeB){

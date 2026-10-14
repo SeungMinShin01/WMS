@@ -4,6 +4,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 // [추가] 신규 등록 시 빈 폼. locationId가 null이면 등록(POST), 값이 있으면 수정(PUT)
 const EMPTY = {
@@ -157,7 +158,7 @@ export default function LocationPage() {
   };
 
   const { sorted, th } = useSort(filtered);
-
+  const { paged, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle
@@ -223,7 +224,7 @@ export default function LocationPage() {
         {/* [변경] 초안은 빈 tbody. 서버 데이터를 .map으로 표시.
             "-"는 DTO에 아직 없는 값(혼용, 적치 품목/LOT, 소비기한, 실제 적재수량, 비고) */}
         <tbody>
-          {sorted.map((l) => {
+          {paged.map((l) => {
             const { zone, aisle, bay } = parseCode(l.locationCode);
             return (
               <tr key={l.locationId} onClick={() => fetchDetail(l.locationId)}>
@@ -243,7 +244,7 @@ export default function LocationPage() {
           })}
         </tbody>
       </table>
-
+          {pager}
       {/* [추가] 하단 상세: 선택 전에는 안내 문구만 (입고예정 화면과 동일) */}
       {form == null ? (
         <p className="empty">목록에서 로케이션을 클릭하면 상세가 나옵니다.</p>

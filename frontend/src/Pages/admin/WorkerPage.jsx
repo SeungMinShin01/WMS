@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import usePaging from "../../Layout/usePaging";
 
 // 관리자: 작업자 계정 목록 + 생성
 export default function WorkerPage() {
@@ -44,7 +45,7 @@ export default function WorkerPage() {
       alert(error.response?.data ?? "변경 실패");
     }
   };
-
+  const { paged, pager } = usePaging(list);
   return (
     <>
       <h3>작업자 계정</h3>
@@ -60,7 +61,7 @@ export default function WorkerPage() {
           <tr><th>번호</th><th>아이디</th><th>이름</th><th>역할</th><th>상태</th><th>관리</th></tr>
         </thead>
         <tbody>
-          {list.map((w) => (
+          {paged.map((w) => (
             <tr key={w.userId}>
               <td>{w.userId}</td>
               <td>{w.loginId}</td>
@@ -78,6 +79,7 @@ export default function WorkerPage() {
           ))}
         </tbody>
       </table>
+      {pager}
     </>
   );
 }

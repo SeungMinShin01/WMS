@@ -3,6 +3,7 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고", DISPOSE: "폐기" };
 const 증감 = (n) => (n === 0 ? "—" : n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString());
@@ -30,6 +31,13 @@ export default function HistoryPage() {
     이력조회();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로
+  const 초기화 = (event) => {
+    event.target.form.reset();
+    set조건({ from: "", to: "", product: "", locationCode: "", txType: "" });
+    이력조회();
+  };
+
   useEffect(() => {
     이력조회();
   }, []);
@@ -46,16 +54,16 @@ export default function HistoryPage() {
   });
 
   const { sorted, th } = useSort(보여줄목록);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="입출고 이력" path="홈 > 재고관리 > 입출고이력" />
 
       <form className="search" onSubmit={조회}>
-        <label>기간</label>
-        <input type="date" name="from" /> ~ <input type="date" name="to" />
         <label>품목</label>
         <input type="text" name="product" placeholder="코드 또는 이름" />
+        <label>기간</label>
+        <input type="date" name="from" /> ~ <input type="date" name="to" />
         <label>로케이션</label>
         <input type="text" name="locationCode" />
         <label>변동타입</label>
@@ -67,6 +75,9 @@ export default function HistoryPage() {
           <option value="DISPOSE">폐기</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        <button type="button" className="btn" onClick={초기화}>
+          초기화
+        </button>
       </form>
 
       <GridTitle title="재고 이력" desc={`총 ${보여줄목록.length}건 · 추가만 되는 기록 (수정·삭제 불가)`} />
@@ -91,9 +102,9 @@ export default function HistoryPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((h, index) => (
+          {paged.map((h, index) => (
             <tr key={h.historyKey}>
-              <td>{index + 1}</td>
+              <td>{startNo + index}</td>
               <td>{h.occurredAt ?? "—"}</td>
               <td>{변동타입명[h.txType]}</td>
               <td>{h.productCode}</td>
@@ -112,6 +123,7 @@ export default function HistoryPage() {
           ))}
         </tbody>
       </table>
+      {pager}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 // 재고 상태: 폐기(소비기한 지남) > 임박(30일 이하) > 부족(가용 0) > 정상
 // 소비기한 당일(남은 0일)까지 정상, 다음 날(-1일)부터 폐기
@@ -50,6 +51,18 @@ export default function StockPage() {
     getList();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      productCode: "",
+      productName: "",
+      zone: "",
+      status: "",
+    });
+    getList();
+  };
+
   useEffect(() => {
     getList();
   }, []);
@@ -82,8 +95,8 @@ export default function StockPage() {
       (filter.status === "" || getStockStatus(s) === filter.status),
   );
 
-   const { sorted, th } = useSort(visibleList);
-
+  const { sorted, th } = useSort(visibleList);
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="재고 현황" path="홈 > 재고관리 > 재고현황" />
@@ -109,6 +122,9 @@ export default function StockPage() {
           <option value="DISPOSE">폐기(소비기한 경과)</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        <button type="button" className="btn" onClick={handleReset}>
+          초기화
+        </button>
       </form>
 
       <GridTitle
@@ -136,9 +152,9 @@ export default function StockPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((s, index) => (
+          {paged.map((s, index) => (
             <tr key={s.stockId}>
-              <td>{index + 1}</td>
+              <td>{startNo + index}</td>
               <td>{s.tenantName}</td>
               <td>{s.productCode}</td>
               <td className="left">{s.productName}</td>
@@ -155,19 +171,26 @@ export default function StockPage() {
               </td>
               <td>{STOCK_STATUS_NAME[getStockStatus(s)]}</td>
               <td>
-                {isAdmin && getStockStatus(s) === "DISPOSE" && (
+                {/* 관리자 + 폐기 대상이면 폐기 버튼, 아니면 "-" (출고문서 관리 칸과 같은 방식) */}
+                {isAdmin && getStockStatus(s) === "DISPOSE" ? (
+                  // height auto : 버튼 기본 높이(24px) 대신 글자 높이만큼 → 다른 줄과 높이가 같아짐
+                  // font inherit : 버튼도 표 글자와 같은 글꼴·크기 / padding 0 : "-" 칸과 폭이 비슷하게
                   <button
                     className="btn danger plain"
+                    style={{ height: "auto", padding: 0, font: "inherit" }}
                     onClick={() => dispose(s)}
                   >
                     폐기
                   </button>
+                ) : (
+                  "-"
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {pager}
     </>
   );
 }
