@@ -172,8 +172,6 @@ export default function LocationPage() {
             <th>베이</th>
             <th>사용여부</th>
             <th>혼용</th>
-            <th>적치 품목 / LOT</th>
-            <th>소비기한</th>
             <th>적재 가능 수량</th>
             <th>실제 적재수량</th>
             <th>비고</th>
@@ -191,12 +189,10 @@ export default function LocationPage() {
                 <td>{aisle}</td>
                 <td>{bay}</td>
                 <td>{l.isActive ? "사용" : "미사용"}</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
+                <td>{l.mixed ? "혼용" : "-"}</td>
                 <td>{l.capacity}</td>
-                <td>-</td>
-                <td>-</td>
+                <td className="num">{l.storedQty ? l.storedQty.toLocaleString() : "-"}</td>
+                <td className="left">{l.remark ?? "-"}</td>
               </tr>
             );
           })}

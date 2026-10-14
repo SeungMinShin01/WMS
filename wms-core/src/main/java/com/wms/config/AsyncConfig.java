@@ -25,10 +25,11 @@ public class AsyncConfig {
 }
 
 /*
-스레드풀 동작 순서:
+    스레드풀 동작 순서:
 
-워커가 core 수보다 적으면 새 워커를 만듭니다.
-core가 다 차면 대기열에 넣습니다.
-대기열까지 꽉 차야 max까지 워커를 늘립니다.
-그래도 넘치면 **거부(TaskRejectedException)**합니다.
+    워커가 core 수보다 적으면 새 워커를 만듭니다.
+    core가 다 차면 대기열에 넣습니다.
+    대기열까지 꽉 차야 max까지 워커를 늘립니다.
+    그래도 넘치면 **거부(TaskRejectedException)**합니다.
+
 */
