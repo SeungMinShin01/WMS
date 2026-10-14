@@ -12,6 +12,9 @@ const EMPTY = {
   capacity: "",
 };
 
+// [추가] 한 페이지에 보여줄 줄 수. 바꾸려면 이 숫자만 고치면 된다.
+const PAGE_SIZE = 20;
+
 // [추가] "A-01-03" -> { zone: "A", aisle: "01", bay: "03" } (구역/통로/베이 열 표시용)
 const parseCode = (code) => {
   const [zone, aisle, bay] = (code ?? "").split("-");
@@ -32,9 +35,8 @@ const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 
 // ─────────────────────────────────────────────────────────────
 // [변경] 상태 뱃지 (활성/비활성 둘 다 표시)
-//   - 이전: 비활성일 때만 회색 뱃지(InactiveBadge)를 보이고, 활성은 빈 칸이었다.
-//          ("위치는 고장/비활성 정도만 표시" 요구에 맞춘 것)
-//   - 이후: 품목·거래처 화면과 같은 StatusBadge 로 통일해서 활성(초록)도 표시한다.
+//   - 이전: 목록 상태 칸을 "사용"/"미사용" 글자로 표시했다.
+//   - 이후: 품목·거래처 화면과 같은 StatusBadge 로 통일해서 활성(초록)·비활성(회색) 뱃지로 표시한다.
 //          · 화면마다 표시 방식이 달라 보이지 않게 하고,
 //          · 빈 칸이 "활성"인지 "응답에 상태가 안 온 것"인지 구분이 안 되던 문제를 없앤다.
 //   - STATUS: true/false 를 화면 문구와 색으로 바꾸는 표. 객체 키는 문자열이라
@@ -44,7 +46,6 @@ const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 //   - 비활성만 표시하던 방식으로 되돌리려면 아래 목록의 상태 칸을
 //     {!activeOf(l) && <StatusBadge active={false} />} 로 바꾸면 된다.
 // ─────────────────────────────────────────────────────────────
-<<<<<<< HEAD
 const STATUS = {
   true: { label: "활성", color: "#2e7d32" },
   false: { label: "비활성", color: "#9e9e9e" },
@@ -66,8 +67,6 @@ function StatusBadge({ active }) {
     </span>
   );
 }
-=======
->>>>>>> bfd21e850d18e3cf098f3dce007f8d5d1a249226
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
 export default function LocationPage() {
@@ -77,6 +76,18 @@ export default function LocationPage() {
   const [locations, setLocations] = useState([]); // 서버 전체 목록
   const [filtered, setFiltered] = useState([]); // 화면에 보이는 목록
   const [form, setForm] = useState(null); // 하단 상세. null이면 안내 문구
+
+  // [추가] 페이지 처리 (프론트에서 filtered 를 잘라서 보여준다. 서버 API 변경 없음)
+  //   - page: 사용자가 보고 있는 페이지 (1부터)
+  //   - curPage: 저장·조회로 건수가 줄어도 마지막 페이지를 넘지 않게 보정한 값
+  //   - pageRows: 현재 페이지에 보여줄 줄만 잘라낸 배열 (아래 표가 이걸 .map 한다)
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = filtered.slice(
+    (curPage - 1) * PAGE_SIZE,
+    curPage * PAGE_SIZE,
+  );
 
   // [추가] 목록 조회 (GET /wms/locations)
   const fetchLocations = async () => {
@@ -136,6 +147,7 @@ export default function LocationPage() {
           (active === "" || String(activeOf(l)) === active),
       ),
     );
+    setPage(1); // [추가] 조회하면 항상 1페이지부터 보여준다
   };
 
   // [추가] 신규 버튼: 빈 폼을 열어 하단 상세에 표시
@@ -233,7 +245,7 @@ export default function LocationPage() {
         )}
       </GridTitle>
       <table className="grid">
-        {/* thead: 초안 그대로, 단 "사용여부" 열 이름만 "상태" 로 바꿨다 */}
+        {/* thead: 팀원이 정리한 9열 그대로. 단 "사용여부" 열 이름만 "상태" 로 바꿨다 */}
         <thead>
           <tr>
             <th>로케이션코드</th>
@@ -247,10 +259,11 @@ export default function LocationPage() {
             <th>비고</th>
           </tr>
         </thead>
-        {/* [변경] 초안은 빈 tbody. 서버 데이터를 .map으로 표시.
-            "-"는 DTO에 아직 없는 값(혼용, 적치 품목/LOT, 소비기한, 실제 적재수량, 비고) */}
+        {/* 서버 데이터를 .map으로 표시. 열 순서는 위 thead 와 같다 (9열). */}
         <tbody>
-          {filtered.map((l) => {
+          {/* [변경] 이전: filtered.map (전체 줄 표시)
+                    이후: pageRows.map (현재 페이지의 줄만 표시) */}
+          {pageRows.map((l) => {
             const { zone, aisle, bay } = parseCode(l.locationCode);
             return (
               <tr key={l.locationId} onClick={() => fetchDetail(l.locationId)}>
@@ -258,19 +271,13 @@ export default function LocationPage() {
                 <td>{zone}</td>
                 <td>{aisle}</td>
                 <td>{bay}</td>
-<<<<<<< HEAD
-                {/* [변경] 이전: 비활성일 때만 회색 뱃지를 표시하고, 활성은 빈 칸
-                          이후: 활성(초록)·비활성(회색) 둘 다 뱃지로 표시 (품목·거래처와 같은 모양) */}
+                {/* [변경] 이전: l.isActive ? "사용" : "미사용" (글자로 표시)
+                          이후: activeOf(l) 결과를 뱃지로 표시 (활성=초록, 비활성=회색, 품목·거래처와 같은 모양) */}
                 <td>
                   <StatusBadge active={activeOf(l)} />
                 </td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-=======
-                <td>{l.isActive ? "사용" : "미사용"}</td>
+                {/* 팀원 코드 그대로: 혼용 여부 */}
                 <td>{l.mixed ? "혼용" : "-"}</td>
->>>>>>> bfd21e850d18e3cf098f3dce007f8d5d1a249226
                 <td>{l.capacity}</td>
                 <td className="num">
                   {l.storedQty ? l.storedQty.toLocaleString() : "-"}
@@ -281,6 +288,30 @@ export default function LocationPage() {
           })}
         </tbody>
       </table>
+
+      {/* [추가] 페이지 이동 버튼. 한 페이지(PAGE_SIZE)를 넘을 때만 보인다.
+          curPage 로 비교하므로 첫/마지막 페이지에서는 이전/다음이 비활성이 된다. */}
+      {totalPages > 1 && (
+        <div style={{ textAlign: "center", margin: "12px 0" }}>
+          <button
+            className="btn"
+            disabled={curPage <= 1}
+            onClick={() => setPage(curPage - 1)}
+          >
+            이전
+          </button>
+          <span style={{ margin: "0 12px" }}>
+            {curPage} / {totalPages}
+          </span>
+          <button
+            className="btn"
+            disabled={curPage >= totalPages}
+            onClick={() => setPage(curPage + 1)}
+          >
+            다음
+          </button>
+        </div>
+      )}
 
       {/* [추가] 하단 상세: 선택 전에는 안내 문구만 (입고예정 화면과 동일) */}
       {form == null ? (
@@ -325,6 +356,7 @@ export default function LocationPage() {
               value={form.capacity ?? ""}
               onChange={입력}
             />
+            {/* 팀원 코드 그대로: 비고 */}
             <label>비고</label>
             <input
               type="text"

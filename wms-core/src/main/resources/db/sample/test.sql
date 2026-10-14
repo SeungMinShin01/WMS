@@ -1,1 +1,2 @@
-SELECT product_code, is_active FROM product;
+DROP DATABASE IF EXISTS wms_db;
+CREATE DATABASE wms_db DEFAULT CHARACTER SET utf8mb4;
