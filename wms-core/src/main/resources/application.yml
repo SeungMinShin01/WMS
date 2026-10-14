@@ -12,7 +12,7 @@ spring:
         format_sql: true
   flyway:
     enabled: true
-    locations: classpath:db/migration # db/migration 폴더의 V1__…, V2__…를 순서대로 실행
+    locations: classpath:db/migration,classpath:db/seed # 스키마(V…) 다음 시연 시드(R__seed_demo) 실행
 
 logging:
   level:
