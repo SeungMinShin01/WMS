@@ -1,0 +1,126 @@
+# CD: main 의 CI(WMS CI)가 성공하면 서버에 자동 배포
+# - 수동 실행: Actions 탭 → WMS CD → Run workflow (main 최신으로 배포)
+# - backend : jar 복사 → 컨테이너 재생성(env 파일 다시 읽음) → health UP 대기 (약 20~30초 끊김)
+# - static  : dist 복사 → /var/www/wms 교체 → chmod
+# - 필요한 Secrets: SSH_KEY(.pem 내용), BACKEND_HOST, STATIC_HOST
+# - 서버 보안 그룹 22번이 0.0.0.0/0 으로 열려 있어야 함 (러너 IP가 매번 바뀜)
+# 주의: db/seed/R__seed_demo.sql 내용이 바뀌어 main 에 들어가면 배포 때 운영 DB가 시드로 초기화됨
+
+name: WMS CD
+
+on:
+  workflow_run:
+    workflows: ["WMS CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# 배포가 겹치지 않게 하나씩 (앞 배포를 취소하지 않고 기다림)
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 자동 실행은 CI 성공일 때만, 수동 실행은 항상
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # CI 가 검사한 바로 그 커밋을 받음 (수동 실행이면 main 최신)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc # ci.yml 과 같은 버전
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # 테스트는 CI 에서 이미 통과 → 여기선 빌드만
+      - name: build jar
+        run: |
+          chmod +x gradlew
+          ./gradlew :wms-core:bootJar -x test --no-daemon
+          ls -l wms-core/build/libs/
+
+      - name: build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: ssh key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          BACKEND_HOST: ${{ secrets.BACKEND_HOST }}
+          STATIC_HOST: ${{ secrets.STATIC_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy.pem
+          chmod 600 ~/.ssh/deploy.pem
+          ssh-keyscan -T 10 -H "$BACKEND_HOST" "$STATIC_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<EOF
+          Host backend
+            HostName $BACKEND_HOST
+            User ubuntu
+            IdentityFile ~/.ssh/deploy.pem
+          Host static
+            HostName $STATIC_HOST
+            User ubuntu
+            IdentityFile ~/.ssh/deploy.pem
+          EOF
+
+      # ---------- backend ----------
+      - name: deploy backend
+        run: |
+          # 새 이름으로 올린 뒤 바꿔치기 (전송 중 끊겨도 기존 jar 그대로)
+          scp wms-core/build/libs/wms-core-0.0.1-SNAPSHOT.jar backend:/home/ubuntu/app/wms.jar.new
+          ssh backend 'bash -s' <<'EOF'
+          set -e
+          mv ~/app/wms.jar.new ~/app/wms.jar
+          sudo docker rm -f wms-api
+          sudo docker run -d --name wms-api --restart unless-stopped -p 8080:8080 \
+            --env-file ~/app/wms.env -v ~/app:/app -w /app \
+            eclipse-temurin:17-jre java -Xms256m -Xmx768m -jar /app/wms.jar
+          # 최대 90초 동안 health UP 대기
+          for i in $(seq 1 45); do
+            if curl -sf localhost:8080/actuator/health | grep -q '"UP"'; then
+              echo "health UP (${i}회째, 약 $((i*2))초)"
+              sudo docker logs wms-api 2>&1 | grep -E "Migrating|Successfully applied|Started" | tail -10
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "90초 안에 UP 안 됨 — 로그 마지막 80줄"
+          sudo docker logs --tail 80 wms-api
+          exit 1
+          EOF
+
+      # ---------- static ----------
+      - name: deploy frontend
+        run: |
+          ssh static 'rm -rf ~/dist-new'
+          scp -r frontend/dist static:/home/ubuntu/dist-new
+          ssh static 'bash -s' <<'EOF'
+          set -e
+          sudo rm -rf /var/www/wms/*
+          sudo cp -r ~/dist-new/* /var/www/wms/
+          sudo chmod -R a+rX /var/www/wms
+          grep -o 'index-[^"]*\.js' /var/www/wms/index.html
+          EOF
+
+      # 밖에서 실제 주소로 확인
+      - name: smoke test
+        run: |
+          curl -sf -o /dev/null -w "https %{http_code}\n" https://firstin-wms.com/
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://firstin-wms.com/wms/stocks)
+          echo "API $code (로그인 안 했으니 401 이면 정상)"
+          [ "$code" = "401" ]
