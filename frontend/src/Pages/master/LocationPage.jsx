@@ -227,8 +227,6 @@ export default function LocationPage() {
             <th>베이</th>
             <th>상태</th>
             <th>혼용</th>
-            <th>적치 품목 / LOT</th>
-            <th>소비기한</th>
             <th>적재 가능 수량</th>
             <th>실제 적재수량</th>
             <th>비고</th>
@@ -245,17 +243,13 @@ export default function LocationPage() {
                 <td>{zone}</td>
                 <td>{aisle}</td>
                 <td>{bay}</td>
-                {/* [변경] 이전: l.isActive ? "사용" : "미사용" (활성·비활성 둘 다 글자로 표시)
-                          이후: 비활성일 때만 뱃지를 표시하고, 활성(정상)은 빈 칸으로 둔다.
-                    "위치는 고장/비활성 정도만 표시" 요구에 맞춘 것이다.
-                    정상 위치까지 표시하고 싶으면 이 줄을 StatusBadge 방식으로 바꾸면 된다. */}
-                <td>{!activeOf(l) && <InactiveBadge />}</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
+                <td>{l.isActive ? "사용" : "미사용"}</td>
+                <td>{l.mixed ? "혼용" : "-"}</td>
                 <td>{l.capacity}</td>
-                <td>-</td>
-                <td>-</td>
+                <td className="num">
+                  {l.storedQty ? l.storedQty.toLocaleString() : "-"}
+                </td>
+                <td className="left">{l.remark ?? "-"}</td>
               </tr>
             );
           })}
@@ -303,6 +297,14 @@ export default function LocationPage() {
               type="number"
               name="capacity"
               value={form.capacity ?? ""}
+              onChange={입력}
+            />
+            <label>비고</label>
+            <input
+              type="text"
+              name="remark"
+              maxLength={200}
+              value={form.remark ?? ""}
               onChange={입력}
             />
           </div>
