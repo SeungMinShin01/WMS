@@ -2,7 +2,8 @@ import { useState } from "react";
 import QrScanner from "./QrScanner";
 
 // 스캔 입력 박스: [카메라] 켜고 끄기 + 입력칸 (손 스캐너·직접 입력, Enter 로 전송)
-export default function ScanBox({ label, placeholder, onScan, disabled }) {
+// done : 확인된 코드 → 비활성일 때 입력칸에 표시 (비활성이면 카메라도 꺼짐)
+export default function ScanBox({ label, placeholder, onScan, disabled, done }) {
   const [camera, setCamera] = useState(false);
   const [text, setText] = useState("");
 
@@ -31,7 +32,7 @@ export default function ScanBox({ label, placeholder, onScan, disabled }) {
       <form onSubmit={submit}>
         <input
           className="m-input"
-          value={text}
+          value={disabled && done ? done : text}
           onChange={(e) => setText(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
