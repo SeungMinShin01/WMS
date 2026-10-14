@@ -172,8 +172,8 @@ public class QrPickingService {
     }
 
     // 2. ED-75 작업자 배정
-    // CREATED(처음 배정) · ASSIGNED(다른 작업자로 다시 배정) 일 때만 가능
-    // 작업자가 스캔을 시작한(PICKING) 뒤에는 바꿀 수 없음
+    // CREATED(배정 전) 일 때만 가능 → 한 번 배정하면 다시 배정할 수 없음
+    // 배정된 뒤(ASSIGNED) · 스캔 시작(PICKING) · 완료 · 취소된 리스트는 409
     public PickingDto assignWorker(Integer pickingListId, PickingAssignDto dto) {
 
         // 2-1. 작업자 번호가 비어 있으면 → 400
@@ -194,14 +194,13 @@ public class QrPickingService {
             throw new IllegalArgumentException("작업자 계정에만 배정할 수 있습니다: " + worker.getUserName());
         }
 
-        // 2-5. 조건부 UPDATE : 상태가 CREATED 나 ASSIGNED 일 때만 작업자·상태·배정시각을 바꿈
-        //      2-2 에서 조회한 뒤 그 사이 작업자가 첫 스캔을 했다면 상태가 PICKING 이라 0 → 409
+        // 2-5. 조건부 UPDATE : 상태가 CREATED 일 때만 작업자·상태·배정시각을 바꿈
+        //      이미 배정됐거나, 2-2 에서 조회한 뒤 그 사이 다른 사람이 먼저 배정했다면 0 → 409
         List<PickingStatus> fromList = new ArrayList<>();
         fromList.add(PickingStatus.CREATED);
-        fromList.add(PickingStatus.ASSIGNED);
         int changed = pickingListRepository.assign(pickingListId, worker, fromList, PickingStatus.ASSIGNED);
         if (changed == 0) {
-            throw new IllegalStateException("이미 피킹을 시작했거나 끝난 리스트라 배정할 수 없습니다: " + pickingListId);
+            throw new IllegalStateException("이미 배정된 피킹 리스트입니다: " + pickingListId);
         }
 
         // 2-6. 바뀐 리스트 리턴

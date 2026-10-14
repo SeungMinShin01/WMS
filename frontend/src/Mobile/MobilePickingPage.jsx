@@ -17,6 +17,7 @@ export default function MobilePickingPage() {
   const navigate = useNavigate();
   const [detail, setDetail] = useState(null); // { picking, items }
   const [step, setStep] = useState("WAIT_LOC"); // WAIT_LOC → WAIT_LOT → READY
+  const [scannedLoc, setScannedLoc] = useState(""); // 찍어서 확인된 칸
   const [scannedLot, setScannedLot] = useState("");
   const [qty, setQty] = useState("");
   const [message, setMessage] = useState(null); // { type: ok|error|info, text }
@@ -47,6 +48,7 @@ export default function MobilePickingPage() {
 
   const resetScan = () => {
     setStep("WAIT_LOC");
+    setScannedLoc("");
     setScannedLot("");
     setQty("");
   };
@@ -62,6 +64,7 @@ export default function MobilePickingPage() {
     if (!isLocationCode(code)) return fail(`칸 QR이 아닙니다: ${code}`);
     if (code !== item.locationCode)
       return fail(`다른 칸입니다. ${item.locationCode} 로 가세요.`);
+    setScannedLoc(code);
     setStep("WAIT_LOT");
     setMessage({ type: "ok", text: `칸 확인 ${code}. LOT QR을 찍으세요.` });
   };
@@ -99,6 +102,7 @@ export default function MobilePickingPage() {
     try {
       const res = await axios.put(`/wms/pickings/${pickingListId}/scan`, {
         pickingListItemId: item.pickingListItemId,
+        locationCode: scannedLoc,
         lotCode: scannedLot,
         qty: n,
       });
@@ -201,12 +205,14 @@ export default function MobilePickingPage() {
             placeholder="A-01-01"
             onScan={scanLocation}
             disabled={step !== "WAIT_LOC"}
+            done={scannedLoc}
           />
           <ScanBox
             label="② LOT QR"
             placeholder="LOT-…"
             onScan={scanLot}
-            disabled={step !== "WAIT_LOT" && step !== "READY"}
+            disabled={step !== "WAIT_LOT"}
+            done={scannedLot}
           />
 
           <p className="m-muted">③ 수량</p>

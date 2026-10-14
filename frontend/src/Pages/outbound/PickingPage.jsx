@@ -7,6 +7,7 @@ import GridTitle from "../../Layout/GridTitle";
 // 피킹리스트 — 담당: 김지환
 // 흐름 : 문서 선택 → 줄마다 [집음] → 전 줄 집음 → 출고확정
 // 전 품목이 할당된 문서만 집을 수 있다 (ED-52 결정)
+// QR 피킹 : 문서를 고른 뒤 작업자를 [배정] → 작업자가 모바일에서 스캔 → 줄이 집음으로 바뀜
 export default function PickingPage() {
   // 주소의 documentId (/outbounds/picking/66) — 목록 주소(/outbounds/picking)면 undefined
   const { documentId } = useParams();
@@ -18,6 +19,9 @@ export default function PickingPage() {
   const [detail, setDetail] = useState(null); // 선택한 출고 문서 정보
   const [pickings, setPickings] = useState([]); // 피킹 줄 목록
   const [loading, setLoading] = useState(false); // 요청 중이면 true → 버튼 잠금
+  const [picking, setPicking] = useState(null); // 이 문서의 QR 피킹 리스트 (없으면 null)
+  const [workers, setWorkers] = useState([]); // 배정할 작업자 목록
+  const [workerId, setWorkerId] = useState(""); // 고른 작업자 ("" = 안 고름)
   // 칸 제목 클릭 정렬 : sortKey = 정렬 중인 칸 이름, sortAsc = true 오름차순 / false 내림차순
   // 처음 화면 : 주문번호 오름차순(▲)으로 시작
   const [sortKey, setSortKey] = useState("documentNo");
@@ -38,6 +42,16 @@ export default function PickingPage() {
     if (status === "ALLOCATED") return "할당됨";
     if (status === "PICKED") return "집음";
     if (status === "SHIPPED") return "출고됨";
+    return status;
+  };
+
+  // QR 피킹 리스트 상태 한글
+  const QR상태 = (status) => {
+    if (status === "CREATED") return "생성";
+    if (status === "ASSIGNED") return "배정됨";
+    if (status === "PICKING") return "피킹중";
+    if (status === "DONE") return "완료";
+    if (status === "CANCELED") return "취소";
     return status;
   };
 
@@ -115,16 +129,55 @@ export default function PickingPage() {
     }
   };
 
-  // 주소의 documentId 가 바뀔 때마다 : 없으면 문서 목록, 있으면 그 문서의 정보 + 피킹리스트
+  // ED-76 이 문서의 QR 피킹 리스트 : 전체 목록에서 문서 번호가 같은 것을 찾음 (없으면 null)
+  // 주소의 documentId 는 글자("66"), 응답의 documentId 는 숫자(66) → String 으로 맞춰서 비교
+  const getPicking = async () => {
+    if (!documentId) return;
+    try {
+      const response = await axios.get("/wms/pickings");
+      let found = null;
+      for (let i = 0; i < response.data.length; i++) {
+        if (String(response.data[i].documentId) === documentId) {
+          found = response.data[i];
+        }
+      }
+      setPicking(found);
+    } catch (error) {
+      에러알림(error);
+    }
+  };
+
+  // 배정할 작업자 목록 : 작업자(WORKER) 이면서 사용 중인 계정만
+  // /wms/workers 는 관리자 전용이라 작업자로 로그인했으면 403 → 알림 없이 빈 목록
+  const getWorkers = async () => {
+    try {
+      const response = await axios.get("/wms/workers");
+      let result = [];
+      for (let i = 0; i < response.data.length; i++) {
+        const w = response.data[i];
+        if (w.role === "WORKER" && w.active !== false) {
+          result.push(w);
+        }
+      }
+      setWorkers(result);
+    } catch {
+      setWorkers([]);
+    }
+  };
+
+  // 주소의 documentId 가 바뀔 때마다 : 없으면 문서 목록, 있으면 그 문서의 정보 + 피킹리스트 + QR 피킹 리스트
   useEffect(() => {
     if (!documentId) {
       setDetail(null);
       setPickings([]);
+      setPicking(null);
       getOrders(tenantId);
       getTenants();
     } else {
       getDetail();
       getPickings();
+      getPicking();
+      getWorkers();
     }
   }, [documentId]);
 
@@ -158,6 +211,47 @@ export default function PickingPage() {
     detail !== null &&
     (detail.status === "ALLOCATED" || detail.status === "PICKING") &&
     전품목할당;
+
+  // 배정할 수 있는 문서인지 : 출고할당 + 전 품목 할당 + QR 피킹 리스트가 없거나 아직 배정 전(생성)
+  // 한 번 배정하면 담당자 이름만 보이고 다시 배정할 수 없음 (서버도 409)
+  const 배정가능 =
+    detail !== null &&
+    detail.status === "ALLOCATED" &&
+    전품목할당 &&
+    (picking === null || picking.status === "CREATED");
+
+  // ED-75 작업자 배정
+  // 1. QR 피킹 리스트가 아직 없으면 먼저 만듦 (POST /wms/pickings)
+  // 2. 만든(또는 있던) 리스트에 작업자 배정 (PUT /wms/pickings/{id}/assign)
+  const 배정 = async () => {
+    if (workerId === "") {
+      alert("배정할 작업자를 선택하세요");
+      return;
+    }
+    try {
+      setLoading(true);
+      let pickingListId;
+      if (picking === null) {
+        const created = await axios.post("/wms/pickings", {
+          documentId: Number(documentId),
+        });
+        pickingListId = created.data.pickingListId;
+      } else {
+        pickingListId = picking.pickingListId;
+      }
+      await axios.put("/wms/pickings/" + pickingListId + "/assign", {
+        workerId: Number(workerId),
+      });
+      alert("배정되었습니다");
+      setWorkerId("");
+      getPicking(); // 담당자 이름 새로고침
+    } catch (error) {
+      에러알림(error);
+      getPicking(); // 생성은 됐는데 배정만 실패했을 수도 있으니 다시 조회
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 줄 1개 집음 (ED-52 피킹 확인)
   const 집음 = async (detailId) => {
@@ -290,12 +384,18 @@ export default function PickingPage() {
           <thead>
             <tr>
               {/* 정렬 가능한 칸 : 클릭하면 changeSort, 옆에 화살표 표시 (cursor pointer : 마우스를 올리면 손가락 모양) */}
-              <th style={{ cursor: "pointer" }} onClick={() => changeSort("documentNo")}>
+              <th
+                style={{ cursor: "pointer" }}
+                onClick={() => changeSort("documentNo")}
+              >
                 주문번호 {arrow("documentNo")}
               </th>
               <th>화주</th>
               <th>배송지명</th>
-              <th style={{ cursor: "pointer" }} onClick={() => changeSort("expectedAt")}>
+              <th
+                style={{ cursor: "pointer" }}
+                onClick={() => changeSort("expectedAt")}
+              >
                 출고요청일 {arrow("expectedAt")}
               </th>
               <th>상태</th>
@@ -362,11 +462,44 @@ export default function PickingPage() {
                   : "-"}
               </td>
             </tr>
+            <tr>
+              <th>담당자</th>
+              <td>
+                {picking && picking.workerName ? picking.workerName : "-"}
+              </td>
+              <th>QR 피킹</th>
+              <td>
+                {picking
+                  ? picking.pickingNo + " (" + QR상태(picking.status) + ")"
+                  : "-"}
+              </td>
+              <th></th>
+              <td></td>
+            </tr>
           </tbody>
         </table>
       )}
 
       <div style={{ textAlign: "right", margin: "8px 0" }}>
+        {/* 작업자 배정 : 출고할당 + 전 품목 할당 + 아직 스캔 시작 전일 때만 보임 */}
+        {배정가능 && (
+          <>
+            <select
+              value={workerId}
+              onChange={(e) => setWorkerId(e.target.value)}
+            >
+              <option value="">작업자 선택</option>
+              {workers.map((w) => (
+                <option key={w.userId} value={w.userId}>
+                  {w.userName} ({w.loginId})
+                </option>
+              ))}
+            </select>{" "}
+            <button className="btn primary" onClick={배정} disabled={loading}>
+              배정
+            </button>{" "}
+          </>
+        )}
         {/* 번호 없는 주소로 가서 문서 선택 목록으로 돌아감 */}
         <button className="btn" onClick={() => navigate("/outbounds/picking")}>
           목록
