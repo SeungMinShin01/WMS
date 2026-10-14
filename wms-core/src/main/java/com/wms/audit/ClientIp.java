@@ -14,7 +14,7 @@ final class ClientIp {
         if (realIp != null && !realIp.isBlank()) {
             return normalize(realIp.trim());
         }
-        return normalize(request.getHeader(realIp));
+        return normalize(request.getRemoteAddr());
     }
 
     static String normalize(String ip) {
