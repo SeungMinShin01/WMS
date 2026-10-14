@@ -3,6 +3,7 @@ import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
+import useSort from "../../Layout/useSort";
 
 const EMPTY = {
   productId: null,
@@ -128,6 +129,8 @@ export default function ProductPage() {
     }
   };
 
+  const { sorted, th } = useSort(filtered);
+
   return (
     <>
       <PageTitle title="품목 관리" path="홈 > 기준정보 > 품목" />
@@ -172,17 +175,17 @@ export default function ProductPage() {
         <thead>
           <tr>
             <th>화주</th> {/* [추가] */}
-            <th>품목코드</th>
+            {th("productCode", "품목코드")}
             <th>품목명</th>
             <th>규격 (단위×입수)</th>
             <th>단위</th>
             <th>출고허용 잔여일</th>
             <th>사용여부</th>
-            <th>수정일</th>
+            {th("updatedAt", "수정일")}
           </tr>
         </thead>
         <tbody>
-          {filtered.map((p) => (
+          {sorted.map((p) => (
             <tr key={p.productId} onClick={() => fetchDetail(p.productId)}>
               <td>{p.tenantName}</td> {/* [추가] */}
               <td>{p.productCode}</td>

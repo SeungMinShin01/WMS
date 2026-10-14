@@ -3,6 +3,7 @@ import axios from "axios"; // [추가] 서버 호출용
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
+import useSort from "../../Layout/useSort";
 
 // [추가] 신규 등록 시 빈 폼. locationId가 null이면 등록(POST), 값이 있으면 수정(PUT)
 const EMPTY = {
@@ -122,6 +123,8 @@ export default function LocationPage() {
     }
   };
 
+  const { sorted, th } = useSort(filtered);
+
   return (
     <>
       <PageTitle
@@ -167,21 +170,21 @@ export default function LocationPage() {
         {/* thead: 초안 그대로 */}
         <thead>
           <tr>
-            <th>로케이션코드</th>
+            {th("locationCode", "로케이션코드")}
             <th>구역</th>
             <th>통로</th>
             <th>베이</th>
             <th>사용여부</th>
             <th>혼용</th>
             <th>적재 가능 수량</th>
-            <th>실제 적재수량</th>
+            {th("storedQty", "실제 적재수량")}
             <th>비고</th>
           </tr>
         </thead>
         {/* [변경] 초안은 빈 tbody. 서버 데이터를 .map으로 표시.
             "-"는 DTO에 아직 없는 값(혼용, 적치 품목/LOT, 소비기한, 실제 적재수량, 비고) */}
         <tbody>
-          {filtered.map((l) => {
+          {sorted.map((l) => {
             const { zone, aisle, bay } = parseCode(l.locationCode);
             return (
               <tr key={l.locationId} onClick={() => fetchDetail(l.locationId)}>

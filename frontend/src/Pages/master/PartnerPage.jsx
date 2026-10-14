@@ -3,6 +3,7 @@ import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
+import useSort from "../../Layout/useSort";
 
 const TYPE_LABEL = { SUPPLIER: "공급사", CUSTOMER: "납품처" };
 
@@ -122,6 +123,8 @@ export default function PartnerPage() {
     }
   };
 
+  const { sorted, th } = useSort(filtered);
+
   return (
     <>
       <PageTitle title="거래처 관리" path="홈 > 기준정보 > 거래처" />
@@ -162,15 +165,15 @@ export default function PartnerPage() {
           <tr>
             <th>No</th>
             <th>화주</th> {/* [추가] */}
-            <th>거래처코드</th>
+            {th("partnerCode", "거래처코드")}
             <th>거래처명</th>
             <th>구분</th>
             <th>연락처</th>
-            <th>등록일</th>
+            {th("createdAt", "등록일")}
           </tr>
         </thead>
         <tbody>
-          {filtered.map((p, i) => (
+          {sorted.map((p, i) => (
             <tr key={p.partnerId} onClick={() => fetchDetail(p.partnerId)}>
               <td>{i + 1}</td>
               <td>{p.tenantName}</td> {/* [추가] */}

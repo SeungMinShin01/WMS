@@ -3,6 +3,7 @@ import axios from "axios";
 import { useOutletContext } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
+import useSort from "../../Layout/useSort";
 
 // 재고 상태: 폐기(소비기한 지남) > 임박(30일 이하) > 부족(가용 0) > 정상
 // 소비기한 당일(남은 0일)까지 정상, 다음 날(-1일)부터 폐기
@@ -81,6 +82,8 @@ export default function StockPage() {
       (filter.status === "" || getStockStatus(s) === filter.status),
   );
 
+   const { sorted, th } = useSort(visibleList);
+
   return (
     <>
       <PageTitle title="재고 현황" path="홈 > 재고관리 > 재고현황" />
@@ -117,7 +120,7 @@ export default function StockPage() {
           <tr>
             <th>No</th>
             <th>화주</th>
-            <th>품목코드</th>
+            {th("productCode", "품목코드")}
             <th>품목명</th>
             <th>규격</th>
             <th>단위</th>
@@ -126,14 +129,14 @@ export default function StockPage() {
             <th>선점</th>
             <th>가용</th>
             <th>로케이션</th>
-            <th>최단 소비기한</th>
+            {th("expiryDate", "최단 소비기한")}
             <th>남은일수</th>
             <th>상태</th>
             <th>관리</th>
           </tr>
         </thead>
         <tbody>
-          {visibleList.map((s, index) => (
+          {sorted.map((s, index) => (
             <tr key={s.stockId}>
               <td>{index + 1}</td>
               <td>{s.tenantName}</td>
