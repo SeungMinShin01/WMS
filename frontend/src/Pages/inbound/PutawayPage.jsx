@@ -90,6 +90,18 @@ export default function PutawayPage() {
     getList();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로 (상태는 기본값 '검수완료·입고완료')
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      from: "",
+      to: "",
+      tenantName: "",
+      status: "INSPECTED,COMPLETED",
+    });
+    getList();
+  };
+
   useEffect(() => {
     getList();
     getLocations();
@@ -206,6 +218,9 @@ export default function PutawayPage() {
               <option value="COMPLETED">입고완료</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle

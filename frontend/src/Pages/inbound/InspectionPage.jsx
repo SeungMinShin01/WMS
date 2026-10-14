@@ -78,6 +78,18 @@ export default function InspectionPage() {
     getList();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로 (상태는 기본값 '입고예정·검수완료')
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      from: "",
+      to: "",
+      tenantName: "",
+      status: "WAITING,INSPECTED",
+    });
+    getList();
+  };
+
   useEffect(() => {
     getList();
     if (documentId) selectDocument(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
@@ -195,6 +207,9 @@ export default function InspectionPage() {
               <option value="INSPECTED">검수완료</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle

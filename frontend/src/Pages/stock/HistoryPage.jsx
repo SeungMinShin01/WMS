@@ -31,6 +31,13 @@ export default function HistoryPage() {
     이력조회();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로
+  const 초기화 = (event) => {
+    event.target.form.reset();
+    set조건({ from: "", to: "", product: "", locationCode: "", txType: "" });
+    이력조회();
+  };
+
   useEffect(() => {
     이력조회();
   }, []);
@@ -68,6 +75,9 @@ export default function HistoryPage() {
           <option value="DISPOSE">폐기</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        <button type="button" className="btn" onClick={초기화}>
+          초기화
+        </button>
       </form>
 
       <GridTitle title="재고 이력" desc={`총 ${보여줄목록.length}건 · 추가만 되는 기록 (수정·삭제 불가)`} />

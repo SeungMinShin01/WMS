@@ -51,6 +51,18 @@ export default function StockPage() {
     getList();
   };
 
+  // 초기화 — 입력칸 + 조회 조건을 처음으로
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      productCode: "",
+      productName: "",
+      zone: "",
+      status: "",
+    });
+    getList();
+  };
+
   useEffect(() => {
     getList();
   }, []);
@@ -110,6 +122,9 @@ export default function StockPage() {
           <option value="DISPOSE">폐기(소비기한 경과)</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        <button type="button" className="btn" onClick={handleReset}>
+          초기화
+        </button>
       </form>
 
       <GridTitle
@@ -156,13 +171,19 @@ export default function StockPage() {
               </td>
               <td>{STOCK_STATUS_NAME[getStockStatus(s)]}</td>
               <td>
-                {isAdmin && getStockStatus(s) === "DISPOSE" && (
+                {/* 관리자 + 폐기 대상이면 폐기 버튼, 아니면 "-" (출고문서 관리 칸과 같은 방식) */}
+                {isAdmin && getStockStatus(s) === "DISPOSE" ? (
+                  // height auto : 버튼 기본 높이(24px) 대신 글자 높이만큼 → 다른 줄과 높이가 같아짐
+                  // font inherit : 버튼도 표 글자와 같은 글꼴·크기 / padding 0 : "-" 칸과 폭이 비슷하게
                   <button
                     className="btn danger plain"
+                    style={{ height: "auto", padding: 0, font: "inherit" }}
                     onClick={() => dispose(s)}
                   >
                     폐기
                   </button>
+                ) : (
+                  "-"
                 )}
               </td>
             </tr>

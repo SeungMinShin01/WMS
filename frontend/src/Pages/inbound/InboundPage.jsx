@@ -82,6 +82,19 @@ export default function InboundPage() {
     getList();
   };
 
+  // 초기화 — 입력칸을 처음 모습으로 + 조회 조건도 처음 값으로 (출고지시와 같은 방식)
+  const handleReset = (event) => {
+    event.target.form.reset(); // 버튼이 속한 form 의 입력칸을 defaultValue 로 되돌림
+    setFilter({
+      from: "",
+      to: "",
+      tenantName: "",
+      documentNo: "",
+      status: "",
+    });
+    getList();
+  };
+
   // 화면이 처음 열릴때 목록 한번 불러오기
   useEffect(() => {
     getList();
@@ -179,6 +192,9 @@ export default function InboundPage() {
               <option value="CANCELED">취소</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle title="입고문서 목록" desc={`총 ${visibleList.length}건`}>
