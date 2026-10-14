@@ -115,8 +115,6 @@ public class LocationService {
             }
             list.add(dto);
         }
-        List<LocationDto> list = new ArrayList<>();
-        locationRepository.findAll().forEach(entity -> list.add(LocationDto.from(entity)));
         return list;
     }
 
