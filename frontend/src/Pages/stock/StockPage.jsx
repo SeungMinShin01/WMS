@@ -6,7 +6,12 @@ import GridTitle from "../../Layout/GridTitle";
 
 // 재고 상태: 폐기(소비기한 지남) > 임박(30일 이하) > 부족(가용 0) > 정상
 // 소비기한 당일(남은 0일)까지 정상, 다음 날(-1일)부터 폐기
-const STOCK_STATUS_NAME = { NORMAL: "정상", SHORT: "부족", NEAR: "임박", DISPOSE: "폐기" };
+const STOCK_STATUS_NAME = {
+  NORMAL: "정상",
+  SHORT: "부족",
+  NEAR: "임박",
+  DISPOSE: "폐기",
+};
 const getStockStatus = (s) => {
   if (s.remainingDays !== null && s.remainingDays < 0) return "DISPOSE";
   if (s.remainingDays !== null && s.remainingDays <= 30) return "NEAR";
@@ -15,7 +20,7 @@ const getStockStatus = (s) => {
 };
 
 // 07 재고현황 — 담당: 조현우
-export default function StockPage(props) {
+export default function StockPage() {
   const { user } = useOutletContext() ?? {}; // Layout 이 넘겨준 로그인 사용자
   const isAdmin = user?.role === "ADMIN";
   const [stocks, setStocks] = useState([]); // ED-21 재고 전체 (FEFO 정렬)
@@ -50,7 +55,12 @@ export default function StockPage(props) {
 
   // 폐기 (관리자) — 소비기한 지난 LOT 재고를 칸 단위로 전량 폐기
   const dispose = async (s) => {
-    if (!window.confirm(`${s.productName} / ${s.lotCode} / ${s.locationCode}\n실물 ${s.qty}개를 전량 폐기할까요?`)) return;
+    if (
+      !window.confirm(
+        `${s.productName} / ${s.lotCode} / ${s.locationCode}\n실물 ${s.qty}개를 전량 폐기할까요?`,
+      )
+    )
+      return;
     try {
       await axios.put(`/wms/stocks/${s.stockId}/dispose`);
       alert("폐기 처리했습니다.");
@@ -143,7 +153,10 @@ export default function StockPage(props) {
               <td>{STOCK_STATUS_NAME[getStockStatus(s)]}</td>
               <td>
                 {isAdmin && getStockStatus(s) === "DISPOSE" && (
-                  <button className="btn danger plain" onClick={() => dispose(s)}>
+                  <button
+                    className="btn danger plain"
+                    onClick={() => dispose(s)}
+                  >
                     폐기
                   </button>
                 )}
