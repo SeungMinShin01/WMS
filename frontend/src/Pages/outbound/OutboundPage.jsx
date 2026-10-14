@@ -5,6 +5,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import OutboundCreateForm from "./OutboundCreateForm";
+import usePaging from "../../Layout/usePaging";
 
 // 문서 상태 영어 값 → 화면에 보여줄 한글 (값에 없는 상태는 영어 그대로)
 const STATUS_NAME = {
@@ -239,7 +240,7 @@ export default function OutboundPage() {
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}
                 >
-                  <td>{{startNo + index}}</td>
+                  <td>{startNo + index}</td>
                   <td>{outbound.documentNo}</td>
                   {/* [ED-61] 화주 */}
                   <td>{outbound.tenantName}</td>

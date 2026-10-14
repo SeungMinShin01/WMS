@@ -382,7 +382,7 @@ export default function AllocationPage() {
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}
                 >
-                  <td>{{startNo + index}}</td>
+                  <td>{startNo + index}</td>
                   <td>{outbound.documentNo}</td>
                   <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
