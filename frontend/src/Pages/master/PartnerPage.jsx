@@ -19,6 +19,9 @@ const EMPTY = {
   isActive: true,
 };
 
+// [추가] 한 페이지에 보여줄 줄 수
+const PAGE_SIZE = 20;
+
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
 // ─────────────────────────────────────────────────────────────
@@ -29,7 +32,6 @@ const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 //                    Jackson 이 키를 "active" 로 내보내는 경우 (자주 생기는 함정)
 //   - 둘 다 없으면(아직 백엔드에 컬럼이 없을 때) 활성(true)으로 본다.
 //   - 목록 표시, 조회 필터, 상세 폼 세 곳이 이 함수 하나만 쓰도록 통일했다.
-//   - ProductPage 와 같은 코드다. 공통 파일로 빼서 import 하면 중복이 없어진다.
 // ─────────────────────────────────────────────────────────────
 const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 
@@ -69,6 +71,12 @@ export default function PartnerPage() {
   const [filtered, setFiltered] = useState([]);
   const [form, setForm] = useState(null);
   const [tenants, setTenants] = useState([]); // 화주 select 옵션
+  // [추가] 페이지 처리: filtered 중 현재 페이지 PAGE_SIZE건만 pageRows 로 나온다
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages); // 줄이 줄어 현재 페이지가 넘으면 마지막 페이지로
+  const startNo = (curPage - 1) * PAGE_SIZE + 1; // No 열 시작 번호
+  const pageRows = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
 
   const fetchPartners = async () => {
     try {
@@ -113,6 +121,16 @@ export default function PartnerPage() {
     fetchTenants();
   }, []);
 
+  // [추가] 초기화 버튼 (출고지시 화면의 handleReset 과 같은 방식)
+  //   - event.target.form.reset(): 조회조건 입력칸을 처음 값(defaultValue)으로 되돌린다
+  //   - setFiltered(목록 전체): 걸러 둔 목록을 풀어서 전체를 다시 보여준다
+  //   - setPage(1): 1페이지로 돌아간다
+  const 초기화 = (event) => {
+    event.target.form.reset();
+    setFiltered(partners);
+    setPage(1);
+  };
+
   const 조회 = (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
@@ -123,6 +141,7 @@ export default function PartnerPage() {
     // [추가] 조회조건의 상태 select 값을 읽는다. ""(전체) | "true"(활성) | "false"(비활성)
     const active = data.get("isActive");
 
+    setPage(1); // [추가] 조회하면 1페이지부터
     setFiltered(
       partners.filter(
         (p) =>
@@ -184,6 +203,43 @@ export default function PartnerPage() {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // [추가] 관리 열의 "취소" 버튼 (출고문서의 관리-취소 버튼과 같은 방식)
+  //   - 데이터를 지우지 않고 상태만 비활성(is_active=false)으로 바꾼다.
+  //     (다른 문서가 이 거래처를 이미 쓰고 있을 수 있어서 진짜 삭제는 하지 않는다)
+  //   - 새 API 없이 기존 상세조회(GET) + 수정(PUT)을 그대로 쓴다.
+  //   - e.stopPropagation(): 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게 막는다.
+  // ─────────────────────────────────────────────────────────────
+  const 비활성처리 = async (e, row) => {
+    e.stopPropagation();
+    if (
+      !confirm(
+        `${row.partnerCode} 거래처를 취소할까요?\n(취소하면 상태가 비활성으로 바뀝니다)`,
+      )
+    )
+      return;
+    try {
+      const detail = await axios.get("/wms/partner/detail", {
+        params: { partnerid: row.partnerId },
+      });
+      const res = await axios.put("/wms/partner", {
+        ...detail.data,
+        isActive: false,
+      });
+      if (res.data) {
+        alert("취소되었습니다. (상태: 비활성)");
+        setForm(null);
+        fetchPartners();
+      } else {
+        alert("처리에 실패했습니다.");
+      }
+    } catch (err) {
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
+      alert(msg || "처리 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <>
       <PageTitle title="거래처 관리" path="홈 > 기준정보 > 거래처" />
@@ -216,6 +272,10 @@ export default function PartnerPage() {
           <option value="false">비활성</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        {/* [추가] type="button" 이어야 폼 제출(조회)로 번지지 않는다 */}
+        <button type="button" className="btn" onClick={초기화}>
+          초기화
+        </button>
       </form>
 
       <GridTitle title="거래처 목록" desc={`총 ${filtered.length}건`}>
@@ -237,12 +297,14 @@ export default function PartnerPage() {
             {/* [추가] 상태 열. 등록일 앞에 두어 구분·연락처 다음에 바로 보이게 했다. */}
             <th>상태</th>
             <th>등록일</th>
+            {/* [추가] 관리 열: 활성 줄에만 취소 버튼 (관리자만) */}
+            <th>관리</th>
           </tr>
         </thead>
         <tbody>
-          {filtered.map((p, i) => (
+          {pageRows.map((p, i) => (
             <tr key={p.partnerId} onClick={() => fetchDetail(p.partnerId)}>
-              <td>{i + 1}</td>
+              <td>{startNo + i}</td>
               <td>{p.tenantName}</td>
               <td>{p.partnerCode}</td>
               <td>{p.partnerName}</td>
@@ -253,10 +315,46 @@ export default function PartnerPage() {
                 <StatusBadge active={activeOf(p)} />
               </td>
               <td>{fmtDate(p.createdAt)}</td>
+              {/* [추가] 관리 열: 관리자 + 활성 상태일 때만 버튼, 아니면 "-" */}
+              <td>
+                {isAdmin && activeOf(p) ? (
+                  <button
+                    className="btn danger plain"
+                    style={{ height: "auto" }}
+                    onClick={(e) => 비활성처리(e, p)}
+                  >
+                    취소
+                  </button>
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {/* [추가] 이전/다음 (한 페이지뿐이면 안 보임) */}
+      {totalPages > 1 && (
+        <div style={{ textAlign: "center", margin: "12px 0" }}>
+          <button
+            className="btn"
+            disabled={curPage <= 1}
+            onClick={() => setPage(curPage - 1)}
+          >
+            이전
+          </button>
+          <span style={{ margin: "0 12px" }}>
+            {curPage} / {totalPages}
+          </span>
+          <button
+            className="btn"
+            disabled={curPage >= totalPages}
+            onClick={() => setPage(curPage + 1)}
+          >
+            다음
+          </button>
+        </div>
+      )}
 
       {form == null ? (
         <p className="empty">목록에서 거래처를 클릭하면 상세가 나옵니다.</p>

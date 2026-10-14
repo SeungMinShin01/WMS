@@ -128,6 +128,16 @@ export default function LocationPage() {
   // [변경] 초안은 event.preventDefault()만 있었음.
   // 서버가 조회조건을 받지 않으므로 프론트에서 거른다.
   // (적치상태 occupied는 DTO에 값이 없어 아직 걸러지지 않음)
+  // [추가] 초기화 버튼 (출고지시 화면의 handleReset 과 같은 방식)
+  //   - event.target.form.reset(): 조회조건 입력칸을 처음 값(defaultValue)으로 되돌린다
+  //   - setFiltered(목록 전체): 걸러 둔 목록을 풀어서 전체를 다시 보여준다
+  //   - setPage(1): 1페이지로 돌아간다
+  const 초기화 = (event) => {
+    event.target.form.reset();
+    setFiltered(locations);
+    setPage(1);
+  };
+
   const 조회 = (event) => {
     event.preventDefault();
     // 여기부터 추가
@@ -197,6 +207,43 @@ export default function LocationPage() {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // [추가] 관리 열의 "취소" 버튼 (출고문서의 관리-취소 버튼과 같은 방식)
+  //   - 데이터를 지우지 않고 상태만 비활성(is_active=false)으로 바꾼다.
+  //     (다른 문서가 이 로케이션을 이미 쓰고 있을 수 있어서 진짜 삭제는 하지 않는다)
+  //   - 새 API 없이 기존 상세조회(GET) + 수정(PUT)을 그대로 쓴다.
+  //   - e.stopPropagation(): 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게 막는다.
+  // ─────────────────────────────────────────────────────────────
+  const 비활성처리 = async (e, row) => {
+    e.stopPropagation();
+    if (
+      !confirm(
+        `${row.locationCode} 로케이션을 취소할까요?\n(취소하면 상태가 비활성으로 바뀝니다)`,
+      )
+    )
+      return;
+    try {
+      const detail = await axios.get("/wms/location/detail", {
+        params: { locationid: row.locationId },
+      });
+      const res = await axios.put("/wms/location", {
+        ...detail.data,
+        isActive: false,
+      });
+      if (res.data) {
+        alert("취소되었습니다. (상태: 비활성)");
+        setForm(null);
+        fetchLocations();
+      } else {
+        alert("처리에 실패했습니다.");
+      }
+    } catch (err) {
+      const msg =
+        typeof err.response?.data === "string" ? err.response.data : null;
+      alert(msg || "처리 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <>
       <PageTitle
@@ -233,6 +280,10 @@ export default function LocationPage() {
           <option value="Y">적치중</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
+        {/* [추가] type="button" 이어야 폼 제출(조회)로 번지지 않는다 */}
+        <button type="button" className="btn" onClick={초기화}>
+          초기화
+        </button>
       </form>
 
       {/* [변경] desc: "총 0건" -> 실제 건수 / 신규 버튼에 onClick 추가 */}
@@ -257,6 +308,8 @@ export default function LocationPage() {
             <th>적재 가능 수량</th>
             <th>실제 적재수량</th>
             <th>비고</th>
+            {/* [추가] 관리 열: 활성 줄에만 비활성 버튼 (관리자만) */}
+            <th>관리</th>
           </tr>
         </thead>
         {/* 서버 데이터를 .map으로 표시. 열 순서는 위 thead 와 같다 (9열). */}
@@ -283,6 +336,20 @@ export default function LocationPage() {
                   {l.storedQty ? l.storedQty.toLocaleString() : "-"}
                 </td>
                 <td className="left">{l.remark ?? "-"}</td>
+              {/* [추가] 관리 열: 관리자 + 활성 상태일 때만 버튼, 아니면 "-" */}
+              <td>
+                {isAdmin && activeOf(l) ? (
+                  <button
+                    className="btn danger plain"
+                    style={{ height: "auto" }}
+                    onClick={(e) => 비활성처리(e, l)}
+                  >
+                    취소
+                  </button>
+                ) : (
+                  "-"
+                )}
+              </td>
               </tr>
             );
           })}
