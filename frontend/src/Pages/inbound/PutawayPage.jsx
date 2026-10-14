@@ -26,10 +26,11 @@ export default function PutawayPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 문서 전체
+  const [tenants, setTenants] = useState([]);
   const [filter, setFilter] = useState({
     from: "",
     to: "",
-    partnerName: "",
+    tenantName: "",
     status: "INSPECTED,COMPLETED",
   }); // 조회 조건
   const [detail, setDetail] = useState(null); // ED-13 선택한 문서 (items 포함)
@@ -83,7 +84,7 @@ export default function PutawayPage() {
     setFilter({
       from: form.get("from"),
       to: form.get("to"),
-      partnerName: form.get("partnerName").trim(),
+      tenantName: form.get("tenantName"),
       status: form.get("status"),
     });
     getList();
@@ -94,6 +95,8 @@ export default function PutawayPage() {
     getLocations();
     if (documentId) selectDocument(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
   }, []);
+
+  axios.get("/wms/inbounds/tenants").then((res) => setTenants(res.data));
 
   // 상세 → 목록으로 (주소도 목록 주소로)
   const goBack = () => {
@@ -107,7 +110,7 @@ export default function PutawayPage() {
       filter.status.split(",").includes(d.status) &&
       (filter.from === "" || d.expectedAt >= filter.from) &&
       (filter.to === "" || d.expectedAt <= filter.to) &&
-      (filter.partnerName === "" || d.partnerName.includes(filter.partnerName)),
+      (filter.tenantName === "" || d.tenantName === filter.tenantName),
   );
 
   const putawayCount = results.filter((r) => r.status === "STORED").length;
@@ -183,10 +186,17 @@ export default function PutawayPage() {
         <>
           {/* ── 목록: 검수완료·입고완료 ── */}
           <form className="search" onSubmit={handleSearch}>
+            <label>화주명</label>
+            <select name="tenantName" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
-            <label>화주명</label>
-            <input type="text" name="partnerName" />
             <label>상태</label>
             <select name="status" defaultValue="INSPECTED,COMPLETED">
               <option value="INSPECTED,COMPLETED">

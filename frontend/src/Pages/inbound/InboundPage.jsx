@@ -28,11 +28,12 @@ export default function InboundPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록
+  const [tenants, setTenants] = useState([]); // 화주 드롭다운 선택지 [{id, code, name}]
   const [detail, setDetail] = useState(null); // ED-13 클릭한 문서 상세
   const [filter, setFilter] = useState({
     from: "",
     to: "",
-    partnerName: "",
+    tenantName: "",
     documentNo: "",
     status: "",
   }); // 조회 조건
@@ -74,7 +75,7 @@ export default function InboundPage() {
     setFilter({
       from: form.get("from"),
       to: form.get("to"),
-      partnerName: form.get("partnerName").trim(),
+      tenantName: form.get("tenantName"),
       documentNo: form.get("documentNo").trim(),
       status: form.get("status"),
     });
@@ -86,13 +87,14 @@ export default function InboundPage() {
     getList();
   }, []);
 
+  axios.get("/wms/inbounds/tenants").then((res) => setTenants(res.data)); // 화주 드롭다운 선택지
+
   // 조회 조건에 맞는 문서만 (빈 조건은 통과)
   const visibleList = inbounds.filter(
     (d) =>
       (filter.from === "" || d.expectedAt >= filter.from) &&
       (filter.to === "" || d.expectedAt <= filter.to) &&
-      (filter.partnerName === "" ||
-        d.partnerName.includes(filter.partnerName)) &&
+      (filter.tenantName === "" || d.tenantName === filter.tenantName) &&
       (filter.documentNo === "" || d.documentNo.includes(filter.documentNo)) &&
       (filter.status === "" || d.status === filter.status),
   );
@@ -155,10 +157,17 @@ export default function InboundPage() {
         <>
           {/* ── 목록 ── */}
           <form className="search" onSubmit={handleSearch}>
+            <label>화주명</label>
+            <select name="tenantName" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
-            <label>화주명</label>
-            <input type="text" name="partnerName" />
             <label>입고번호</label>
             <input type="text" name="documentNo" defaultValue="IN-2026" />
             <label>상태</label>

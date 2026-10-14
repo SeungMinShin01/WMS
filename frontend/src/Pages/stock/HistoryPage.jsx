@@ -53,10 +53,10 @@ export default function HistoryPage() {
       <PageTitle title="입출고 이력" path="홈 > 재고관리 > 입출고이력" />
 
       <form className="search" onSubmit={조회}>
-        <label>기간</label>
-        <input type="date" name="from" /> ~ <input type="date" name="to" />
         <label>품목</label>
         <input type="text" name="product" placeholder="코드 또는 이름" />
+        <label>기간</label>
+        <input type="date" name="from" /> ~ <input type="date" name="to" />
         <label>로케이션</label>
         <input type="text" name="locationCode" />
         <label>변동타입</label>
