@@ -108,15 +108,13 @@ public class StockService {
     }
 
     // 칸 하나 조사
+    // stocks = 이 칸의 수량 있는 재고만
     private LocationCheck check(LocationEntity loc, LotEntity lot, List<StockEntity> stocks) {
         int total = 0;  // 칸 합계
         boolean hasSameLot = false; // 같은 LOT 유무
         boolean hasSameProductOtherLot = false; // 같은 품목인데 LOT만 다른것이 있는지
         boolean hasOtherTenant = false; // 다른 화주의 재고 유무
         for (StockEntity s : stocks) {
-            // 다른 칸 재고,
-            if (!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
-                continue;
             total += s.getQty();
             if(!s.getTenantEntity().getTenantId().equals(lot.getProductEntity().getTenantEntity().getTenantId()))
                 hasOtherTenant = true;  // 다른 화주 재고가 있음(ED-60)
