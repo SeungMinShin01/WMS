@@ -1,0 +1,41 @@
+/* QR 라벨 한 장 */
+.qr-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 170px;
+  padding: 10px 8px;
+  margin: 4px;
+  border: 1px dashed #999;
+  background: #fff;
+  break-inside: avoid; /* 인쇄 때 라벨이 두 쪽으로 잘리지 않게 */
+}
+.qr-label .qr-code {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: bold;
+  word-break: break-all;
+  text-align: center;
+}
+.qr-label .qr-title,
+.qr-label .qr-sub {
+  font-size: 12px;
+  color: #444;
+  text-align: center;
+}
+.qr-sheet {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* 인쇄: 라벨만 보이게 (메뉴·헤더·버튼 숨김) */
+@media print {
+  header.top,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  .qr-label {
+    border-color: #ccc;
+  }
+}

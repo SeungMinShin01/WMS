@@ -108,7 +108,7 @@ export default function LocationPage() {
       const res = isEdit
         ? await axios.put("/wms/location", body)
         : await axios.post("/wms/location", body);
-      if (res.data === true) {
+      if (res.data) { // [변경] === true 였던 것 (등록은 새 번호가 와요)
         alert(isEdit ? "수정되었습니다." : "등록되었습니다.");
         setForm(null);
         fetchLocations();
@@ -116,8 +116,9 @@ export default function LocationPage() {
         alert("저장에 실패했습니다.");
       }
     } catch (err) {
-      console.error("로케이션 저장 실패", err);
-      alert("저장 중 오류가 발생했습니다.");
+    // [변경] 서버가 보낸 문구(400, 404, 409)가 있으면 그대로 보여준다
+    const msg = typeof err.response?.data === "string" ? err.response.data : null;
+    alert(msg || "저장 중 오류가 발생했습니다.");
     }
   };
 

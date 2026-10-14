@@ -83,6 +83,7 @@ export default function Layout() {
               <div className="menu-group">관리자</div>
               <NavLink to="/admin/workers">작업자 계정</NavLink>
               <NavLink to="/admin/audit-logs">감사 로그</NavLink>
+              <NavLink to="/admin/labels">QR 라벨</NavLink>
             </>
           )}
 
