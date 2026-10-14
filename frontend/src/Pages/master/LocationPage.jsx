@@ -31,25 +31,37 @@ const parseCode = (code) => {
 const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 
 // ─────────────────────────────────────────────────────────────
-// [추가] 비활성 뱃지
-//   - 위치는 "고장/비활성 정도만 표시" 하기로 해서, 비활성일 때만 이 뱃지를 쓴다.
-//     (활성은 아래 목록에서 아예 표시하지 않아서 정상 위치는 빈 칸으로 둔다.)
+// [변경] 상태 뱃지 (활성/비활성 둘 다 표시)
+//   - 이전: 비활성일 때만 회색 뱃지(InactiveBadge)를 보이고, 활성은 빈 칸이었다.
+//          ("위치는 고장/비활성 정도만 표시" 요구에 맞춘 것)
+//   - 이후: 품목·거래처 화면과 같은 StatusBadge 로 통일해서 활성(초록)도 표시한다.
+//          · 화면마다 표시 방식이 달라 보이지 않게 하고,
+//          · 빈 칸이 "활성"인지 "응답에 상태가 안 온 것"인지 구분이 안 되던 문제를 없앤다.
+//   - STATUS: true/false 를 화면 문구와 색으로 바꾸는 표. 객체 키는 문자열이라
+//             사용할 때 String(active) 로 변환해서 찾는다.
 //   - 고장과 비활성은 DB 에서 구분하지 않고 is_active=false 하나로 처리한다.
 //     → 비활성 = 사용 불가(고장 포함). 나중에 구분이 필요하면 status 컬럼을 따로 추가한다.
-//   - 모양과 색은 품목·거래처의 비활성 뱃지와 같다(회색).
+//   - 비활성만 표시하던 방식으로 되돌리려면 아래 목록의 상태 칸을
+//     {!activeOf(l) && <StatusBadge active={false} />} 로 바꾸면 된다.
 // ─────────────────────────────────────────────────────────────
-function InactiveBadge() {
+const STATUS = {
+  true: { label: "활성", color: "#2e7d32" },
+  false: { label: "비활성", color: "#9e9e9e" },
+};
+
+function StatusBadge({ active }) {
+  const s = STATUS[String(active)];
   return (
     <span
       style={{
-        color: "#9e9e9e",
-        border: "1px solid #9e9e9e",
+        color: s.color,
+        border: `1px solid ${s.color}`,
         borderRadius: 4,
         padding: "2px 8px",
         fontSize: 12,
       }}
     >
-      비활성
+      {s.label}
     </span>
   );
 }
@@ -245,11 +257,11 @@ export default function LocationPage() {
                 <td>{zone}</td>
                 <td>{aisle}</td>
                 <td>{bay}</td>
-                {/* [변경] 이전: l.isActive ? "사용" : "미사용" (활성·비활성 둘 다 글자로 표시)
-                          이후: 비활성일 때만 뱃지를 표시하고, 활성(정상)은 빈 칸으로 둔다.
-                    "위치는 고장/비활성 정도만 표시" 요구에 맞춘 것이다.
-                    정상 위치까지 표시하고 싶으면 이 줄을 StatusBadge 방식으로 바꾸면 된다. */}
-                <td>{!activeOf(l) && <InactiveBadge />}</td>
+                {/* [변경] 이전: 비활성일 때만 회색 뱃지를 표시하고, 활성은 빈 칸
+                          이후: 활성(초록)·비활성(회색) 둘 다 뱃지로 표시 (품목·거래처와 같은 모양) */}
+                <td>
+                  <StatusBadge active={activeOf(l)} />
+                </td>
                 <td>-</td>
                 <td>-</td>
                 <td>-</td>
