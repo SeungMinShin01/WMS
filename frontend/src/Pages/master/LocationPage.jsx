@@ -33,13 +33,39 @@ const parseCode = (code) => {
 const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 
 // ─────────────────────────────────────────────────────────────
-// [추가] 비활성 뱃지
-//   - 위치는 "고장/비활성 정도만 표시" 하기로 해서, 비활성일 때만 이 뱃지를 쓴다.
-//     (활성은 아래 목록에서 아예 표시하지 않아서 정상 위치는 빈 칸으로 둔다.)
+// [변경] 상태 뱃지 (활성/비활성 둘 다 표시)
+//   - 이전: 목록 상태 칸을 "사용"/"미사용" 글자로 표시했다.
+//   - 이후: 품목·거래처 화면과 같은 StatusBadge 로 통일해서 활성(초록)·비활성(회색) 뱃지로 표시한다.
+//          · 화면마다 표시 방식이 달라 보이지 않게 하고,
+//          · 빈 칸이 "활성"인지 "응답에 상태가 안 온 것"인지 구분이 안 되던 문제를 없앤다.
+//   - STATUS: true/false 를 화면 문구와 색으로 바꾸는 표. 객체 키는 문자열이라
+//             사용할 때 String(active) 로 변환해서 찾는다.
 //   - 고장과 비활성은 DB 에서 구분하지 않고 is_active=false 하나로 처리한다.
 //     → 비활성 = 사용 불가(고장 포함). 나중에 구분이 필요하면 status 컬럼을 따로 추가한다.
-//   - 모양과 색은 품목·거래처의 비활성 뱃지와 같다(회색).
+//   - 비활성만 표시하던 방식으로 되돌리려면 아래 목록의 상태 칸을
+//     {!activeOf(l) && <StatusBadge active={false} />} 로 바꾸면 된다.
 // ─────────────────────────────────────────────────────────────
+const STATUS = {
+  true: { label: "활성", color: "#2e7d32" },
+  false: { label: "비활성", color: "#9e9e9e" },
+};
+
+function StatusBadge({ active }) {
+  const s = STATUS[String(active)];
+  return (
+    <span
+      style={{
+        color: s.color,
+        border: `1px solid ${s.color}`,
+        borderRadius: 4,
+        padding: "2px 8px",
+        fontSize: 12,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
 export default function LocationPage() {
@@ -207,7 +233,7 @@ export default function LocationPage() {
         )}
       </GridTitle>
       <table className="grid">
-        {/* thead: 초안 그대로, 단 "사용여부" 열 이름만 "상태" 로 바꿨다 */}
+        {/* thead: 팀원이 정리한 9열 그대로. 단 "사용여부" 열 이름만 "상태" 로 바꿨다 */}
         <thead>
           <tr>
             {th("locationCode", "로케이션코드")}
@@ -221,8 +247,7 @@ export default function LocationPage() {
             <th>비고</th>
           </tr>
         </thead>
-        {/* [변경] 초안은 빈 tbody. 서버 데이터를 .map으로 표시.
-            "-"는 DTO에 아직 없는 값(혼용, 적치 품목/LOT, 소비기한, 실제 적재수량, 비고) */}
+        {/* 서버 데이터를 .map으로 표시. 열 순서는 위 thead 와 같다 (9열). */}
         <tbody>
           {paged.map((l) => {
             const { zone, aisle, bay } = parseCode(l.locationCode);
@@ -232,7 +257,12 @@ export default function LocationPage() {
                 <td>{zone}</td>
                 <td>{aisle}</td>
                 <td>{bay}</td>
-                <td>{l.isActive ? "사용" : "미사용"}</td>
+                {/* [변경] 이전: l.isActive ? "사용" : "미사용" (글자로 표시)
+                          이후: activeOf(l) 결과를 뱃지로 표시 (활성=초록, 비활성=회색, 품목·거래처와 같은 모양) */}
+                <td>
+                  <StatusBadge active={activeOf(l)} />
+                </td>
+                {/* 팀원 코드 그대로: 혼용 여부 */}
                 <td>{l.mixed ? "혼용" : "-"}</td>
                 <td>{l.capacity}</td>
                 <td className="num">
@@ -244,7 +274,9 @@ export default function LocationPage() {
           })}
         </tbody>
       </table>
-          {pager}
+
+      {pager}
+
       {/* [추가] 하단 상세: 선택 전에는 안내 문구만 (입고예정 화면과 동일) */}
       {form == null ? (
         <p className="empty">목록에서 로케이션을 클릭하면 상세가 나옵니다.</p>
@@ -288,6 +320,7 @@ export default function LocationPage() {
               value={form.capacity ?? ""}
               onChange={입력}
             />
+            {/* 팀원 코드 그대로: 비고 */}
             <label>비고</label>
             <input
               type="text"

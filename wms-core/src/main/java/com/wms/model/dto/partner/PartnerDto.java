@@ -26,6 +26,8 @@ public class PartnerDto {
     private String partnerType;
     private String contact;
     private String address;
+    // [추가] 사용 여부. true=활성, false=비활성. 화면과 키 이름이 같다(isActive)
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -38,6 +40,7 @@ public class PartnerDto {
                 .partnerType(this.partnerType)
                 .contact(this.contact)
                 .address(this.address)
+                .isActive(this.isActive == null ? true : this.isActive)
                 .build();
     }
 
@@ -53,6 +56,8 @@ public class PartnerDto {
                 .partnerType(entity.getPartnerType())
                 .contact(entity.getContact())
                 .address(entity.getAddress())
+                // [추가] 목록·상세 응답에 상태를 싣는다
+                .isActive(entity.getIsActive())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
