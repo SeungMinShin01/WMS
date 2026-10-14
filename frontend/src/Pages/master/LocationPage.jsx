@@ -38,21 +38,6 @@ const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 //     → 비활성 = 사용 불가(고장 포함). 나중에 구분이 필요하면 status 컬럼을 따로 추가한다.
 //   - 모양과 색은 품목·거래처의 비활성 뱃지와 같다(회색).
 // ─────────────────────────────────────────────────────────────
-function InactiveBadge() {
-  return (
-    <span
-      style={{
-        color: "#9e9e9e",
-        border: "1px solid #9e9e9e",
-        borderRadius: 4,
-        padding: "2px 8px",
-        fontSize: 12,
-      }}
-    >
-      비활성
-    </span>
-  );
-}
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
 export default function LocationPage() {
