@@ -170,9 +170,9 @@ public class InboundRegisterService {
                 try{
                      // 1. 이름 → 엔티티(ID). 공급사·품목은 그 화주 안에서만 찾음
                     TenantEntity tenant = excel.findTenant(excel.text(row.getCell(0)));
-                PartnerEntity partner = excel.findPartner(tenant, excel.text(row.getCell(1)), "SUPPLIER", "공급사");
-                LocalDate expectedDate = excel.date(row.getCell(2), "입고예정일");
-                ProductEntity product = excel.findProduct(tenant, excel.text(row.getCell(3)));
+                    PartnerEntity partner = excel.findPartner(tenant, excel.text(row.getCell(1)), "SUPPLIER", "공급사");
+                    LocalDate expectedDate = excel.date(row.getCell(2), "입고예정일");
+                    ProductEntity product = excel.findProduct(tenant, excel.text(row.getCell(3)));
 
                     // 2. 같은 화주+공급사+날짜면 이미 만든 문서에 붙이고, 처음이면 문서 생성
                     String key = tenant.getTenantId() + "|" + partner.getPartnerId() + "|" + expectedDate;

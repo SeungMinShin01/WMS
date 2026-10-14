@@ -108,15 +108,13 @@ public class StockService {
     }
 
     // 칸 하나 조사
+    // stocks = 이 칸의 수량 있는 재고만
     private LocationCheck check(LocationEntity loc, LotEntity lot, List<StockEntity> stocks) {
         int total = 0;  // 칸 합계
         boolean hasSameLot = false; // 같은 LOT 유무
         boolean hasSameProductOtherLot = false; // 같은 품목인데 LOT만 다른것이 있는지
         boolean hasOtherTenant = false; // 다른 화주의 재고 유무
         for (StockEntity s : stocks) {
-            // 다른 칸 재고,
-            if (!s.getLocationEntity().getLocationId().equals(loc.getLocationId()) || s.getQty() == 0)
-                continue;
             total += s.getQty();
             if(!s.getTenantEntity().getTenantId().equals(lot.getProductEntity().getTenantEntity().getTenantId()))
                 hasOtherTenant = true;  // 다른 화주 재고가 있음(ED-60)
@@ -205,26 +203,26 @@ public class StockService {
 
 
         // 예) 20박스 적재 / A 여유 22, B 40, C 100 (전부 들어감) / D 15, E 5 (부족)
-        // → 2번에서 [A, B, C] / [D, E] 로 나뉘고
+        // → 1번에서 [A, B, C] / [D, E] 로 나뉘고
         // → 3번에서 들어가는 칸은 여유 작은 순 A(22) → B(40) → C(100), 부족한 칸은 여유 큰 순 D(15) → E(5)
         // → 최종 A → B → C → D → E
                     
         // 추천칸 정렬
         candidates.sort((a,b)->{
-            // 1. 순위 숫자가 작은 칸이 앞(1. 같은 LOT -> 2. 같은 품목 다른 LOT -> 3. 다른 품목 잔량 -> 빈칸)
-            if(!a.getPriority().equals(b.getPriority()))
-                return a.getPriority().compareTo(b.getPriority());
-
-            // 2. 같은 순위면 전부 들어가는 칸 (fits = true)이 앞으로
+            // 1. 전량 들어가는 칸(fits = true)이 앞 — 적재는 나눠 넣을 수 없어서 부족한 칸은 순위가 높아도 뒤로
             if(a.getFits() && !b.getFits()) return -1;
             if(!a.getFits() && b.getFits()) return 1;
+
+            // 2. 순위 숫자가 작은 칸이 앞(1. 같은 LOT -> 2. 같은 품목 다른 LOT -> 3. 다른 품목 잔량 -> 빈칸)
+            if(!a.getPriority().equals(b.getPriority()))
+                return a.getPriority().compareTo(b.getPriority());
 
             // 3. 여유 비교 (제한없음 null은 가장 큰 여유칸으로 취급하기 )
             int freeA = a.getFreeQty() == null ? Integer.MAX_VALUE : a.getFreeQty();
             int freeB = b.getFreeQty() == null ? Integer.MAX_VALUE : b.getFreeQty();
             if(freeA != freeB){
-                if(a.getFits()) return freeA - freeB;   // 전부 들어가는 칸끼리: 여유 작은 칸이 앞 (딱 맞는칸, Best Fit)
-                else            return freeB - freeA;   // 부족한 칸끼리: 여유 큰 칸이 앞으로 (많이 들어가는 칸)          
+                if(a.getFits()) return Integer.compare(freeA, freeB);   // 전부 들어가는 칸끼리: 여유 작은 칸이 앞 (딱 맞는칸, Best Fit)
+                else            return Integer.compare(freeB, freeA);   // 부족한 칸끼리: 여유 큰 칸이 앞으로 (많이 들어가는 칸)          
             }
             // 다 같으면 칸 코드 순으로 
             return a.getLocationCode().compareTo(b.getLocationCode());
