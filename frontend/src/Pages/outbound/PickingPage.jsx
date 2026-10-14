@@ -160,7 +160,7 @@ export default function PickingPage() {
         }
       }
       setWorkers(result);
-    } catch (error) {
+    } catch {
       setWorkers([]);
     }
   };
@@ -384,12 +384,18 @@ export default function PickingPage() {
           <thead>
             <tr>
               {/* 정렬 가능한 칸 : 클릭하면 changeSort, 옆에 화살표 표시 (cursor pointer : 마우스를 올리면 손가락 모양) */}
-              <th style={{ cursor: "pointer" }} onClick={() => changeSort("documentNo")}>
+              <th
+                style={{ cursor: "pointer" }}
+                onClick={() => changeSort("documentNo")}
+              >
                 주문번호 {arrow("documentNo")}
               </th>
               <th>화주</th>
               <th>배송지명</th>
-              <th style={{ cursor: "pointer" }} onClick={() => changeSort("expectedAt")}>
+              <th
+                style={{ cursor: "pointer" }}
+                onClick={() => changeSort("expectedAt")}
+              >
                 출고요청일 {arrow("expectedAt")}
               </th>
               <th>상태</th>
