@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.wms.audit.AuditAction;
 import com.wms.audit.AuditLog;
@@ -39,6 +41,14 @@ public class OutboundRegisterController {
     public ResponseEntity<Integer> createItem(@PathVariable(name = "documentId") Integer documentId,
             @RequestBody OutboundItemCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(outboundRegisterService.createItem(documentId, dto));
+    }
+
+    // 엑셀 일괄 등록 → 201 + "출고문서 N건, 품목 M줄 등록"
+    // 감사: 파일명·크기. 실패하면 reason 에 "3행: …" 이 남음
+    @AuditLog(action = AuditAction.OUTBOUND_UPLOAD, fields = { "originalFilename", "size" })
+    @PostMapping("/upload")
+    public ResponseEntity<String> upload(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(outboundRegisterService.uploadExcel(file));
     }
 
     // 등록 화면 선택지 1. 화주 목록

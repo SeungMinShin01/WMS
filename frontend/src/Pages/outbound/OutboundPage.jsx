@@ -46,6 +46,22 @@ export default function OutboundPage() {
     setOutbounds(response.data);
   };
 
+  // 엑셀 일괄 등록: 파일을 고르면 바로 업로드 (한 줄이라도 틀리면 전체 취소)
+  const uploadExcel = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = ""; // 같은 파일을 다시 고를 수 있게 초기화
+    if (!file) return;
+    const form = new FormData(); // 파일은 JSON 이 아니라 FormData 로 보냄
+    form.append("file", file); // 컨트롤러 @RequestParam("file") 과 이름 같아야 함
+    try {
+      const response = await axios.post("/wms/outbounds/upload", form);
+      alert(response.data); // "출고문서 3건, 품목 5줄 등록"
+      getList();
+    } catch (error) {
+      alert(`엑셀 등록 실패 (전체 취소)\n${error.response?.data ?? "오류"}`);
+    }
+  };
+
   // 최초 1번 목록 조회
   useEffect(() => {
     getList();
@@ -185,6 +201,10 @@ export default function OutboundPage() {
 
           <GridTitle title="출고문서 목록" desc={`총 ${visibleList.length}건`}>
              <button className="btn" onClick={() => setCreating(true)}>신규</button>
+             <label className="btn">
+              엑셀 등록
+              <input type="file" accept=".xlsx" hidden onChange={uploadExcel} />
+            </label>
           </GridTitle>
           <table className="grid">
             <thead>
