@@ -45,7 +45,8 @@ public enum AuditAction {
     WORKER_CREATE("작업자 계정 생성"),
     WORKER_ACTIVE("작업자 계정 활성/비활성"),
 
-    AUDIT_DOWNLOAD("감사 로그 다운로드");
+    AUDIT_DOWNLOAD("감사 로그 다운로드"),
+    DEMO_RESET("시연 데이터 초기화");
 
     private final String label; // 한글 이름 (CSV detail 칸에 사용)
 
