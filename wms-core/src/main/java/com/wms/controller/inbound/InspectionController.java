@@ -37,7 +37,7 @@ public class InspectionController {
     @AuditLog(action = AuditAction.INSPECT, target = "documentItemId", fields = { "qty" })
     @PostMapping("")
     public ResponseEntity<Integer> inspectionSave(@RequestBody InspectionDto inspectionDto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(inboundService.inspectionSave(inspectionDto));
+        return ResponseEntity.status(HttpStatus.CREATED).body(carryAsyncService.inspect(inspectionDto).join());
     }
 
     // 검수 결과 상세 조회 ED - 15
