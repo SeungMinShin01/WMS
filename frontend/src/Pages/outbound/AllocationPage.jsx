@@ -341,11 +341,10 @@ export default function AllocationPage() {
             <input type="date" name="from" /> ~ <input type="date" name="to" />
             <label>배송지명</label>
             <input type="text" name="partnerName" />
-            <label>주문상태</label>
+            <label>상태</label>
+            {/* 전체 = 출고지시 대상 상태(출고예정·출고할당)만 */}
             <select name="status" defaultValue="WAITING,ALLOCATED">
-              <option value="WAITING,ALLOCATED">
-                지시 대상 전체 (출고예정·출고할당)
-              </option>
+              <option value="WAITING,ALLOCATED">전체</option>
               <option value="WAITING">출고예정</option>
               <option value="ALLOCATED">출고할당</option>
             </select>

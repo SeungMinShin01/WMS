@@ -15,7 +15,14 @@ export default function PickingPage() {
 
   const [orders, setOrders] = useState([]); // 피킹할 수 있는 문서 목록 (할당 · 피킹중)
   const [tenants, setTenants] = useState([]); // [ED-61] 화주 선택 목록 [{tenantId, tenantName}]
-  const [tenantId, setTenantId] = useState(""); // [ED-61] 고른 화주 ("" = 전체)
+  // 조회 조건 : 화주 · 출고요청일(from ~ to) · 상태 (출고문서 · 출고지시 화면과 같은 순서)
+  // status 의 "ALLOCATED,PICKING" = 전체 (피킹 대상 상태인 출고할당·재고피킹 둘 다)
+  const [filter, setFilter] = useState({
+    tenantId: "", // [ED-61] "" = 전체
+    from: "",
+    to: "",
+    status: "ALLOCATED,PICKING",
+  });
   const [detail, setDetail] = useState(null); // 선택한 출고 문서 정보
   const [pickings, setPickings] = useState([]); // 피킹 줄 목록
   const [loading, setLoading] = useState(false); // 요청 중이면 true → 버튼 잠금
@@ -171,7 +178,7 @@ export default function PickingPage() {
       setDetail(null);
       setPickings([]);
       setPicking(null);
-      getOrders(tenantId);
+      getOrders(filter.tenantId);
       getTenants();
     } else {
       getDetail();
@@ -181,10 +188,30 @@ export default function PickingPage() {
     }
   }, [documentId]);
 
-  // [ED-61] 화주 선택을 바꾸면 그 화주 문서로 다시 조회
-  const 화주변경 = (event) => {
-    setTenantId(event.target.value);
-    getOrders(event.target.value);
+  // 조회 버튼 - 입력한 조건 저장 + 화주 조건으로 서버에서 다시 받아옴 (출고지시 화면과 같은 방식)
+  const handleSearch = (event) => {
+    event.preventDefault();
+    const tenantId = event.target.tenantId.value; // [ED-61]
+    setFilter({
+      tenantId: tenantId,
+      from: event.target.from.value,
+      to: event.target.to.value,
+      status: event.target.status.value,
+    });
+    getOrders(tenantId);
+  };
+
+  // 초기화 버튼 - 입력칸을 처음 값으로 되돌리고 전체로 다시 조회
+  // event.target.form : 버튼이 들어 있는 form / reset() : 입력칸을 defaultValue 로 되돌림
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      tenantId: "",
+      from: "",
+      to: "",
+      status: "ALLOCATED,PICKING",
+    });
+    getOrders("");
   };
 
   // 전 품목 할당 여부 : 품목마다 할당수량이 주문수량보다 적으면 아직 덜 할당된 것
@@ -343,9 +370,20 @@ export default function PickingPage() {
     return <span style={{ fontSize: "0.8em" }}>▲</span>;
   };
 
-  // 문서 목록 : orders(할당·피킹중 문서)를 복사해서 정렬
+  // 조회 조건(상태 · 출고요청일)으로 거른 목록 (화주는 서버에서 이미 걸러서 받아온다)
+  // status 는 "ALLOCATED,PICKING" 처럼 여러 개 → split(",") 로 나눠서 그 안에 있는지 확인
+  // 출고요청일이 비어 있는 문서는 날짜 조건을 고르면 빠짐
+  const visibleList = orders.filter((order) => {
+    if (!filter.status.split(",").includes(order.status)) return false;
+    const day = order.expectedAt ? order.expectedAt.substring(0, 10) : "";
+    if (filter.from !== "" && (day === "" || day < filter.from)) return false;
+    if (filter.to !== "" && (day === "" || day > filter.to)) return false;
+    return true;
+  });
+
+  // 문서 목록 : 걸러진 목록(visibleList)을 복사해서 정렬
   // [...배열] : 배열을 복사 (원본은 그대로 두고 복사본만 정렬)
-  const sortedList = [...orders];
+  const sortedList = [...visibleList];
   sortedList.sort((a, b) => {
     // a[sortKey] : sortKey 가 "documentNo" 면 a.documentNo 와 같음 (칸 이름을 변수로 받아서 꺼냄)
     // 두 칸 모두 글자("OUT-20260902-001", "2026-09-02T10:00:00")라서 글자 순 비교 = 번호 순 · 날짜 순
@@ -363,10 +401,11 @@ export default function PickingPage() {
       <>
         <PageTitle title="피킹리스트" path="홈 > 출고관리 > 피킹리스트" />
 
-        {/* [ED-61] 화주 선택 */}
-        <form className="search" onSubmit={(e) => e.preventDefault()}>
+        {/* 조회 조건 : 화주 · 출고요청일 · 상태 + 조회 · 초기화 (출고문서 · 출고지시 화면과 같은 모양) */}
+        <form className="search" onSubmit={handleSearch}>
+          {/* [ED-61] 화주 선택 */}
           <label>화주</label>
-          <select value={tenantId} onChange={화주변경}>
+          <select name="tenantId" defaultValue="">
             <option value="">전체</option>
             {tenants.map((t) => (
               <option key={t.tenantId} value={t.tenantId}>
@@ -374,11 +413,24 @@ export default function PickingPage() {
               </option>
             ))}
           </select>
+          <label>출고요청일</label>
+          <input type="date" name="from" /> ~ <input type="date" name="to" />
+          <label>상태</label>
+          {/* 전체 = 피킹 대상 상태(출고할당·재고피킹)만 */}
+          <select name="status" defaultValue="ALLOCATED,PICKING">
+            <option value="ALLOCATED,PICKING">전체</option>
+            <option value="ALLOCATED">출고할당</option>
+            <option value="PICKING">재고피킹</option>
+          </select>
+          <input type="submit" className="btn primary" value="조회" />
+          <button type="button" className="btn" onClick={handleReset}>
+            초기화
+          </button>
         </form>
 
         <GridTitle
           title="피킹할 출고 문서"
-          desc={"총 " + orders.length + "건"}
+          desc={"총 " + visibleList.length + "건"}
         />
         <table className="grid">
           <thead>
@@ -396,7 +448,7 @@ export default function PickingPage() {
             </tr>
           </thead>
           <tbody>
-            {orders.length === 0 && (
+            {visibleList.length === 0 && (
               <tr>
                 <td colSpan="5">
                   피킹할 문서가 없습니다 (출고지시에서 피킹리스트를 먼저
