@@ -20,6 +20,7 @@ public enum AuditAction {
     // 출고
     OUTBOUND_CREATE("출고 문서 등록"),
     OUTBOUND_ITEM_ADD("출고 품목 추가"),
+    OUTBOUND_UPLOAD("출고 엑셀 일괄 등록"),
     ALLOCATE("할당"),
     PICK("피킹 확인"),
     SHIP("출고 확정"),

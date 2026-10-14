@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import useSort from "../../Layout/useSort";
 
 const STATUS_NAME = {
   WAITING: "입고예정",
@@ -171,6 +172,8 @@ export default function PutawayPage() {
     setLocations({ ...locations, [focusDetailId]: locationId });
   };
 
+  const { sorted, th } = useSort(visibleList);
+
   return (
     <>
       <PageTitle title="물품적재" path="홈 > 입고관리 > 물품적재" />
@@ -202,18 +205,18 @@ export default function PutawayPage() {
             <thead>
               <tr>
                 <th>No</th>
-                <th>입고번호</th>
+                {th("documentNo", "입고번호")}
                 <th>화주</th>
                 <th>공급사명</th>
-                <th>입고예정일</th>
+                {th("expectedAt", "입고예정일")}
                 <th>품목수</th>
                 <th>예정수량</th>
                 <th>상태</th>
-                <th>입고확정일시</th>
+                {th("completedAt", "입고확정일시")}
               </tr>
             </thead>
             <tbody>
-              {visibleList.map((inbound, index) => (
+              {sorted.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
