@@ -30,4 +30,8 @@ public class UserEntity extends BaseTime{
         @Enumerated(EnumType.STRING)
         private UserRole role;
 
+        // 계정 사용 여부 (false = 비활성 → 로그인·요청 모두 401). 삭제하지 않고 막기만 함
+        @Builder.Default
+        private Boolean isActive = true;
+
 }

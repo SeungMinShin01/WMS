@@ -1,6 +1,5 @@
 package com.wms.model.dto.location;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.wms.model.entity.LocationEntity;
@@ -20,6 +19,10 @@ public class LocationDto {
     private Integer capacity;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String remark;  // 비고
+    // 재고에서 계산, 컬럼x
+    private Integer storedQty;
+    private Boolean mixed;  
 
     // 1. DTO->ENTITY 등록시
     public LocationEntity toEntity(){
@@ -27,6 +30,7 @@ public class LocationDto {
                              .locationCode( this.locationCode )
                              .isActive( this.isActive )
                              .capacity( this.capacity )
+                             .remark(this.remark)
                              .build();
     }
 
@@ -39,6 +43,7 @@ public class LocationDto {
             .capacity( entity.getCapacity() )
             .createdAt( entity.getCreatedAt() )
             .updatedAt( entity.getUpdatedAt() )
+            .remark(entity.getRemark())
             .build();
     }
 }

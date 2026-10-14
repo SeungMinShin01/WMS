@@ -27,6 +27,7 @@ public class InboundListDto {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime createdAt;
     private String status;
+    private String source;  // 들어온 경로
     private Integer itemCount;
     private Integer totalExpectedQty;   // 들어올 예정인 수량
     private Integer inspectedQty;   // 실제 입고수량 합계 
@@ -41,6 +42,7 @@ public class InboundListDto {
                 .completedAt(entity.getCompletedAt())
                 .createdAt(entity.getCreatedAt())
                 .status(entity.getStatus().name())
+                .source(entity.getSource().name())  
                 .itemCount(itemCount)
                 .totalExpectedQty(totalExpectedQty)
                 .build();

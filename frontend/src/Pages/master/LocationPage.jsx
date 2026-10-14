@@ -44,6 +44,7 @@ const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
 //   - 비활성만 표시하던 방식으로 되돌리려면 아래 목록의 상태 칸을
 //     {!activeOf(l) && <StatusBadge active={false} />} 로 바꾸면 된다.
 // ─────────────────────────────────────────────────────────────
+<<<<<<< HEAD
 const STATUS = {
   true: { label: "활성", color: "#2e7d32" },
   false: { label: "비활성", color: "#9e9e9e" },
@@ -65,6 +66,8 @@ function StatusBadge({ active }) {
     </span>
   );
 }
+=======
+>>>>>>> bfd21e850d18e3cf098f3dce007f8d5d1a249226
 
 // 02 창고·로케이션 — 담당: 기준정보 담당
 export default function LocationPage() {
@@ -239,8 +242,6 @@ export default function LocationPage() {
             <th>베이</th>
             <th>상태</th>
             <th>혼용</th>
-            <th>적치 품목 / LOT</th>
-            <th>소비기한</th>
             <th>적재 가능 수량</th>
             <th>실제 적재수량</th>
             <th>비고</th>
@@ -257,6 +258,7 @@ export default function LocationPage() {
                 <td>{zone}</td>
                 <td>{aisle}</td>
                 <td>{bay}</td>
+<<<<<<< HEAD
                 {/* [변경] 이전: 비활성일 때만 회색 뱃지를 표시하고, 활성은 빈 칸
                           이후: 활성(초록)·비활성(회색) 둘 다 뱃지로 표시 (품목·거래처와 같은 모양) */}
                 <td>
@@ -265,9 +267,15 @@ export default function LocationPage() {
                 <td>-</td>
                 <td>-</td>
                 <td>-</td>
+=======
+                <td>{l.isActive ? "사용" : "미사용"}</td>
+                <td>{l.mixed ? "혼용" : "-"}</td>
+>>>>>>> bfd21e850d18e3cf098f3dce007f8d5d1a249226
                 <td>{l.capacity}</td>
-                <td>-</td>
-                <td>-</td>
+                <td className="num">
+                  {l.storedQty ? l.storedQty.toLocaleString() : "-"}
+                </td>
+                <td className="left">{l.remark ?? "-"}</td>
               </tr>
             );
           })}
@@ -315,6 +323,14 @@ export default function LocationPage() {
               type="number"
               name="capacity"
               value={form.capacity ?? ""}
+              onChange={입력}
+            />
+            <label>비고</label>
+            <input
+              type="text"
+              name="remark"
+              maxLength={200}
+              value={form.remark ?? ""}
               onChange={입력}
             />
           </div>

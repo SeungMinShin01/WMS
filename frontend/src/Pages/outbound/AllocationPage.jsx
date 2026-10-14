@@ -37,6 +37,10 @@ export default function AllocationPage() {
   const [checked, setChecked] = useState([]); // 체크한 품목 줄 id 목록
   const [previews, setPreviews] = useState([]); // 추천 결과 (사용자가 수정하는 값)
   const [loading, setLoading] = useState(false); // 요청 중이면 버튼 잠금
+  // 칸 제목 클릭 정렬 : sortKey = 정렬 중인 칸 이름, sortAsc = true 오름차순 / false 내림차순
+  // 처음 화면 : 주문번호 오름차순(▲)으로 시작
+  const [sortKey, setSortKey] = useState("documentNo");
+  const [sortAsc, setSortAsc] = useState(true);
 
   // ─────────────── 3. 조회 함수 ───────────────
   // [ED-61] 화주를 고르면 서버에서 그 화주 문서만 받아온다 (tenantId 가 "" 면 전체)
@@ -79,6 +83,41 @@ export default function AllocationPage() {
     )
       return false;
     return true;
+  });
+
+  // ── 칸 제목 클릭 정렬 (주문번호 · 출고요청일) ── 출고문서 화면과 같은 방식
+  // 정렬 중인 칸을 다시 누르면 방향만 뒤집음 (▲ → ▼ → ▲ ...)
+  // 다른 칸을 누르면 그 칸 내림차순(▼)부터 : 목록이 원래 빠른 순이라 첫 클릭에 바로 순서가 바뀌어 보이게
+  const changeSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  // 칸 제목 옆 화살표 : 정렬할 수 있는 칸에는 처음부터 항상 화살표 하나가 보임
+  // 정렬 중인 칸 : 지금 방향대로 ▲(오름차순) 또는 ▼(내림차순)
+  // 나머지 칸 : ▲ (누르면 그 칸으로 정렬할 수 있다는 표시)
+  // fontSize 0.8em : 칸 제목 글자보다 조금 작게
+  const arrow = (key) => {
+    if (sortKey === key && !sortAsc) {
+      return <span style={{ fontSize: "0.8em" }}>▼</span>;
+    }
+    return <span style={{ fontSize: "0.8em" }}>▲</span>;
+  };
+
+  // 화면에 보여줄 목록 : visibleList 를 복사해서 정렬
+  // [...배열] : 배열을 복사 (원본은 그대로 두고 복사본만 정렬)
+  const sortedList = [...visibleList];
+  sortedList.sort((a, b) => {
+    // a[sortKey] : sortKey 가 "documentNo" 면 a.documentNo 와 같음 (칸 이름을 변수로 받아서 꺼냄)
+    // 두 칸 모두 글자("OUT-20260902-001", "2026-09-02T10:00:00")라서 글자 순 비교 = 번호 순 · 날짜 순
+    // localeCompare : a 가 앞이면 음수, 같으면 0, 뒤면 양수 (자바 compareTo 와 같음)
+    const result = a[sortKey].localeCompare(b[sortKey]);
+    // 내림차순이면 부호를 뒤집어서 순서를 반대로
+    return sortAsc ? result : -result;
   });
 
   const handleSearch = (event) => {
@@ -324,15 +363,20 @@ export default function AllocationPage() {
             <thead>
               <tr>
                 <th>No</th>
-                <th>주문번호</th>
+                {/* 정렬 가능한 칸 : 클릭하면 changeSort, 옆에 화살표 표시 (cursor pointer : 마우스를 올리면 손가락 모양) */}
+                <th style={{ cursor: "pointer" }} onClick={() => changeSort("documentNo")}>
+                  주문번호 {arrow("documentNo")}
+                </th>
                 <th>화주</th>
                 <th>배송지명</th>
-                <th>출고요청일</th>
+                <th style={{ cursor: "pointer" }} onClick={() => changeSort("expectedAt")}>
+                  출고요청일 {arrow("expectedAt")}
+                </th>
                 <th>상태</th>
               </tr>
             </thead>
             <tbody>
-              {visibleList.map((outbound, index) => (
+              {sortedList.map((outbound, index) => (
                 <tr
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}

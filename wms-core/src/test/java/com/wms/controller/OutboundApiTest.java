@@ -154,7 +154,7 @@ public class OutboundApiTest {
                                         .andExpect(content().string("SHIPPED"));
 
                         mockMvc.perform(get("/wms/stocks"))
-                                        .andExpect(jsonPath("$[?(@.stockId == 4)].qty", contains(0)))
+                                        .andExpect(jsonPath("$[?(@.stockId == 4)].qty", hasSize(0)))
                                         .andExpect(jsonPath("$[?(@.stockId == 13)].qty", contains(10)))
                                         .andExpect(jsonPath("$[?(@.stockId == 13)].allocatedQty", contains(0)));
                 }

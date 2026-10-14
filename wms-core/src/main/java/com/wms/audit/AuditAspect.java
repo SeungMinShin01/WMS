@@ -45,7 +45,7 @@ public class AuditAspect {
         // 1. 실행 전: 누가, 어디서, 무엇을
         HttpServletRequest request = currentRequest();
         LoginUser user = currentUser(request);
-        String ip = clientIp(request);
+        String ip = ClientIp.from(request);
         String uri = request == null ? "" : request.getMethod() + " " + request.getRequestURI();
 
         Object[] args = joinPoint.getArgs();
@@ -81,16 +81,6 @@ public class AuditAspect {
             return user;
         }
         return null;
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        if (request == null)
-            return "";
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     // fields에 적은 이름들을 "locationId=3 qty=10" 형태로 만든다.
