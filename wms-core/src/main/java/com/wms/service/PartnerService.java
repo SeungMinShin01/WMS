@@ -119,6 +119,9 @@ public class PartnerService {
         entity.setPartnerType(partnerDto.getPartnerType());
         entity.setContact(partnerDto.getContact());
         entity.setAddress(partnerDto.getAddress());
+        if (partnerDto.getIsActive() != null) {
+            entity.setIsActive(partnerDto.getIsActive());
+        }
         return true;
     }
 }

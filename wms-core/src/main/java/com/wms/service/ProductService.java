@@ -142,6 +142,10 @@ public class ProductService {
         if (productDto.getMinShipDays() != null) {
             entity.setMinShipDays(productDto.getMinShipDays());
         }
+        // [추가] 사용 여부. null 이면(요청에 안 담겨 오면) 기존 값을 유지한다
+        if (productDto.getIsActive() != null) {
+            entity.setIsActive(productDto.getIsActive());
+        }  
         return true;
     }
 }

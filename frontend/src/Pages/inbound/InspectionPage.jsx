@@ -5,6 +5,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const STATUS_NAME = {
   WAITING: "입고예정",
@@ -23,10 +24,11 @@ export default function InspectionPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 문서 전체
+  const [tenants, setTenants] = useState([]);
   const [filter, setFilter] = useState({
     from: "",
     to: "",
-    partnerName: "",
+    tenantName: "",
     status: "WAITING,INSPECTED",
   }); // 조회 조건
   const [detail, setDetail] = useState(null); // ED-13 선택한 문서 (items 포함)
@@ -70,8 +72,20 @@ export default function InspectionPage() {
     setFilter({
       from: form.get("from"),
       to: form.get("to"),
-      partnerName: form.get("partnerName").trim(),
+      tenantName: form.get("tenantName"),
       status: form.get("status"),
+    });
+    getList();
+  };
+
+  // 초기화 — 입력칸 + 조회 조건을 처음으로 (상태는 기본값 '입고예정·검수완료')
+  const handleReset = (event) => {
+    event.target.form.reset();
+    setFilter({
+      from: "",
+      to: "",
+      tenantName: "",
+      status: "WAITING,INSPECTED",
     });
     getList();
   };
@@ -80,6 +94,8 @@ export default function InspectionPage() {
     getList();
     if (documentId) selectDocument(Number(documentId)); // 주소에 문서 번호가 있으면 바로 상세
   }, []);
+
+  axios.get("/wms/inbounds/tenants").then((res) => setTenants(res.data));
 
   // 상세 → 목록으로 (주소도 목록 주소로)
   const goBack = () => {
@@ -98,7 +114,7 @@ export default function InspectionPage() {
       filter.status.split(",").includes(d.status) &&
       (filter.from === "" || d.expectedAt >= filter.from) &&
       (filter.to === "" || d.expectedAt <= filter.to) &&
-      (filter.partnerName === "" || d.partnerName.includes(filter.partnerName)),
+      (filter.tenantName === "" || d.tenantName === filter.tenantName),
   );
 
   // 이미 검수된 품목 { documentItemId: 검수 결과 } — 있으면 입력칸 대신 값으로 보여줌
@@ -162,7 +178,7 @@ export default function InspectionPage() {
   };
 
   const { sorted, th } = useSort(visibleList);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="입고검수" path="홈 > 입고관리 > 입고검수" />
@@ -171,10 +187,17 @@ export default function InspectionPage() {
         <>
           {/* ── 목록: 입고예정·검수완료 ── */}
           <form className="search" onSubmit={handleSearch}>
+            <label>화주명</label>
+            <select name="tenantName" defaultValue="">
+              <option value="">전체</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
             <label>입고예정일</label>
             <input type="date" name="from" /> ~ <input type="date" name="to" />
-            <label>화주명</label>
-            <input type="text" name="partnerName" />
             <label>상태</label>
             <select name="status" defaultValue="WAITING,INSPECTED">
               <option value="WAITING,INSPECTED">
@@ -184,6 +207,9 @@ export default function InspectionPage() {
               <option value="INSPECTED">검수완료</option>
             </select>
             <input type="submit" className="btn primary" value="조회" />
+            <button type="button" className="btn" onClick={handleReset}>
+              초기화
+            </button>
           </form>
 
           <GridTitle
@@ -204,12 +230,12 @@ export default function InspectionPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((inbound, index) => (
+              {paged.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{startNo + index}</td>
                   <td>{inbound.documentNo}</td>
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
@@ -223,6 +249,7 @@ export default function InspectionPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>
