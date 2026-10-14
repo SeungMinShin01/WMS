@@ -28,6 +28,21 @@ export default function Layout() {
     localStorage.removeItem("user");
     navigate("/login");
   };
+
+  // 시연 데이터 초기화 (관리자, 배포 서버에서만 동작)
+  const resetDemo = async () => {
+    const typed = window.prompt(
+      '모든 입출고·재고·피킹 데이터가 시연 시작 상태로 돌아갑니다.\n계속하려면 "초기화"를 입력하세요.',
+    );
+    if (typed !== "초기화") return;
+    try {
+      const res = await axios.post("/wms/admin/demo-reset");
+      alert(res.data);
+      window.location.reload();
+    } catch (error) {
+      alert(error.response?.data ?? "초기화하지 못했습니다.");
+    }
+  };
   return (
     <>
       <header className="top">
@@ -84,6 +99,14 @@ export default function Layout() {
               <NavLink to="/admin/workers">작업자 계정</NavLink>
               <NavLink to="/admin/audit-logs">감사 로그</NavLink>
               <NavLink to="/admin/labels">QR 라벨</NavLink>
+              <button
+                type="button"
+                className="btn"
+                style={{ margin: "8px 12px" }}
+                onClick={resetDemo}
+              >
+                시연 데이터 초기화
+              </button>
             </>
           )}
 
