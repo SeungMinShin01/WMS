@@ -30,6 +30,7 @@ public class LocationDto {
                              .locationCode( this.locationCode )
                              .isActive( this.isActive )
                              .capacity( this.capacity )
+                             .remark(this.remark)
                              .build();
     }
 
@@ -42,6 +43,7 @@ public class LocationDto {
             .capacity( entity.getCapacity() )
             .createdAt( entity.getCreatedAt() )
             .updatedAt( entity.getUpdatedAt() )
+            .remark(entity.getRemark())
             .build();
     }
 }

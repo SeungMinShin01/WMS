@@ -36,4 +36,6 @@ public class LocationEntity extends BaseTime {
     // @Builder.Default = 기본값 true 무시하고 null 로 바꾸는 버그 안전장치
     // isActive = 이 위치가 지금 사용 가능한 상태인지(참/거짓) 나타내는 변수
     private Integer capacity; // 로케이션별 적재량
+
+    private String remark;
 }

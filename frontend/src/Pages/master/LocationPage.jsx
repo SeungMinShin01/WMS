@@ -237,6 +237,14 @@ export default function LocationPage() {
               value={form.capacity ?? ""}
               onChange={입력}
             />
+            <label>비고</label>
+            <input
+              type="text"
+              name="remark"
+              maxLength={200}
+              value={form.remark ?? ""}
+              onChange={입력}
+            />
           </div>
         </>
       )}
