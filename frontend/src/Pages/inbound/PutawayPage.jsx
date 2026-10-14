@@ -5,6 +5,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const STATUS_NAME = {
   WAITING: "입고예정",
@@ -173,7 +174,7 @@ export default function PutawayPage() {
   };
 
   const { sorted, th } = useSort(visibleList);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="물품적재" path="홈 > 입고관리 > 물품적재" />
@@ -216,12 +217,12 @@ export default function PutawayPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((inbound, index) => (
+              {paged.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{startNo + index}</td>
                   <td>{inbound.documentNo}</td>
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
@@ -236,6 +237,7 @@ export default function PutawayPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>

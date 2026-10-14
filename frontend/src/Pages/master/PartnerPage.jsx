@@ -4,6 +4,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const TYPE_LABEL = { SUPPLIER: "공급사", CUSTOMER: "납품처" };
 
@@ -124,7 +125,7 @@ export default function PartnerPage() {
   };
 
   const { sorted, th } = useSort(filtered);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="거래처 관리" path="홈 > 기준정보 > 거래처" />
@@ -173,9 +174,9 @@ export default function PartnerPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p, i) => (
+          {paged.map((p, i) => (
             <tr key={p.partnerId} onClick={() => fetchDetail(p.partnerId)}>
-              <td>{i + 1}</td>
+              <td>{startNo + i}</td>
               <td>{p.tenantName}</td> {/* [추가] */}
               <td>{p.partnerCode}</td>
               <td>{p.partnerName}</td>
@@ -186,7 +187,7 @@ export default function PartnerPage() {
           ))}
         </tbody>
       </table>
-
+          {pager}
       {form == null ? (
         <p className="empty">목록에서 거래처를 클릭하면 상세가 나옵니다.</p>
       ) : (

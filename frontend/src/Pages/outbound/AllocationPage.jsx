@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import usePaging from "../../Layout/usePaging";
 
 // 문서 상태 영어 값 → 화면에 보여줄 한글
 const STATUS_NAME = {
@@ -119,7 +120,7 @@ export default function AllocationPage() {
     // 내림차순이면 부호를 뒤집어서 순서를 반대로
     return sortAsc ? result : -result;
   });
-
+  const { paged, startNo, pager } = usePaging(sortedList);
   const handleSearch = (event) => {
     event.preventDefault();
     const tenantId = event.target.tenantId.value; // [ED-61]
@@ -376,12 +377,12 @@ export default function AllocationPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedList.map((outbound, index) => (
+              {paged.map((outbound, index) => (
                 <tr
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{{startNo + index}}</td>
                   <td>{outbound.documentNo}</td>
                   <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
@@ -391,6 +392,7 @@ export default function AllocationPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>

@@ -3,6 +3,7 @@ import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고", DISPOSE: "폐기" };
 const 증감 = (n) => (n === 0 ? "—" : n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString());
@@ -46,7 +47,7 @@ export default function HistoryPage() {
   });
 
   const { sorted, th } = useSort(보여줄목록);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="입출고 이력" path="홈 > 재고관리 > 입출고이력" />
@@ -91,9 +92,9 @@ export default function HistoryPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((h, index) => (
+          {paged.map((h, index) => (
             <tr key={h.historyKey}>
-              <td>{index + 1}</td>
+              <td>{startNo + index}</td>
               <td>{h.occurredAt ?? "—"}</td>
               <td>{변동타입명[h.txType]}</td>
               <td>{h.productCode}</td>
@@ -112,6 +113,7 @@ export default function HistoryPage() {
           ))}
         </tbody>
       </table>
+      {pager}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 // 재고 상태: 폐기(소비기한 지남) > 임박(30일 이하) > 부족(가용 0) > 정상
 // 소비기한 당일(남은 0일)까지 정상, 다음 날(-1일)부터 폐기
@@ -82,8 +83,8 @@ export default function StockPage() {
       (filter.status === "" || getStockStatus(s) === filter.status),
   );
 
-   const { sorted, th } = useSort(visibleList);
-
+  const { sorted, th } = useSort(visibleList);
+  const { paged, startNo, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="재고 현황" path="홈 > 재고관리 > 재고현황" />
@@ -136,9 +137,9 @@ export default function StockPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((s, index) => (
+          {paged.map((s, index) => (
             <tr key={s.stockId}>
-              <td>{index + 1}</td>
+              <td>{startNo + index}</td>
               <td>{s.tenantName}</td>
               <td>{s.productCode}</td>
               <td className="left">{s.productName}</td>
@@ -168,6 +169,7 @@ export default function StockPage() {
           ))}
         </tbody>
       </table>
+      {pager}
     </>
   );
 }

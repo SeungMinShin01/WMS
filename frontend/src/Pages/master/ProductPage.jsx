@@ -4,6 +4,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 const EMPTY = {
   productId: null,
@@ -130,7 +131,7 @@ export default function ProductPage() {
   };
 
   const { sorted, th } = useSort(filtered);
-
+  const { paged, pager } = usePaging(sorted);
   return (
     <>
       <PageTitle title="품목 관리" path="홈 > 기준정보 > 품목" />
@@ -185,7 +186,7 @@ export default function ProductPage() {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p) => (
+          {paged.map((p) => (
             <tr key={p.productId} onClick={() => fetchDetail(p.productId)}>
               <td>{p.tenantName}</td> {/* [추가] */}
               <td>{p.productCode}</td>
@@ -199,7 +200,7 @@ export default function ProductPage() {
           ))}
         </tbody>
       </table>
-
+      {pager}
       {form == null ? (
         <p className="empty">목록에서 품목을 클릭하면 상세가 나옵니다.</p>
       ) : (

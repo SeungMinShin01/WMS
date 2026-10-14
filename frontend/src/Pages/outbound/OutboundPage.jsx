@@ -165,6 +165,8 @@ export default function OutboundPage() {
     return sortAsc ? result : -result;
   });
 
+  const { paged, startNo, pager } = usePaging(sortedList);
+
   return (
     <>
       <PageTitle title="출고문서" path="홈 > 출고관리 > 출고문서" />
@@ -232,12 +234,12 @@ export default function OutboundPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedList.map((outbound, index) => (
+              {paged.map((outbound, index) => (
                 <tr
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{{startNo + index}}</td>
                   <td>{outbound.documentNo}</td>
                   {/* [ED-61] 화주 */}
                   <td>{outbound.tenantName}</td>
@@ -273,6 +275,7 @@ export default function OutboundPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>

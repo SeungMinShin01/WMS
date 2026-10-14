@@ -6,6 +6,7 @@ import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import InboundCreateForm from "./InboundCreateForm";
 import useSort from "../../Layout/useSort";
+import usePaging from "../../Layout/usePaging";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -124,7 +125,7 @@ export default function InboundPage() {
 
   // 칸 제목 클릭 정렬 (조회 조건으로 거른 목록을 정렬)
   const { sorted, th } = useSort(visibleList);
-
+  const { paged, startNo, pager } = usePaging(sorted);
   // 목록 [관리] 칸 취소 — 출고문서 목록과 같은 방식
   const cancelFromList = async (event, inbound) => {
     event.stopPropagation(); // 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게
@@ -197,12 +198,12 @@ export default function InboundPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((inbound, index) => (
+              {paged.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
                 >
-                  <td>{index + 1}</td>
+                  <td>{startNo + index}</td>
                   <td>{inbound.documentNo}</td>
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
@@ -233,6 +234,7 @@ export default function InboundPage() {
               ))}
             </tbody>
           </table>
+          {pager}
         </>
       ) : (
         <>
