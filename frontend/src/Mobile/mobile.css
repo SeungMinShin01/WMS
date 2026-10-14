@@ -1,0 +1,139 @@
+/* 모바일 화면 공통 — 큰 글씨, 손가락으로 누르기 쉬운 버튼 */
+.m-page {
+  min-height: 100vh;
+  background: #f3f5f8;
+  font-size: 16px;
+}
+.m-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1f3864;
+  color: #fff;
+}
+.m-top b {
+  font-size: 17px;
+}
+.m-body {
+  padding: 12px 16px 32px;
+}
+.m-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.m-card.click {
+  cursor: pointer;
+}
+.m-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0;
+}
+.m-muted {
+  color: #666;
+  font-size: 14px;
+}
+.m-big {
+  font-size: 28px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.m-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 17px;
+  border: none;
+  border-radius: 8px;
+  background: #2f5597;
+  color: #fff;
+}
+.m-btn:disabled {
+  background: #b0b8c4;
+}
+.m-btn.small {
+  width: auto;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+.m-btn.plain {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.m-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  font-size: 17px;
+  border: 1px solid #b8c0cc;
+  border-radius: 8px;
+}
+.m-bar {
+  height: 10px;
+  background: #e1e5eb;
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.m-bar > div {
+  height: 100%;
+  background: #4caf50;
+}
+.m-msg {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.m-msg.ok {
+  background: #e2efda;
+  color: #2e6b1f;
+}
+.m-msg.error {
+  background: #fde2e2;
+  color: #b42318;
+}
+.m-msg.info {
+  background: #e8eef9;
+  color: #1f3864;
+}
+.m-scan {
+  margin: 10px 0;
+}
+.m-scan.disabled {
+  opacity: 0.45;
+}
+.m-scan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.m-camera {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.m-step {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+.m-step span {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 6px;
+  background: #e1e5eb;
+  font-size: 14px;
+}
+.m-step span.done {
+  background: #4caf50;
+  color: #fff;
+}
+.m-step span.now {
+  background: #2f5597;
+  color: #fff;
+}

@@ -15,8 +15,9 @@ public class WorkerDto {
     private String loginId;
     private String userName;
     private String role;
+    private Boolean active;
 
     public static WorkerDto from(UserEntity u){
-        return new WorkerDto(u.getUserId(), u.getLoginId(), u.getUserName(), u.getRole().name());
+        return new WorkerDto(u.getUserId(), u.getLoginId(), u.getUserName(), u.getRole().name(), u.getIsActive());
     }
 }

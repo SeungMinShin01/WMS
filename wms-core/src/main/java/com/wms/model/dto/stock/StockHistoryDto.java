@@ -11,6 +11,8 @@ import com.wms.model.entity.DocumentItemDetailEntity;
 import com.wms.model.entity.DocumentStatus;
 import com.wms.model.entity.DocumentType;
 import com.wms.model.entity.ProductEntity;
+import com.wms.model.entity.StockDisposalEntity;
+import com.wms.model.entity.StockEntity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -85,6 +87,29 @@ public class StockHistoryDto {
                         .documentNo(doc.getDocumentNo())
                         .remark(detail.getRemark())
                         .handler("admin")
+                        .build();
+    }
+
+    // 폐기 기록 1건 -> 이력 1줄 (실물 −, 근거 문서 없음)
+    public static StockHistoryDto fromDisposal(StockDisposalEntity d){
+        StockEntity stock = d.getStockEntity();
+        ProductEntity product = stock.getLotEntity().getProductEntity();
+        return StockHistoryDto.builder()
+                        .historyKey("D" + d.getDisposalId() + "-DISPOSE")   // 문서 상세 줄 key 와 안 겹치게
+                        .detailId(null)                                     // 문서 상세가 없음
+                        .stockId(stock.getStockId())
+                        .occurredAt(d.getDisposedAt())
+                        .txType("DISPOSE")
+                        .productCode(product.getProductCode())
+                        .productName(product.getProductName())
+                        .locationCode(stock.getLocationEntity().getLocationCode())
+                        .lotCode(stock.getLotEntity().getLotCode())
+                        .expiryDate(stock.getLotEntity().getExpiryDate())
+                        .qtyChange(-d.getQty())
+                        .allocatedChange(0)
+                        .documentNo("-")
+                        .remark(d.getReason())
+                        .handler(d.getUserEntity().getUserName())
                         .build();
     }
 }

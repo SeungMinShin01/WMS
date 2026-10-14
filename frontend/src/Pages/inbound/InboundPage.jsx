@@ -5,6 +5,7 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
 import InboundCreateForm from "./InboundCreateForm";
+import useSort from "../../Layout/useSort";
 
 // status 코드 -> 화면에 띄울 한글
 // 날짜 모양(yyyy-MM-dd / yyyy-MM-dd HH:mm)과 남은일수는 백엔드 DTO에서 만들어서 보낸다
@@ -15,8 +16,14 @@ const STATUS_NAME = {
   CANCELED: "취소",
 };
 
+// 출처 코드 -> 화면 글자 (출고문서 화면과 동일)
+const SOURCE_NAME = {
+  WMS: "WMS",
+  PORTAL: "화주요청",
+};
+
 // 03 입고예정 — 담당: 조현우
-export default function InboundPage(props) {
+export default function InboundPage() {
   const navigate = useNavigate();
 
   const [inbounds, setInbounds] = useState([]); // ED-10 입고 예정 목록
@@ -98,8 +105,37 @@ export default function InboundPage(props) {
     setDetail(null);
   };
 
+  // 입고 취소 — 적재 전만. 적재된 품목이 있으면 서버가 409 로 막음
+  const cancelInbound = async () => {
+    if (!window.confirm(`${detail.documentNo} 입고를 취소할까요?\n취소하면 되돌릴 수 없습니다.`)) return;
+    try {
+      await axios.put(`/wms/inbounds/${detail.documentId}/cancel`);
+      alert("입고를 취소했습니다.");
+      selectDocument(detail.documentId); // 상세 새로고침 (상태 = 취소)
+      getList();
+    } catch (error) {
+      alert(error.response?.data ?? "취소 실패");
+    }
+  };
+
   const goInspect = () => {
     navigate(`/inbounds/inspection/${detail.documentId}`);
+  };
+
+  // 칸 제목 클릭 정렬 (조회 조건으로 거른 목록을 정렬)
+  const { sorted, th } = useSort(visibleList);
+
+  // 목록 [관리] 칸 취소 — 출고문서 목록과 같은 방식
+  const cancelFromList = async (event, inbound) => {
+    event.stopPropagation(); // 버튼 클릭이 줄 클릭(상세 열기)으로 번지지 않게
+    if (!window.confirm(`${inbound.documentNo} 입고를 취소할까요?\n취소하면 되돌릴 수 없습니다.`)) return;
+    try {
+      await axios.put(`/wms/inbounds/${inbound.documentId}/cancel`);
+      alert("입고를 취소했습니다.");
+      getList();
+    } catch (error) {
+      alert(error.response?.data ?? "취소 실패");
+    }
   };
 
   return (
@@ -146,20 +182,22 @@ export default function InboundPage(props) {
             <thead>
               <tr>
                 <th>No</th>
-                <th>입고번호</th>
+                {th("documentNo", "입고번호")}
                 <th>화주</th>
                 <th>공급사명</th>
-                <th>입고예정일</th>
+                {th("expectedAt", "입고예정일")}
+                <th>출처</th>
                 <th>품목수</th>
                 <th>예정수량 합계</th>
                 <th>상태</th>
                 <th>비고</th>
-                <th>등록일시</th>
-                <th>입고확정일시</th>
+                {th("createdAt", "등록일시")}
+                {th("completedAt", "입고확정일시")}
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
-              {visibleList.map((inbound, index) => (
+              {sorted.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
@@ -169,6 +207,7 @@ export default function InboundPage(props) {
                   <td>{inbound.tenantName}</td>
                   <td className="left">{inbound.partnerName}</td>
                   <td>{inbound.expectedAt}</td>
+                  <td>{SOURCE_NAME[inbound.source]}</td>
                   <td className="num">{inbound.itemCount}</td>
                   <td className="num">
                     {inbound.totalExpectedQty.toLocaleString()}
@@ -177,6 +216,19 @@ export default function InboundPage(props) {
                   <td className="left"></td>
                   <td>{inbound.createdAt}</td>
                   <td>{inbound.completedAt}</td>
+                  <td>
+                    {inbound.status === "WAITING" || inbound.status === "INSPECTED" ? (
+                      <button
+                        className="btn danger plain"
+                        style={{ height: "auto" }}
+                        onClick={(e) => cancelFromList(e, inbound)}
+                      >
+                        취소
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -198,6 +250,11 @@ export default function InboundPage(props) {
             {detail.status === "WAITING" && (
               <button className="btn primary" onClick={goInspect}>
                 검수하기
+              </button>
+            )}
+            {(detail.status === "WAITING" || detail.status === "INSPECTED") && (
+              <button className="btn" onClick={cancelInbound}>
+                입고 취소
               </button>
             )}
           </div>

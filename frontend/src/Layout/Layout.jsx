@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 // 공통 틀: 상단 헤더 + 왼쪽 메뉴 + 오른쪽 내용(<Outlet />)
-export default function Layout(props) {
+export default function Layout() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null); // 화면 표시용 로그인 사용자
 
@@ -13,7 +13,7 @@ export default function Layout(props) {
     try {
       await axios.get("/auth/me");
       setUser(JSON.parse(localStorage.getItem("user")));
-    } catch (error) {
+    } catch {
       navigate("/login");
     }
   };
@@ -27,6 +27,21 @@ export default function Layout(props) {
     await axios.post("/auth/logout");
     localStorage.removeItem("user");
     navigate("/login");
+  };
+
+  // 시연 데이터 초기화 (관리자, 배포 서버에서만 동작)
+  const resetDemo = async () => {
+    const typed = window.prompt(
+      '모든 입출고·재고·피킹 데이터가 시연 시작 상태로 돌아갑니다.\n계속하려면 "초기화"를 입력하세요.',
+    );
+    if (typed !== "초기화") return;
+    try {
+      const res = await axios.post("/wms/admin/demo-reset");
+      alert(res.data);
+      window.location.reload();
+    } catch (error) {
+      alert(error.response?.data ?? "초기화하지 못했습니다.");
+    }
   };
   return (
     <>
@@ -83,6 +98,15 @@ export default function Layout(props) {
               <div className="menu-group">관리자</div>
               <NavLink to="/admin/workers">작업자 계정</NavLink>
               <NavLink to="/admin/audit-logs">감사 로그</NavLink>
+              <NavLink to="/admin/labels">QR 라벨</NavLink>
+              <button
+                type="button"
+                className="btn"
+                style={{ margin: "8px 12px" }}
+                onClick={resetDemo}
+              >
+                시연 데이터 초기화
+              </button>
             </>
           )}
 

@@ -7,7 +7,7 @@ import GridTitle from "../../Layout/GridTitle";
 // 피킹리스트 — 담당: 김지환
 // 흐름 : 문서 선택 → 줄마다 [집음] → 전 줄 집음 → 출고확정
 // 전 품목이 할당된 문서만 집을 수 있다 (ED-52 결정)
-export default function PickingPage(props) {
+export default function PickingPage() {
   // 주소의 documentId (/outbounds/picking/66) — 목록 주소(/outbounds/picking)면 undefined
   const { documentId } = useParams();
   const navigate = useNavigate();
@@ -18,6 +18,10 @@ export default function PickingPage(props) {
   const [detail, setDetail] = useState(null); // 선택한 출고 문서 정보
   const [pickings, setPickings] = useState([]); // 피킹 줄 목록
   const [loading, setLoading] = useState(false); // 요청 중이면 true → 버튼 잠금
+  // 칸 제목 클릭 정렬 : sortKey = 정렬 중인 칸 이름, sortAsc = true 오름차순 / false 내림차순
+  // 처음 화면 : 주문번호 오름차순(▲)으로 시작
+  const [sortKey, setSortKey] = useState("documentNo");
+  const [sortAsc, setSortAsc] = useState(true);
 
   // 문서 상태 한글 (AllocationPage 와 같은 이름)
   const 문서상태 = (status) => {
@@ -222,6 +226,44 @@ export default function PickingPage(props) {
   };
 
   // ─────────────── 문서를 아직 안 골랐을 때 : 피킹할 문서 목록 ───────────────
+  // ── 칸 제목 클릭 정렬 (주문번호 · 출고요청일) ── 출고문서 화면과 같은 방식
+  // 정렬 중인 칸을 다시 누르면 방향만 뒤집음 (▲ → ▼ → ▲ ...)
+  // 다른 칸을 누르면 그 칸 내림차순(▼)부터 : 목록이 원래 빠른 순이라 첫 클릭에 바로 순서가 바뀌어 보이게
+  const changeSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  // 칸 제목 옆 화살표 : 정렬할 수 있는 칸에는 처음부터 항상 화살표 하나가 보임
+  // 정렬 중인 칸 : 지금 방향대로 ▲(오름차순) 또는 ▼(내림차순)
+  // 나머지 칸 : ▲ (누르면 그 칸으로 정렬할 수 있다는 표시)
+  // fontSize 0.8em : 칸 제목 글자보다 조금 작게
+  const arrow = (key) => {
+    if (sortKey === key && !sortAsc) {
+      return <span style={{ fontSize: "0.8em" }}>▼</span>;
+    }
+    return <span style={{ fontSize: "0.8em" }}>▲</span>;
+  };
+
+  // 문서 목록 : orders(할당·피킹중 문서)를 복사해서 정렬
+  // [...배열] : 배열을 복사 (원본은 그대로 두고 복사본만 정렬)
+  const sortedList = [...orders];
+  sortedList.sort((a, b) => {
+    // a[sortKey] : sortKey 가 "documentNo" 면 a.documentNo 와 같음 (칸 이름을 변수로 받아서 꺼냄)
+    // 두 칸 모두 글자("OUT-20260902-001", "2026-09-02T10:00:00")라서 글자 순 비교 = 번호 순 · 날짜 순
+    // localeCompare : a 가 앞이면 음수, 같으면 0, 뒤면 양수 (자바 compareTo 와 같음)
+    // 출고요청일이 비어 있는 문서가 있을 수 있어서(아래 표에서도 "-" 처리) 비어 있으면 "" 로 비교
+    const aValue = a[sortKey] ? a[sortKey] : "";
+    const bValue = b[sortKey] ? b[sortKey] : "";
+    const result = aValue.localeCompare(bValue);
+    // 내림차순이면 부호를 뒤집어서 순서를 반대로
+    return sortAsc ? result : -result;
+  });
+
   if (!documentId) {
     return (
       <>
@@ -247,10 +289,15 @@ export default function PickingPage(props) {
         <table className="grid">
           <thead>
             <tr>
-              <th>주문번호</th>
+              {/* 정렬 가능한 칸 : 클릭하면 changeSort, 옆에 화살표 표시 (cursor pointer : 마우스를 올리면 손가락 모양) */}
+              <th style={{ cursor: "pointer" }} onClick={() => changeSort("documentNo")}>
+                주문번호 {arrow("documentNo")}
+              </th>
               <th>화주</th>
               <th>배송지명</th>
-              <th>출고요청일</th>
+              <th style={{ cursor: "pointer" }} onClick={() => changeSort("expectedAt")}>
+                출고요청일 {arrow("expectedAt")}
+              </th>
               <th>상태</th>
             </tr>
           </thead>
@@ -263,7 +310,7 @@ export default function PickingPage(props) {
                 </td>
               </tr>
             )}
-            {orders.map((row) => (
+            {sortedList.map((row) => (
               <tr
                 key={row.documentId}
                 onClick={() => navigate(`/outbounds/picking/${row.documentId}`)}

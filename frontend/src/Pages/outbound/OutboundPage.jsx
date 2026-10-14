@@ -23,7 +23,7 @@ const SOURCE_NAME = {
 
 // 06 출고문서 — 담당: 김지환
 // 목록 줄 클릭 → 상세(헤더 + 주문 품목) → [출고지시] / [피킹리스트]로 이동
-export default function OutboundPage(props) {
+export default function OutboundPage() {
   const navigate = useNavigate();
   const [outbounds, setOutbounds] = useState([]); // ED-12 출고 문서 전체
   const [filter, setFilter] = useState({
@@ -35,11 +35,31 @@ export default function OutboundPage(props) {
   }); // 조회 조건
   const [detail, setDetail] = useState(null); // 선택한 문서 상세 (null = 목록 화면)
   const [creating, setCreating] = useState(false);
+  // 칸 제목 클릭 정렬 : sortKey = 정렬 중인 칸 이름, sortAsc = true 오름차순 / false 내림차순
+  // 처음 화면 : 주문번호 오름차순(▲)으로 시작
+  const [sortKey, setSortKey] = useState("documentNo");
+  const [sortAsc, setSortAsc] = useState(true);
 
   // 출고 목록 조회 (취소 후 다시 불러야 해서 useEffect 밖에 만듦)
   const getList = async () => {
     const response = await axios.get("/wms/outbounds");
     setOutbounds(response.data);
+  };
+
+  // 엑셀 일괄 등록: 파일을 고르면 바로 업로드 (한 줄이라도 틀리면 전체 취소)
+  const uploadExcel = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = ""; // 같은 파일을 다시 고를 수 있게 초기화
+    if (!file) return;
+    const form = new FormData(); // 파일은 JSON 이 아니라 FormData 로 보냄
+    form.append("file", file); // 컨트롤러 @RequestParam("file") 과 이름 같아야 함
+    try {
+      const response = await axios.post("/wms/outbounds/upload", form);
+      alert(response.data); // "출고문서 3건, 품목 5줄 등록"
+      getList();
+    } catch (error) {
+      alert(`엑셀 등록 실패 (전체 취소)\n${error.response?.data ?? "오류"}`);
+    }
   };
 
   // 최초 1번 목록 조회
@@ -110,6 +130,41 @@ export default function OutboundPage(props) {
     return true;
   });
 
+  // ── 칸 제목 클릭 정렬 (주문번호 · 출고요청일 · 등록일시) ──
+  // 정렬 중인 칸을 다시 누르면 방향만 뒤집음 (▲ → ▼ → ▲ ...)
+  // 다른 칸을 누르면 그 칸 내림차순(▼)부터 : 목록이 원래 빠른 순이라 첫 클릭에 바로 순서가 바뀌어 보이게
+  const changeSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  // 칸 제목 옆 화살표 : 정렬할 수 있는 칸에는 처음부터 항상 화살표 하나가 보임
+  // 정렬 중인 칸 : 지금 방향대로 ▲(오름차순) 또는 ▼(내림차순)
+  // 나머지 칸 : ▲ (누르면 그 칸으로 정렬할 수 있다는 표시)
+  // fontSize 0.8em : 칸 제목 글자보다 조금 작게
+  const arrow = (key) => {
+    if (sortKey === key && !sortAsc) {
+      return <span style={{ fontSize: "0.8em" }}>▼</span>;
+    }
+    return <span style={{ fontSize: "0.8em" }}>▲</span>;
+  };
+
+  // 화면에 보여줄 목록 : 걸러진 목록(visibleList)을 복사해서 정렬
+  // [...배열] : 배열을 복사 (원본 visibleList 는 그대로 두고 복사본만 정렬)
+  const sortedList = [...visibleList];
+  sortedList.sort((a, b) => {
+    // a[sortKey] : sortKey 가 "documentNo" 면 a.documentNo 와 같음 (칸 이름을 변수로 받아서 꺼냄)
+    // 세 칸 모두 글자("OUT-20260902-001", "2026-09-02T10:00:00")라서 글자 순 비교 = 번호 순 · 날짜 순
+    // localeCompare : a 가 앞이면 음수, 같으면 0, 뒤면 양수 (자바 compareTo 와 같음)
+    const result = a[sortKey].localeCompare(b[sortKey]);
+    // 내림차순이면 부호를 뒤집어서 순서를 반대로
+    return sortAsc ? result : -result;
+  });
+
   return (
     <>
       <PageTitle title="출고문서" path="홈 > 출고관리 > 출고문서" />
@@ -146,28 +201,38 @@ export default function OutboundPage(props) {
 
           <GridTitle title="출고문서 목록" desc={`총 ${visibleList.length}건`}>
              <button className="btn" onClick={() => setCreating(true)}>신규</button>
+             <label className="btn">
+              엑셀 등록
+              <input type="file" accept=".xlsx" hidden onChange={uploadExcel} />
+            </label>
           </GridTitle>
           <table className="grid">
             <thead>
               <tr>
                 <th>No</th>
-                <th>주문번호</th>
+                {/* 정렬 가능한 칸 : 클릭하면 changeSort, 옆에 화살표 표시 (cursor pointer : 마우스를 올리면 손가락 모양) */}
+                <th style={{ cursor: "pointer" }} onClick={() => changeSort("documentNo")}>
+                  주문번호 {arrow("documentNo")}
+                </th>
                 <th>화주</th>
                 <th>배송지명</th>
                 <th>배송지 주소</th>
                 <th>연락처</th>
-                <th>출고요청일</th>
+                <th style={{ cursor: "pointer" }} onClick={() => changeSort("expectedAt")}>
+                  출고요청일 {arrow("expectedAt")}
+                </th>
                 <th>출처</th>
                 <th>품목수</th>
-                <th>총수량</th>
+                <th>예정수량 합계</th>
                 <th>상태</th>
-                <th>출고지시번호</th>
-                <th>등록일시</th>
+                <th style={{ cursor: "pointer" }} onClick={() => changeSort("createdAt")}>
+                  등록일시 {arrow("createdAt")}
+                </th>
                 <th>관리</th>
               </tr>
             </thead>
             <tbody>
-              {visibleList.map((outbound, index) => (
+              {sortedList.map((outbound, index) => (
                 <tr
                   key={outbound.documentId}
                   onClick={() => selectDocument(outbound.documentId)}
@@ -182,16 +247,20 @@ export default function OutboundPage(props) {
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
                   {/* [ED-61] 출처 (WMS 직접 등록 / 화주요청) */}
                   <td>{SOURCE_NAME[outbound.source]}</td>
-                  <td></td>
-                  <td></td>
+                  {/* 품목수 · 예정수량 합계 (입고 목록과 같은 방식) */}
+                  <td className="num">{outbound.itemCount}</td>
+                  {/* toLocaleString : 1200 → "1,200" 처럼 천 단위 쉼표 */}
+                  <td className="num">{outbound.totalExpectedQty.toLocaleString()}</td>
                   <td>{STATUS_NAME[outbound.status]}</td>
-                  <td></td>
-                  <td></td>
+                  {/* 등록일시 : "2026-10-12T09:30:15" → T 를 공백으로 바꾸고 앞 16글자만 → "2026-10-12 09:30" */}
+                  <td>{outbound.createdAt.replace("T", " ").substring(0, 16)}</td>
                   <td>
                     {outbound.status === "WAITING" ||
                     outbound.status === "ALLOCATED" ? (
+                      // height auto : 버튼 기본 높이(24px) 대신 글자 높이만큼만 → "-" 들어간 줄과 줄 높이가 같아짐
                       <button
                         className="btn danger plain"
+                        style={{ height: "auto" }}
                         onClick={(e) => cancelOrder(e, outbound)}
                       >
                         취소

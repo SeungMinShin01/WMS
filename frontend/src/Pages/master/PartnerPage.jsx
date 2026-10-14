@@ -3,29 +3,73 @@ import axios from "axios";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useOutletContext } from "react-router-dom";
+import useSort from "../../Layout/useSort";
 
 const TYPE_LABEL = { SUPPLIER: "공급사", CUSTOMER: "납품처" };
 
 const EMPTY = {
   partnerId: null,
-  tenantId: "", // [추가] 신규일 때 화주를 직접 고르게 비워 둔다
+  tenantId: "", // 신규일 때 화주를 직접 고르게 비워 둔다
   partnerCode: "PT-",
   partnerName: "",
   partnerType: "SUPPLIER",
   contact: "",
   address: "",
+  // [추가] 상태(is_active). 신규 등록 화면을 열면 기본값이 "활성"이 되도록 true 로 시작한다.
+  //        (DB 컬럼 is_active 의 DEFAULT TRUE 와 같은 기준)
+  isActive: true,
 };
 
 const fmtDate = (v) => (v ? v.slice(0, 10) : "");
 
+// ─────────────────────────────────────────────────────────────
+// [추가] activeOf: 행 데이터에서 "활성 여부"를 true/false 로 꺼내는 함수
+//   - 서버 JSON 의 키 이름이 응답마다 다를 수 있어서 둘 다 받는다.
+//       · isActive : DTO 필드명을 그대로 직렬화한 경우
+//       · active   : Lombok 이 boolean isActive 의 getter 를 isActive() 로 만들어
+//                    Jackson 이 키를 "active" 로 내보내는 경우 (자주 생기는 함정)
+//   - 둘 다 없으면(아직 백엔드에 컬럼이 없을 때) 활성(true)으로 본다.
+//   - 목록 표시, 조회 필터, 상세 폼 세 곳이 이 함수 하나만 쓰도록 통일했다.
+//   - ProductPage 와 같은 코드다. 공통 파일로 빼서 import 하면 중복이 없어진다.
+// ─────────────────────────────────────────────────────────────
+const activeOf = (row) => Boolean(row?.isActive ?? row?.active ?? true);
+
+// ─────────────────────────────────────────────────────────────
+// [추가] 상태 뱃지 (ProductPage 와 동일한 모양·색)
+//   - STATUS: true/false 를 화면 문구와 색으로 바꾸는 표.
+//     객체 키는 문자열이라 사용할 때 String(active) 로 변환해서 찾는다.
+//   - 활성은 초록, 비활성은 회색.
+// ─────────────────────────────────────────────────────────────
+const STATUS = {
+  true: { label: "활성", color: "#2e7d32" },
+  false: { label: "비활성", color: "#9e9e9e" },
+};
+
+function StatusBadge({ active }) {
+  const s = STATUS[String(active)];
+  return (
+    <span
+      style={{
+        color: s.color,
+        border: `1px solid ${s.color}`,
+        borderRadius: 4,
+        padding: "2px 8px",
+        fontSize: 12,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 // 01-2 거래처 — 담당: 기준정보 담당 (공급사 SUPPLIER / 납품처 CUSTOMER)
-export default function PartnerPage(props) {
+export default function PartnerPage() {
   const { user } = useOutletContext();
   const isAdmin = user?.role === "ADMIN";
   const [partners, setPartners] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [form, setForm] = useState(null);
-  const [tenants, setTenants] = useState([]); // [추가] 화주 select 옵션
+  const [tenants, setTenants] = useState([]); // 화주 select 옵션
 
   const fetchPartners = async () => {
     try {
@@ -37,7 +81,7 @@ export default function PartnerPage(props) {
     }
   };
 
-  // [추가] 화주 목록 조회 (GET /wms/tenants)
+  // 화주 목록 조회 (GET /wms/tenants)
   const fetchTenants = async () => {
     try {
       const res = await axios.get("/wms/tenants");
@@ -52,9 +96,13 @@ export default function PartnerPage(props) {
       const res = await axios.get("/wms/partner/detail", {
         params: { partnerid: partnerId },
       });
-      setForm(res.data);
+      // [변경] 이전: setForm(res.data)
+      //        이후: 응답을 그대로 form 에 넣되, 상태만 activeOf 로 꺼내 isActive(boolean)로 덮어쓴다.
+      //   이유: 서버 키가 "active" 로 와도 form 안에서는 항상 isActive 하나로만 다루기 위해서.
+      //         이렇게 해두면 아래 상태 select 와 저장(body)이 키 이름을 신경 쓰지 않아도 된다.
+      setForm({ ...res.data, isActive: activeOf(res.data) });
     } catch (err) {
-      // [변경] 없는 거래처(404)면 서버 문구를 보여준다
+      // 없는 거래처(404)면 서버 문구를 보여준다
       const msg =
         typeof err.response?.data === "string" ? err.response.data : null;
       alert(msg || "거래처 정보를 불러오지 못했습니다.");
@@ -63,24 +111,28 @@ export default function PartnerPage(props) {
 
   useEffect(() => {
     fetchPartners();
-    fetchTenants(); // [추가]
+    fetchTenants();
   }, []);
 
   const 조회 = (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
-    const tenantId = data.get("tenantId"); // [추가]
+    const tenantId = data.get("tenantId");
     const code = data.get("partnerCode").trim();
     const name = data.get("partnerName").trim();
     const type = data.get("partnerType");
+    // [추가] 조회조건의 상태 select 값을 읽는다. ""(전체) | "true"(활성) | "false"(비활성)
+    const active = data.get("isActive");
 
     setFiltered(
       partners.filter(
         (p) =>
-          (tenantId === "" || String(p.tenantId) === tenantId) && // [추가]
+          (tenantId === "" || String(p.tenantId) === tenantId) &&
           (code === "" || code === "PT-" || p.partnerCode?.includes(code)) &&
           (name === "" || p.partnerName?.includes(name)) &&
-          (type === "" || p.partnerType === type),
+          (type === "" || p.partnerType === type) &&
+          // [추가] 상태 필터. 전체("")면 통과, 아니면 행의 활성 여부를 문자열로 바꿔 select 값과 비교한다.
+          (active === "" || String(activeOf(p)) === active),
       ),
     );
   };
@@ -89,7 +141,12 @@ export default function PartnerPage(props) {
 
   const 입력 = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  // [변경] 품목 코드가 섞여 있던 것을 거래처 기준으로 교체, 화주 필수 추가
+  // [추가] 상태 select 전용 변경 함수
+  //   위의 입력()은 값을 문자열 그대로 저장하는데, select 값은 "true"/"false" 문자열이다.
+  //   서버에는 boolean 을 보내야 하므로 여기서 === "true" 비교로 true/false 로 바꿔서 저장한다.
+  const 활성변경 = (e) =>
+    setForm({ ...form, isActive: e.target.value === "true" });
+
   const 저장 = async () => {
     if (!form.tenantId) {
       alert("화주를 선택하세요.");
@@ -100,7 +157,13 @@ export default function PartnerPage(props) {
       return;
     }
     const isEdit = form.partnerId != null;
-    const body = { ...form, tenantId: Number(form.tenantId) }; // 문자열 → 숫자
+    const body = {
+      ...form,
+      tenantId: Number(form.tenantId), // 문자열 → 숫자
+      // [추가] 서버로 보낼 상태값. Boolean() 으로 감싸서 항상 true/false 만 가도록 한다.
+      //   주의: 키 이름이 isActive 로 고정이다. 서버 DTO 가 "active" 로 받는다면 여기 키를 맞춰야 한다.
+      isActive: Boolean(form.isActive),
+    };
 
     try {
       const res = isEdit
@@ -122,12 +185,13 @@ export default function PartnerPage(props) {
     }
   };
 
+  const { sorted, th } = useSort(filtered);
+
   return (
     <>
       <PageTitle title="거래처 관리" path="홈 > 기준정보 > 거래처" />
 
       <form className="search" onSubmit={조회}>
-        {/* [추가] 화주 조회조건 */}
         <label>화주</label>
         <select name="tenantId">
           <option value="">전체</option>
@@ -147,6 +211,13 @@ export default function PartnerPage(props) {
           <option value="SUPPLIER">공급사</option>
           <option value="CUSTOMER">납품처</option>
         </select>
+        {/* [추가] 상태 조회조건. 값은 true/false 문자열이고, 조회() 의 상태 필터와 연결된다. */}
+        <label>상태</label>
+        <select name="isActive">
+          <option value="">전체</option>
+          <option value="true">활성</option>
+          <option value="false">비활성</option>
+        </select>
         <input type="submit" className="btn primary" value="조회" />
       </form>
 
@@ -162,22 +233,26 @@ export default function PartnerPage(props) {
           <tr>
             <th>No</th>
             <th>화주</th> {/* [추가] */}
-            <th>거래처코드</th>
+            {th("partnerCode", "거래처코드")}
             <th>거래처명</th>
             <th>구분</th>
             <th>연락처</th>
-            <th>등록일</th>
+            {th("createdAt", "등록일")}
           </tr>
         </thead>
         <tbody>
-          {filtered.map((p, i) => (
+          {sorted.map((p, i) => (
             <tr key={p.partnerId} onClick={() => fetchDetail(p.partnerId)}>
               <td>{i + 1}</td>
-              <td>{p.tenantName}</td> {/* [추가] */}
+              <td>{p.tenantName}</td>
               <td>{p.partnerCode}</td>
               <td>{p.partnerName}</td>
               <td>{TYPE_LABEL[p.partnerType]}</td>
               <td>{p.contact}</td>
+              {/* [추가] activeOf(p) 결과(true/false)를 뱃지로 표시 (활성=초록, 비활성=회색) */}
+              <td>
+                <StatusBadge active={activeOf(p)} />
+              </td>
               <td>{fmtDate(p.createdAt)}</td>
             </tr>
           ))}
@@ -198,7 +273,7 @@ export default function PartnerPage(props) {
             )}
           </GridTitle>
           <div className="panel">
-            {/* [추가] 화주: 신규는 선택, 수정은 바꿀 수 없다(표시만) */}
+            {/* 화주: 신규는 선택, 수정은 바꿀 수 없다(표시만) */}
             <label>화주</label>
             <select
               name="tenantId"
@@ -238,6 +313,21 @@ export default function PartnerPage(props) {
             <input name="contact" value={form.contact ?? ""} onChange={입력} />
             <label>주소</label>
             <input name="address" value={form.address ?? ""} onChange={입력} />
+            {/* [추가] 상태 입력란
+                - value: form.isActive(boolean)를 문자열로 바꿔 select 의 값과 맞춘다.
+                - onChange: 문자열 → boolean 변환이 필요해서 입력() 대신 활성변경()을 쓴다.
+                - disabled: 저장 버튼과 같은 기준으로 관리자(ADMIN)만 바꿀 수 있다.
+                - 신규 등록은 EMPTY 의 isActive: true 때문에 "활성"이 미리 선택돼 있다. */}
+            <label>상태</label>
+            <select
+              name="isActive"
+              value={String(form.isActive)}
+              onChange={활성변경}
+              disabled={!isAdmin}
+            >
+              <option value="true">활성</option>
+              <option value="false">비활성</option>
+            </select>
           </div>
         </>
       )}

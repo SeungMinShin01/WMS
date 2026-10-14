@@ -2,12 +2,13 @@ import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import useSort from "../../Layout/useSort";
 
-const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고" };
+const 변동타입명 = { INBOUND: "입고", ALLOCATE: "선점", OUTBOUND: "출고", DISPOSE: "폐기" };
 const 증감 = (n) => (n === 0 ? "—" : n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString());
 
 // 08 입출고이력 — 담당: 조현우
-export default function HistoryPage(props) {
+export default function HistoryPage() {
   const [histories, setHistories] = useState([]);
   const [조건, set조건] = useState({ from: "", to: "", product: "", locationCode: "", txType: "" });
 
@@ -44,6 +45,8 @@ export default function HistoryPage(props) {
     );
   });
 
+  const { sorted, th } = useSort(보여줄목록);
+
   return (
     <>
       <PageTitle title="입출고 이력" path="홈 > 재고관리 > 입출고이력" />
@@ -61,6 +64,7 @@ export default function HistoryPage(props) {
           <option value="INBOUND">입고</option>
           <option value="ALLOCATE">선점</option>
           <option value="OUTBOUND">출고</option>
+          <option value="DISPOSE">폐기</option>
         </select>
         <input type="submit" className="btn primary" value="조회" />
       </form>
@@ -70,13 +74,13 @@ export default function HistoryPage(props) {
         <thead>
           <tr>
             <th>No</th>
-            <th>발생일시</th>
+            {th("occurredAt", "발생일시")}
             <th>변동타입</th>
-            <th>품목코드</th>
+            {th("productCode", "품목코드")}
             <th>품목명</th>
             <th>로케이션</th>
             <th>LOT</th>
-            <th>소비기한</th>
+            {th("expiryDate", "소비기한")}
             <th>실물 증감</th>
             <th>선점 증감</th>
             <th>변경 후 실물</th>
@@ -87,7 +91,7 @@ export default function HistoryPage(props) {
           </tr>
         </thead>
         <tbody>
-          {보여줄목록.map((h, index) => (
+          {sorted.map((h, index) => (
             <tr key={h.historyKey}>
               <td>{index + 1}</td>
               <td>{h.occurredAt ?? "—"}</td>

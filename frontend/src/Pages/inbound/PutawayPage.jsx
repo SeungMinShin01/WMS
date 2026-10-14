@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import PageTitle from "../../Layout/PageTitle";
 import GridTitle from "../../Layout/GridTitle";
 import DocumentHeader from "../../Layout/DocumentHeader";
+import useSort from "../../Layout/useSort";
 
 const STATUS_NAME = {
   WAITING: "입고예정",
@@ -19,7 +20,7 @@ const DETAIL_STATUS_NAME = {
 };
 
 // 05 물품적재 — 담당: 조현우
-export default function PutawayPage(props) {
+export default function PutawayPage() {
   const { documentId } = useParams(); // 입고검수 상세에서 [적재하기]로 왔으면 문서 번호가 있음
   const navigate = useNavigate();
 
@@ -151,7 +152,7 @@ export default function PutawayPage(props) {
         { params: { mixLot: mix } },
       );
       setRecommend(response.data);
-    } catch (error) {
+    } catch {
       setRecommend([]); // 추천 실패해도 드롭다운으로 적치 가능
     }
   };
@@ -170,6 +171,8 @@ export default function PutawayPage(props) {
     }
     setLocations({ ...locations, [focusDetailId]: locationId });
   };
+
+  const { sorted, th } = useSort(visibleList);
 
   return (
     <>
@@ -202,18 +205,18 @@ export default function PutawayPage(props) {
             <thead>
               <tr>
                 <th>No</th>
-                <th>입고번호</th>
+                {th("documentNo", "입고번호")}
                 <th>화주</th>
                 <th>공급사명</th>
-                <th>입고예정일</th>
+                {th("expectedAt", "입고예정일")}
                 <th>품목수</th>
                 <th>예정수량</th>
                 <th>상태</th>
-                <th>입고확정일시</th>
+                {th("completedAt", "입고확정일시")}
               </tr>
             </thead>
             <tbody>
-              {visibleList.map((inbound, index) => (
+              {sorted.map((inbound, index) => (
                 <tr
                   key={inbound.documentId}
                   onClick={() => selectDocument(inbound.documentId)}
@@ -383,9 +386,9 @@ export default function PutawayPage(props) {
                 </tbody>
               </table>
               <p className="hint">
-                ※ 같은 LOT 칸 → (혼용적재 시) 같은 품목 다른 LOT 칸 → 다른 품목
-                잔량 칸 → 빈 칸 순으로 추천합니다. 모든 줄이 적재되면 자동으로
-                입고완료 처리됩니다.
+                ※ 전량 적재 가능한 칸을 먼저, 그 안에서 같은 LOT 칸 → (혼용적재 시)
+                같은 품목 다른 LOT 칸 → 다른 품목 잔량 칸 → 빈 칸 순으로 추천합니다.
+                모든 줄이 적재되면 자동으로 입고완료 처리됩니다.
               </p>
             </div>
           </div>

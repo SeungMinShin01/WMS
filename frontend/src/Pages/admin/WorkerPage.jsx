@@ -33,6 +33,18 @@ export default function WorkerPage() {
     }
   };
 
+  // 활성/비활성 — 지금 상태의 반대 값을 보냄
+  const changeActive = async (w) => {
+    const next = !w.active;
+    if (!window.confirm(`${w.userName} 계정을 ${next ? "활성화" : "비활성화"}할까요?`)) return;
+    try {
+      await axios.put(`/wms/workers/${w.userId}/active`, null, { params: { active: next } });
+      load();
+    } catch (error) {
+      alert(error.response?.data ?? "변경 실패");
+    }
+  };
+
   return (
     <>
       <h3>작업자 계정</h3>
@@ -45,7 +57,7 @@ export default function WorkerPage() {
 
       <table className="grid">
         <thead>
-          <tr><th>번호</th><th>아이디</th><th>이름</th><th>역할</th></tr>
+          <tr><th>번호</th><th>아이디</th><th>이름</th><th>역할</th><th>상태</th><th>관리</th></tr>
         </thead>
         <tbody>
           {list.map((w) => (
@@ -54,6 +66,14 @@ export default function WorkerPage() {
               <td>{w.loginId}</td>
               <td>{w.userName}</td>
               <td>{w.role === "ADMIN" ? "관리자" : "작업자"}</td>
+              <td>{w.active ? "사용" : "비활성"}</td>
+              <td>
+                {w.role === "WORKER" && (
+                  <button className="btn" onClick={() => changeActive(w)}>
+                    {w.active ? "비활성화" : "활성화"}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

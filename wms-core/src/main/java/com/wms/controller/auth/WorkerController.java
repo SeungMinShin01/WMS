@@ -6,9 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wms.model.dto.auth.WorkerCreateDto;
@@ -36,4 +39,12 @@ public class WorkerController {
     public ResponseEntity<Integer> create(@RequestBody WorkerCreateDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(workerService.create(dto));
     }
+
+    // 작업자 계정 활성/비활성화
+    @AuditLog(action = AuditAction.WORKER_ACTIVE, target = "userId", fields = {"active"})
+    @PutMapping("/{userId}/active")
+    public ResponseEntity<Boolean> changeActive(@PathVariable(name="userId") Integer userId,
+            @RequestParam(name="active") Boolean active){
+                return ResponseEntity.ok(workerService.changeActive(userId, active));
+            }
 }
