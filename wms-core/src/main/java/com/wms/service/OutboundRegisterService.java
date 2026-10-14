@@ -1,11 +1,22 @@
 package com.wms.service;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 
 import com.wms.model.dto.inbound.RegisterOptionDto;
 import com.wms.model.dto.outbound.OutboundCreateDto;
@@ -32,6 +43,8 @@ import jakarta.persistence.EntityNotFoundException;
 public class OutboundRegisterService {
     @Autowired
     private DocumentRepository documentRepository;
+    @Autowired 
+    private ExcelHelper excel;
     @Autowired
     private DocumentItemRepository documentItemRepository;
     @Autowired
@@ -123,5 +136,63 @@ public class OutboundRegisterService {
             list.add(new RegisterOptionDto(p.getProductId(), p.getProductCode(), p.getProductName()));
         }
         return list;
+    }
+
+    // =============== 엑셀 일괄 등록 ===============
+    // 한 줄 = 품목 1줄. 화주+납품처+출고요청일이 같은 줄은 한 문서로 묶음
+    // 열: A 화주명 | B 납품처명 | C 출고요청일 | D 품목명 | E 주문수량
+    // 한 줄이라도 틀리면 전체 취소 (클래스 @Transactional → 예외가 나면 전부 롤백)
+    public String uploadExcel(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("엑셀 파일을 선택하세요.");
+        }
+
+        Map<String, Integer> documents = new LinkedHashMap<>(); // "화주|납품처|날짜" → documentId
+        int itemCount = 0;
+
+        try (InputStream in = file.getInputStream(); Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            for (int i = 1; i <= sheet.getLastRowNum    (); i++) { // 0행은 제목 줄
+                Row row = sheet.getRow(i);
+                if (row == null || excel.text(row.getCell(0)).isEmpty()) continue; // 빈 줄 건너뛰기
+                int rowNo = i + 1; // 엑셀 화면에 보이는 행 번호
+
+                try {
+                    // 1. 이름 → 엔티티. 납품처·품목은 그 화주 안에서만 찾음
+                    TenantEntity tenant = excel.findTenant(excel.text(row.getCell(0)));
+                    PartnerEntity customer = excel.findPartner(tenant, excel.text(row.getCell(1)), "CUSTOMER", "납품처");
+                    LocalDate expectedDate = excel.date(row.getCell(2), "출고요청일");
+                    ProductEntity product = excel.findProduct(tenant, excel.text(row.getCell(3)));
+
+                    // 2. 같은 화주+납품처+날짜면 이미 만든 문서에 붙이고, 처음이면 문서 생성
+                    String key = tenant.getTenantId() + "|" + customer.getPartnerId() + "|" + expectedDate;
+                    Integer documentId = documents.get(key);
+                    if (documentId == null) {
+                        documentId = createDocument(new OutboundCreateDto(tenant.getTenantId(), customer.getPartnerId(), expectedDate));
+                        documents.put(key, documentId);
+                    }
+
+                    // 3. 품목 1줄: 화면 등록과 같은 createItem 재사용
+                    createItem(documentId, new OutboundItemCreateDto(product.getProductId(),
+                            excel.number(row.getCell(4), "주문수량")));
+                    itemCount++;
+
+                // 같은 종류의 예외로 다시 던지되 메세지 앞에 행 번호 붙임
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException(rowNo + "행: " + e.getMessage());
+                } catch (IllegalStateException e) {
+                    throw new IllegalStateException(rowNo + "행: " + e.getMessage());
+                } catch (EntityNotFoundException e) {
+                    throw new EntityNotFoundException(rowNo + "행: " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("엑셀 파일을 읽을 수 없습니다.");
+        }
+
+        if (itemCount == 0) {
+            throw new IllegalArgumentException("등록할 줄이 없습니다.");
+        }
+        return "출고문서 " + documents.size() + "건, 품목 " + itemCount + "줄 등록";
     }
 }
