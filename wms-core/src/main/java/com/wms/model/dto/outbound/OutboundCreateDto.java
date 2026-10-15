@@ -29,6 +29,8 @@ public class OutboundCreateDto {
                 .documentNo(documentNo)
                 .type(DocumentType.OUTBOUND)
                 .expectedAt(this.expectedDate.atStartOfDay())
+                .shipAddress(partner.getAddress())   // 납품처 주소를 문서에 복사
+                .shipContact(partner.getContact())   // 납품처 연락처를 문서에 복사
                 .build(); // status=WAITING, source=WMS 는 엔티티 기본값
     }
 }
