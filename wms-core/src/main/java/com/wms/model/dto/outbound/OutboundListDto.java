@@ -21,6 +21,8 @@ public class OutboundListDto {
     private String tenantName;    // 화주 이름 (ED-61 추가)
     private String source;        // 들어온 경로 WMS / PORTAL (ED-61 추가)
     private String partnerName;
+    private String shipAddress;   // 배송지 주소
+    private String shipContact;   // 연락처
     private LocalDateTime expectedAt;
     private LocalDateTime completedAt;
     private String status;
@@ -38,6 +40,8 @@ public class OutboundListDto {
                 .tenantName(entity.getTenantEntity().getTenantName())   // (ED-61 추가)
                 .source(entity.getSource().name())                      // (ED-61 추가)
                 .partnerName(entity.getPartnerEntity().getPartnerName())
+                .shipAddress(entity.getShipAddress())
+                .shipContact(entity.getShipContact())
                 .expectedAt(entity.getExpectedAt())
                 .completedAt(entity.getCompletedAt())
                 .status(entity.getStatus().name())
