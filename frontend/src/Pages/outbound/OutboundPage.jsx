@@ -291,8 +291,8 @@ export default function OutboundPage() {
                   {/* [ED-61] 화주 */}
                   <td>{outbound.tenantName}</td>
                   <td>{outbound.partnerName}</td>
-                  <td></td>
-                  <td></td>
+                  <td>{outbound.shipAddress}</td>
+                  <td>{outbound.shipContact}</td>
                   <td>{outbound.expectedAt.replace("T", " ")}</td>
                   {/* [ED-61] 출처 (WMS 직접 등록 / 화주요청) */}
                   <td>{SOURCE_NAME[outbound.source]}</td>
